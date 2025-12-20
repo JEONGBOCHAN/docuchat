@@ -14,6 +14,7 @@ class ChannelCreate(BaseModel):
     """Request model for creating a channel."""
 
     name: str = Field(..., min_length=1, max_length=100, description="Channel display name")
+    description: str | None = Field(default=None, max_length=500, description="Channel description")
 
 
 class ChannelResponse(BaseModel):
@@ -21,6 +22,7 @@ class ChannelResponse(BaseModel):
 
     id: str = Field(..., description="Channel ID (Gemini store name)")
     name: str = Field(..., description="Channel display name")
+    description: str | None = Field(default=None, description="Channel description")
     created_at: datetime = Field(default_factory=_utc_now)
     file_count: int = Field(default=0, description="Number of files in channel")
 

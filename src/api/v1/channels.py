@@ -4,7 +4,7 @@
 from datetime import datetime, UTC
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from src.models.channel import ChannelCreate, ChannelResponse, ChannelList
@@ -36,11 +36,16 @@ def create_channel(
 
         # Save to local metadata DB
         repo = ChannelRepository(db)
-        channel = repo.create(gemini_store_id=store_id, name=data.name)
+        channel = repo.create(
+            gemini_store_id=store_id,
+            name=data.name,
+            description=data.description,
+        )
 
         return ChannelResponse(
             id=store_id,
             name=data.name,
+            description=channel.description,
             created_at=channel.created_at,
             file_count=0,
         )
@@ -59,6 +64,8 @@ def create_channel(
 def list_channels(
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
+    limit: Annotated[int | None, Query(description="Maximum number of channels", ge=1, le=100)] = None,
+    offset: Annotated[int, Query(description="Number of channels to skip", ge=0)] = 0,
 ) -> ChannelList:
     """List all channels (File Search Stores)."""
     try:
@@ -74,11 +81,20 @@ def list_channels(
                 ChannelResponse(
                     id=store_id,
                     name=store.get("display_name", ""),
+                    description=local_meta.description if local_meta else None,
                     created_at=local_meta.created_at if local_meta else datetime.now(UTC),
                     file_count=local_meta.file_count if local_meta else 0,
                 )
             )
-        return ChannelList(channels=channels, total=len(channels))
+
+        # Apply pagination
+        total = len(channels)
+        if offset:
+            channels = channels[offset:]
+        if limit:
+            channels = channels[:limit]
+
+        return ChannelList(channels=channels, total=total)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -114,6 +130,7 @@ def get_channel(
     return ChannelResponse(
         id=store["name"],
         name=store.get("display_name", ""),
+        description=local_meta.description if local_meta else None,
         created_at=local_meta.created_at if local_meta else datetime.now(UTC),
         file_count=local_meta.file_count if local_meta else 0,
     )

@@ -186,6 +186,80 @@ class GeminiService:
 
     # ========== Chat/Search Operations ==========
 
+    def search_and_answer_stream(
+        self,
+        store_name: str,
+        query: str,
+        model: str = "gemini-2.5-flash",
+    ):
+        """Search documents and generate a streaming answer.
+
+        Uses Gemini File Search API to search documents in the store
+        and generate a grounded response with streaming.
+
+        Args:
+            store_name: The store name/ID to search in
+            query: The user's question
+            model: The model to use for generation
+
+        Yields:
+            Chunks of the response as they are generated
+        """
+        try:
+            response_stream = self._client.models.generate_content_stream(
+                model=model,
+                contents=query,
+                config=types.GenerateContentConfig(
+                    tools=[
+                        types.Tool(
+                            file_search=types.FileSearch(
+                                file_search_store_names=[store_name]
+                            )
+                        )
+                    ]
+                ),
+            )
+
+            grounding_sources = []
+
+            for chunk in response_stream:
+                # Yield text chunks as they arrive
+                if chunk.text:
+                    yield {
+                        "type": "content",
+                        "text": chunk.text,
+                    }
+
+                # Extract grounding metadata from the final chunk
+                if hasattr(chunk, "candidates") and chunk.candidates:
+                    candidate = chunk.candidates[0]
+                    if hasattr(candidate, "grounding_metadata"):
+                        metadata = candidate.grounding_metadata
+                        if hasattr(metadata, "grounding_chunks"):
+                            for grounding_chunk in metadata.grounding_chunks:
+                                source = {
+                                    "source": getattr(grounding_chunk, "source", "unknown"),
+                                    "content": getattr(grounding_chunk, "text", ""),
+                                }
+                                if source not in grounding_sources:
+                                    grounding_sources.append(source)
+
+            # Yield sources at the end
+            if grounding_sources:
+                yield {
+                    "type": "sources",
+                    "sources": grounding_sources,
+                }
+
+            # Signal completion
+            yield {"type": "done"}
+
+        except Exception as e:
+            yield {
+                "type": "error",
+                "error": str(e),
+            }
+
     def search_and_answer(
         self,
         store_name: str,

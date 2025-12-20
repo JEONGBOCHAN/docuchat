@@ -15,12 +15,13 @@ class ChannelRepository:
         """Initialize repository with database session."""
         self.db = db
 
-    def create(self, gemini_store_id: str, name: str) -> ChannelMetadata:
+    def create(self, gemini_store_id: str, name: str, description: str | None = None) -> ChannelMetadata:
         """Create a new channel metadata record.
 
         Args:
             gemini_store_id: The Gemini File Search Store ID
             name: Channel display name
+            description: Channel description
 
         Returns:
             Created ChannelMetadata
@@ -28,6 +29,7 @@ class ChannelRepository:
         channel = ChannelMetadata(
             gemini_store_id=gemini_store_id,
             name=name,
+            description=description,
         )
         self.db.add(channel)
         self.db.commit()
@@ -47,13 +49,28 @@ class ChannelRepository:
             ChannelMetadata.gemini_store_id == gemini_store_id
         ).first()
 
-    def get_all(self) -> list[ChannelMetadata]:
-        """Get all channels.
+    def get_all(self, limit: int | None = None, offset: int = 0) -> list[ChannelMetadata]:
+        """Get all channels with optional pagination.
+
+        Args:
+            limit: Maximum number of channels to return (None for all)
+            offset: Number of channels to skip
 
         Returns:
-            List of all channels
+            List of channels
         """
-        return self.db.query(ChannelMetadata).all()
+        query = self.db.query(ChannelMetadata).offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+        return query.all()
+
+    def count(self) -> int:
+        """Get total count of channels.
+
+        Returns:
+            Total number of channels
+        """
+        return self.db.query(ChannelMetadata).count()
 
     def touch(self, gemini_store_id: str) -> ChannelMetadata | None:
         """Update last accessed time for a channel.

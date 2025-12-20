@@ -1,0 +1,100 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: chalssak
+  REGION: asia-northeast3
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t gcr.io/$PROJECT_ID/$SERVICE_NAME:${{ github.sha }} \
+            --target production \
+            .
+          docker push gcr.io/$PROJECT_ID/$SERVICE_NAME:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy $SERVICE_NAME \
+            --image gcr.io/$PROJECT_ID/$SERVICE_NAME:${{ github.sha }} \
+            --region $REGION \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "APP_ENV=production,LOG_LEVEL=INFO" \
+            --set-secrets "GOOGLE_API_KEY=google-api-key:latest" \
+            --memory 512Mi \
+            --cpu 1 \
+            --timeout 300 \
+            --concurrency 80 \
+            --min-instances 0 \
+            --max-instances 10
+
+      - name: Show deployment URL
+        run: |
+          echo "Deployed to:"
+          gcloud run services describe $SERVICE_NAME --region $REGION --format 'value(status.url)'
+
+
+  # Alternative: Deploy to Railway (simpler setup)
+  deploy-railway:
+    runs-on: ubuntu-latest
+    if: false  # Enable this and disable GCP deploy if using Railway
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        uses: bervProject/railway-deploy@main
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: chalssak
+
+
+  # Alternative: Deploy to Render
+  deploy-render:
+    runs-on: ubuntu-latest
+    if: false  # Enable this and disable other deploys if using Render
+
+    steps:
+      - name: Deploy to Render
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

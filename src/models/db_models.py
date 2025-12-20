@@ -21,6 +21,7 @@ class ChannelMetadata(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     gemini_store_id = Column(String(255), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
+    description = Column(String(500), nullable=True, default=None)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     last_accessed_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     file_count = Column(Integer, default=0)

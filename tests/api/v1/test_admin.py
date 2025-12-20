@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 class TestGetSystemStats:
     """Tests for GET /api/v1/admin/stats endpoint."""
 
-    def test_get_system_stats_success(self, client):
+    def test_get_system_stats_success(self, client_with_db):
         """Test getting system statistics."""
-        response = client.get("/api/v1/admin/stats")
+        response = client_with_db.get("/api/v1/admin/stats")
 
         assert response.status_code == 200
         data = response.json()
@@ -22,9 +22,9 @@ class TestGetSystemStats:
         assert "scheduler" in data
         assert "limits" in data
 
-    def test_channels_stats_structure(self, client):
+    def test_channels_stats_structure(self, client_with_db):
         """Test channel statistics structure."""
-        response = client.get("/api/v1/admin/stats")
+        response = client_with_db.get("/api/v1/admin/stats")
         data = response.json()
 
         channels = data["channels"]
@@ -35,9 +35,9 @@ class TestGetSystemStats:
         assert "inactive" in channels["by_state"]
         assert "over_limit" in channels["by_state"]
 
-    def test_storage_stats_structure(self, client):
+    def test_storage_stats_structure(self, client_with_db):
         """Test storage statistics structure."""
-        response = client.get("/api/v1/admin/stats")
+        response = client_with_db.get("/api/v1/admin/stats")
         data = response.json()
 
         storage = data["storage"]
@@ -47,9 +47,9 @@ class TestGetSystemStats:
         assert "avg_files_per_channel" in storage
         assert "avg_size_per_channel_mb" in storage
 
-    def test_api_stats_structure(self, client):
+    def test_api_stats_structure(self, client_with_db):
         """Test API statistics structure."""
-        response = client.get("/api/v1/admin/stats")
+        response = client_with_db.get("/api/v1/admin/stats")
         data = response.json()
 
         api = data["api"]
@@ -58,18 +58,18 @@ class TestGetSystemStats:
         assert "gemini_calls" in api
         assert "error_rate_percent" in api
 
-    def test_scheduler_stats_structure(self, client):
+    def test_scheduler_stats_structure(self, client_with_db):
         """Test scheduler statistics structure."""
-        response = client.get("/api/v1/admin/stats")
+        response = client_with_db.get("/api/v1/admin/stats")
         data = response.json()
 
         scheduler = data["scheduler"]
         assert "running" in scheduler
         assert "job_count" in scheduler
 
-    def test_limits_structure(self, client):
+    def test_limits_structure(self, client_with_db):
         """Test limits information structure."""
-        response = client.get("/api/v1/admin/stats")
+        response = client_with_db.get("/api/v1/admin/stats")
         data = response.json()
 
         limits = data["limits"]
@@ -124,9 +124,9 @@ class TestGetChannelBreakdown:
 class TestGetApiMetrics:
     """Tests for GET /api/v1/admin/api-metrics endpoint."""
 
-    def test_get_api_metrics_success(self, client):
+    def test_get_api_metrics_success(self, client_with_db):
         """Test getting API metrics."""
-        response = client.get("/api/v1/admin/api-metrics")
+        response = client_with_db.get("/api/v1/admin/api-metrics")
 
         assert response.status_code == 200
         data = response.json()
@@ -140,13 +140,13 @@ class TestGetApiMetrics:
         assert "gemini_api_calls" in data
         assert "top_endpoints" in data
 
-    def test_api_metrics_endpoint_structure(self, client):
+    def test_api_metrics_endpoint_structure(self, client_with_db):
         """Test top endpoints structure."""
         # Make some API calls first
-        client.get("/api/v1/health")
-        client.get("/api/v1/admin/stats")
+        client_with_db.get("/api/v1/health")
+        client_with_db.get("/api/v1/admin/stats")
 
-        response = client.get("/api/v1/admin/api-metrics")
+        response = client_with_db.get("/api/v1/admin/api-metrics")
         data = response.json()
 
         # Should have recorded at least these calls
@@ -163,21 +163,21 @@ class TestGetApiMetrics:
 class TestResetApiMetrics:
     """Tests for POST /api/v1/admin/api-metrics/reset endpoint."""
 
-    def test_reset_api_metrics(self, client):
+    def test_reset_api_metrics(self, client_with_db):
         """Test resetting API metrics."""
         # Make some API calls
-        client.get("/api/v1/health")
-        client.get("/api/v1/health")
+        client_with_db.get("/api/v1/health")
+        client_with_db.get("/api/v1/health")
 
         # Reset metrics
-        response = client.post("/api/v1/admin/api-metrics/reset")
+        response = client_with_db.post("/api/v1/admin/api-metrics/reset")
 
         assert response.status_code == 200
         data = response.json()
         assert "message" in data
 
         # Verify metrics were reset
-        metrics_response = client.get("/api/v1/admin/api-metrics")
+        metrics_response = client_with_db.get("/api/v1/admin/api-metrics")
         # Note: The reset call itself will be recorded, so total_api_calls >= 1
         metrics = metrics_response.json()
         # The endpoint list should be minimal (just the calls after reset)
