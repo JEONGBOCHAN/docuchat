@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from fastapi import APIRouter
 
-from src.api.v1 import health, channels, documents, chat, capacity, scheduler, admin, notes
+from src.api.v1 import health, channels, documents, chat, capacity, scheduler, admin, notes, faq, summarize, search
 
 api_router = APIRouter()
 
@@ -27,6 +27,15 @@ api_router.include_router(admin.router)
 
 # Notes API
 api_router.include_router(notes.router)
+
+# FAQ generation API
+api_router.include_router(faq.router)
+
+# Summarization API
+api_router.include_router(summarize.router)
+
+# Multi-channel search API
+api_router.include_router(search.router)
 
 # Channel CRUD
 api_router.include_router(channels.router)
