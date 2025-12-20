@@ -4,12 +4,13 @@
 from datetime import datetime, UTC
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from src.models.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelList
 from src.services.gemini import GeminiService, get_gemini_service
 from src.core.database import get_db
+from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
 
 router = APIRouter(prefix="/channels", tags=["channels"])
@@ -21,7 +22,9 @@ router = APIRouter(prefix="/channels", tags=["channels"])
     status_code=status.HTTP_201_CREATED,
     summary="Create a new channel",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def create_channel(
+    request: Request,
     data: ChannelCreate,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
@@ -61,7 +64,9 @@ def create_channel(
     response_model=ChannelList,
     summary="List all channels",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def list_channels(
+    request: Request,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int | None, Query(description="Maximum number of channels", ge=1, le=100)] = None,
@@ -107,7 +112,9 @@ def list_channels(
     response_model=ChannelResponse,
     summary="Get a channel by ID",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_channel(
+    request: Request,
     channel_id: str,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
@@ -141,7 +148,9 @@ def get_channel(
     response_model=ChannelResponse,
     summary="Update a channel",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def update_channel(
+    request: Request,
     channel_id: str,
     data: ChannelUpdate,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
@@ -199,7 +208,9 @@ def update_channel(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a channel",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def delete_channel(
+    request: Request,
     channel_id: str,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],

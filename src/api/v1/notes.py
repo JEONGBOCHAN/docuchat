@@ -4,13 +4,14 @@
 import json
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from src.models.note import NoteCreate, NoteUpdate, NoteResponse, NoteList
 from src.models.chat import GroundingSource
 from src.services.gemini import GeminiService, get_gemini_service
 from src.core.database import get_db
+from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
 from src.services.note_repository import NoteRepository
 
@@ -63,7 +64,9 @@ def _note_to_response(note, gemini_store_id: str) -> NoteResponse:
     status_code=status.HTTP_201_CREATED,
     summary="Create a new note",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def create_note(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
     data: NoteCreate,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
@@ -93,7 +96,9 @@ def create_note(
     response_model=NoteList,
     summary="List notes in a channel",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def list_notes(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
@@ -118,7 +123,9 @@ def list_notes(
     response_model=NoteResponse,
     summary="Get a note by ID",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_note(
+    request: Request,
     note_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
@@ -144,7 +151,9 @@ def get_note(
     response_model=NoteResponse,
     summary="Update a note",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def update_note(
+    request: Request,
     note_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
     data: NoteUpdate,
@@ -178,7 +187,9 @@ def update_note(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a note",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def delete_note(
+    request: Request,
     note_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],

@@ -2,10 +2,11 @@
 """Repository for channel metadata database operations."""
 
 import json
-from datetime import datetime, UTC
+import secrets
+from datetime import datetime, UTC, timedelta
 from sqlalchemy.orm import Session
 
-from src.models.db_models import ChannelMetadata, ChatMessageDB
+from src.models.db_models import ChannelMetadata, ChatMessageDB, ChatSessionDB
 
 
 class ChannelRepository:
@@ -186,6 +187,7 @@ class ChatHistoryRepository:
         role: str,
         content: str,
         sources: list[dict] | None = None,
+        session: ChatSessionDB | None = None,
     ) -> ChatMessageDB:
         """Add a chat message.
 
@@ -194,12 +196,14 @@ class ChatHistoryRepository:
             role: 'user' or 'assistant'
             content: Message content
             sources: List of source dicts (for assistant messages)
+            session: Optional chat session for multi-turn context
 
         Returns:
             Created ChatMessageDB
         """
         message = ChatMessageDB(
             channel_id=channel.id,
+            session_id=session.id if session else None,
             role=role,
             content=content,
             sources_json=json.dumps(sources or []),
@@ -223,6 +227,27 @@ class ChatHistoryRepository:
             ChatMessageDB.channel_id == channel.id
         ).order_by(ChatMessageDB.created_at.asc()).limit(limit).all()
 
+    def get_session_history(self, session: ChatSessionDB, limit: int | None = None) -> list[ChatMessageDB]:
+        """Get chat history for a specific session.
+
+        Args:
+            session: The chat session
+            limit: Maximum number of messages (defaults to session's context_window)
+
+        Returns:
+            List of chat messages in chronological order
+        """
+        query = self.db.query(ChatMessageDB).filter(
+            ChatMessageDB.session_id == session.id
+        ).order_by(ChatMessageDB.created_at.asc())
+
+        if limit is not None:
+            query = query.limit(limit)
+        elif session.context_window:
+            query = query.limit(session.context_window)
+
+        return query.all()
+
     def clear_history(self, channel: ChannelMetadata) -> int:
         """Clear chat history for a channel.
 
@@ -234,6 +259,141 @@ class ChatHistoryRepository:
         """
         count = self.db.query(ChatMessageDB).filter(
             ChatMessageDB.channel_id == channel.id
+        ).delete()
+        self.db.commit()
+        return count
+
+
+class ChatSessionRepository:
+    """Repository for chat session operations."""
+
+    SESSION_TIMEOUT_HOURS = 24  # Sessions expire after 24 hours of inactivity
+
+    def __init__(self, db: Session):
+        """Initialize repository with database session."""
+        self.db = db
+
+    def create(
+        self,
+        channel: ChannelMetadata,
+        context_window: int = 10,
+    ) -> ChatSessionDB:
+        """Create a new chat session.
+
+        Args:
+            channel: The channel metadata
+            context_window: Number of messages to include as context
+
+        Returns:
+            Created ChatSessionDB
+        """
+        session_id = f"sess_{secrets.token_hex(16)}"
+        session = ChatSessionDB(
+            session_id=session_id,
+            channel_id=channel.id,
+            context_window=context_window,
+        )
+        self.db.add(session)
+        self.db.commit()
+        self.db.refresh(session)
+        return session
+
+    def get_by_session_id(self, session_id: str) -> ChatSessionDB | None:
+        """Get session by session ID.
+
+        Args:
+            session_id: The session ID string (e.g., "sess_abc123")
+
+        Returns:
+            ChatSessionDB or None
+        """
+        return self.db.query(ChatSessionDB).filter(
+            ChatSessionDB.session_id == session_id
+        ).first()
+
+    def get_or_create(
+        self,
+        channel: ChannelMetadata,
+        session_id: str | None = None,
+        context_window: int = 10,
+    ) -> tuple[ChatSessionDB, bool]:
+        """Get existing session or create a new one.
+
+        Args:
+            channel: The channel metadata
+            session_id: Optional existing session ID
+            context_window: Number of messages for new sessions
+
+        Returns:
+            Tuple of (ChatSessionDB, created: bool)
+        """
+        if session_id:
+            session = self.get_by_session_id(session_id)
+            if session and session.channel_id == channel.id:
+                # Check if session is expired
+                if not self.is_expired(session):
+                    self.touch(session)
+                    return session, False
+
+        # Create new session
+        session = self.create(channel, context_window)
+        return session, True
+
+    def touch(self, session: ChatSessionDB) -> ChatSessionDB:
+        """Update last activity time for a session.
+
+        Args:
+            session: The chat session
+
+        Returns:
+            Updated ChatSessionDB
+        """
+        session.last_activity_at = datetime.now(UTC)
+        self.db.commit()
+        self.db.refresh(session)
+        return session
+
+    def is_expired(self, session: ChatSessionDB) -> bool:
+        """Check if a session has expired.
+
+        Args:
+            session: The chat session
+
+        Returns:
+            True if expired
+        """
+        cutoff = datetime.now(UTC) - timedelta(hours=self.SESSION_TIMEOUT_HOURS)
+        # Handle timezone-naive datetime from SQLite
+        last_activity = session.last_activity_at
+        if last_activity.tzinfo is None:
+            last_activity = last_activity.replace(tzinfo=UTC)
+        return last_activity < cutoff
+
+    def delete(self, session_id: str) -> bool:
+        """Delete a session.
+
+        Args:
+            session_id: The session ID string
+
+        Returns:
+            True if deleted
+        """
+        session = self.get_by_session_id(session_id)
+        if session:
+            self.db.delete(session)
+            self.db.commit()
+            return True
+        return False
+
+    def cleanup_expired(self) -> int:
+        """Delete all expired sessions.
+
+        Returns:
+            Number of deleted sessions
+        """
+        cutoff = datetime.now(UTC) - timedelta(hours=self.SESSION_TIMEOUT_HOURS)
+        count = self.db.query(ChatSessionDB).filter(
+            ChatSessionDB.last_activity_at < cutoff
         ).delete()
         self.db.commit()
         return count

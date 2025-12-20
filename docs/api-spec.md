@@ -275,6 +275,50 @@ DELETE /chat/history?channel_id={channel_id}
 
 ---
 
+## FAQ API
+
+### FAQ 자동 생성
+
+```
+POST /channels/{channel_id}/generate-faq
+```
+
+**Request Body:**
+```json
+{
+  "count": 5
+}
+```
+
+| 필드 | 타입 | 필수 | 기본값 | 설명 |
+|------|------|------|--------|------|
+| count | integer | X | 5 | 생성할 FAQ 개수 (1-20) |
+
+**Response (200 OK):**
+```json
+{
+  "channel_id": "fileSearchStores/abc123",
+  "items": [
+    {
+      "question": "프로젝트의 주요 목표는 무엇인가요?",
+      "answer": "이 프로젝트의 주요 목표는..."
+    },
+    {
+      "question": "어떤 기술 스택을 사용하나요?",
+      "answer": "FastAPI, LangGraph, Gemini API를 사용합니다..."
+    }
+  ],
+  "generated_at": "2025-12-20T12:00:00Z"
+}
+```
+
+**에러 응답:**
+- 400: 채널에 문서가 없음
+- 404: 채널을 찾을 수 없음
+- 500: FAQ 생성 실패
+
+---
+
 ## 용량 API
 
 ### 채널 용량 조회

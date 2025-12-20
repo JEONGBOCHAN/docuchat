@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 """Scheduler monitoring API endpoints."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from src.services.scheduler import get_scheduler
+from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
@@ -49,7 +48,8 @@ class SchedulerHistoryResponse(BaseModel):
     response_model=SchedulerStatus,
     summary="Get scheduler status",
 )
-def get_scheduler_status() -> SchedulerStatus:
+@limiter.limit(RateLimits.DEFAULT)
+def get_scheduler_status(request: Request) -> SchedulerStatus:
     """Get the current status of the background scheduler.
 
     Returns job list and running state.
@@ -77,7 +77,8 @@ def get_scheduler_status() -> SchedulerStatus:
     response_model=SchedulerHistoryResponse,
     summary="Get job execution history",
 )
-def get_job_history(limit: int = 20) -> SchedulerHistoryResponse:
+@limiter.limit(RateLimits.DEFAULT)
+def get_job_history(request: Request, limit: int = 20) -> SchedulerHistoryResponse:
     """Get recent job execution history.
 
     Args:
@@ -105,7 +106,8 @@ def get_job_history(limit: int = 20) -> SchedulerHistoryResponse:
     status_code=status.HTTP_202_ACCEPTED,
     summary="Manually trigger a job",
 )
-def run_job_manually(job_id: str) -> dict:
+@limiter.limit(RateLimits.DEFAULT)
+def run_job_manually(request: Request, job_id: str) -> dict:
     """Manually trigger a scheduled job to run immediately.
 
     Args:

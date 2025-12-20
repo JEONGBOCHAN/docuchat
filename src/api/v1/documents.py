@@ -7,11 +7,12 @@ from datetime import datetime, UTC
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query, status
 from sqlalchemy.orm import Session
 
 from src.core.config import get_settings, Settings
 from src.core.database import get_db
+from src.core.rate_limiter import limiter, RateLimits
 from src.models.document import (
     DocumentResponse,
     DocumentList,
@@ -60,7 +61,9 @@ def validate_file(
     status_code=status.HTTP_202_ACCEPTED,
     summary="Upload a document to channel",
 )
+@limiter.limit(RateLimits.FILE_UPLOAD)
 async def upload_document(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
     file: Annotated[UploadFile, File(description="Document file to upload")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
@@ -142,9 +145,11 @@ async def upload_document(
     status_code=status.HTTP_202_ACCEPTED,
     summary="Upload document from URL",
 )
+@limiter.limit(RateLimits.FILE_UPLOAD)
 def upload_from_url(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
-    request: UrlUploadRequest,
+    body: UrlUploadRequest,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     crawler: Annotated[CrawlerService, Depends(get_crawler_service)],
     db: Annotated[Session, Depends(get_db)],
@@ -165,7 +170,7 @@ def upload_from_url(
     tmp_path = None
     try:
         # Crawl the URL
-        result = crawler.fetch_url(request.url)
+        result = crawler.fetch_url(body.url)
 
         # Save to temp file
         tmp_path = crawler.save_to_temp_file(result)
@@ -219,7 +224,9 @@ def upload_from_url(
     response_model=DocumentList,
     summary="List documents in channel",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def list_documents(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
 ) -> DocumentList:
@@ -259,7 +266,9 @@ def list_documents(
     "/{document_id:path}/status",
     summary="Get document upload status",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_document_status(
+    request: Request,
     document_id: str,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
 ) -> dict:
@@ -277,7 +286,9 @@ def get_document_status(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a document",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def delete_document(
+    request: Request,
     document_id: str,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
 ):

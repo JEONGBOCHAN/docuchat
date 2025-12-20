@@ -6,11 +6,12 @@ Provides system-wide statistics and monitoring data.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.core.database import get_db
+from src.core.rate_limiter import limiter, RateLimits
 from src.services.admin_stats import AdminStatsService
 from src.services.api_metrics import get_api_metrics
 
@@ -116,7 +117,9 @@ class ApiMetricsResponse(BaseModel):
     response_model=SystemStatsResponse,
     summary="Get system statistics",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_system_stats(
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
 ) -> SystemStatsResponse:
     """Get comprehensive system statistics for monitoring.
@@ -141,7 +144,9 @@ def get_system_stats(
     response_model=ChannelBreakdownResponse,
     summary="Get channel breakdown",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_channel_breakdown(
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
 ) -> ChannelBreakdownResponse:
     """Get detailed breakdown of all channels.
@@ -162,7 +167,8 @@ def get_channel_breakdown(
     response_model=ApiMetricsResponse,
     summary="Get detailed API metrics",
 )
-def get_api_metrics_endpoint() -> ApiMetricsResponse:
+@limiter.limit(RateLimits.DEFAULT)
+def get_api_metrics_endpoint(request: Request) -> ApiMetricsResponse:
     """Get detailed API call metrics.
 
     Returns call counts, error rates, and latencies per endpoint.
@@ -186,7 +192,8 @@ def get_api_metrics_endpoint() -> ApiMetricsResponse:
     "/api-metrics/reset",
     summary="Reset API metrics",
 )
-def reset_api_metrics() -> dict:
+@limiter.limit(RateLimits.DEFAULT)
+def reset_api_metrics(request: Request) -> dict:
     """Reset all API metrics counters.
 
     Use this to start fresh metrics collection.

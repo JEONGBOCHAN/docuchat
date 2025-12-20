@@ -2,12 +2,16 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from src.api.v1.router import api_router
 from src.core.config import get_settings
 from src.core.database import init_db
+from src.core.rate_limiter import limiter
 from src.middleware.metrics import MetricsMiddleware
 from src.services.scheduler import get_scheduler
 from src.services.scheduler_jobs import (
@@ -67,6 +71,42 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Rate limiting setup
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """Custom rate limit exceeded handler with proper headers."""
+    # Parse rate limit info from exception
+    limit_value = getattr(exc, "detail", "Rate limit exceeded")
+
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Too Many Requests",
+            "message": limit_value,
+        },
+    )
+
+    # Add rate limit headers
+    if hasattr(request.state, "view_rate_limit"):
+        rate_info = request.state.view_rate_limit
+        # rate_info can be a string ("10 per 1 minute") or tuple
+        if isinstance(rate_info, str):
+            limit_parts = rate_info.split(" per ")
+            if len(limit_parts) == 2:
+                response.headers["X-RateLimit-Limit"] = limit_parts[0]
+        elif isinstance(rate_info, tuple) and len(rate_info) > 0:
+            # Handle tuple format from slowapi
+            response.headers["X-RateLimit-Limit"] = str(rate_info[0])
+
+    # Retry-After header (seconds until reset)
+    response.headers["Retry-After"] = str(getattr(exc, "retry_after", 60))
+
+    return response
+
 
 # CORS middleware
 app.add_middleware(

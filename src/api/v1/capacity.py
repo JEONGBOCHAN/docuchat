@@ -3,13 +3,14 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from src.models.capacity import CapacityUsageResponse
 from src.services.gemini import GeminiService, get_gemini_service
 from src.services.capacity_service import CapacityService
 from src.core.database import get_db
+from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/capacity", tags=["capacity"])
 
@@ -19,7 +20,9 @@ router = APIRouter(prefix="/capacity", tags=["capacity"])
     response_model=CapacityUsageResponse,
     summary="Get capacity usage for a channel",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_capacity_usage(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID to check capacity")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
