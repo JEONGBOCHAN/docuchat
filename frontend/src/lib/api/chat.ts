@@ -1,9 +1,7 @@
 import apiClient, { API_BASE_URL } from './client';
+import type { ChatSource } from './types';
 
-export interface ChatSource {
-  source: string;
-  content: string;
-}
+export type { ChatSource };
 
 export interface ChatResponse {
   response: string;
