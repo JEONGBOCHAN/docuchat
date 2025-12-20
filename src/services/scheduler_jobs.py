@@ -27,7 +27,7 @@ def scan_inactive_channels():
     db = SessionLocal()
     try:
         repo = ChannelRepository(db)
-        policy = LifecyclePolicy(db)
+        policy = LifecyclePolicy()
 
         # Get all channels
         channels = repo.get_all()
@@ -39,7 +39,7 @@ def scan_inactive_channels():
         }
 
         for channel in channels:
-            state_info = policy.get_channel_state(channel)
+            state_info = policy.get_status(channel)
 
             if state_info.state == ChannelState.ACTIVE:
                 stats["active"] += 1
@@ -47,13 +47,13 @@ def scan_inactive_channels():
                 stats["idle"] += 1
                 logger.warning(
                     f"Channel {channel.gemini_store_id} is idle. "
-                    f"Days inactive: {state_info.days_inactive}"
+                    f"Days since access: {state_info.days_since_access}"
                 )
             elif state_info.state == ChannelState.INACTIVE:
                 stats["inactive"] += 1
                 logger.warning(
                     f"Channel {channel.gemini_store_id} is INACTIVE and eligible for cleanup. "
-                    f"Days inactive: {state_info.days_inactive}"
+                    f"Days since access: {state_info.days_since_access}"
                 )
 
         logger.info(
@@ -83,11 +83,13 @@ def cleanup_inactive_channels(dry_run: bool = True):
     db = SessionLocal()
     try:
         repo = ChannelRepository(db)
-        policy = LifecyclePolicy(db)
+        policy = LifecyclePolicy()
         gemini = GeminiService()
 
-        # Get inactive channels
-        inactive_channels = policy.get_channels_by_state(ChannelState.INACTIVE)
+        # Get all channels and filter inactive ones
+        all_channels = repo.get_all()
+        inactive_with_status = policy.get_channels_by_state(all_channels, ChannelState.INACTIVE)
+        inactive_channels = [ch for ch, _ in inactive_with_status]
 
         if not inactive_channels:
             logger.info("No inactive channels to clean up")
