@@ -292,6 +292,11 @@ export default function ChannelDetailPage() {
   // Note Handlers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Save chat response as a note.
+   * ChatSource and GroundingSource are identical types (both alias of Source interface),
+   * so ChatSource[] can be directly passed to notesApi.create() which expects GroundingSource[].
+   */
   const handleSaveAsNote = useCallback(async (content: string, sources: ChatSource[]) => {
     try {
       const title = content.slice(0, 50).replace(/[#*`\n]/g, '').trim() || 'New Note';
