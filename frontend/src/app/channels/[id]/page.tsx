@@ -8,7 +8,7 @@ import { DocumentUploader, DocumentList } from '@/components/documents';
 import { NotesList, NoteEditor, DeleteNoteModal } from '@/components/notes';
 import { channelsApi, type Channel } from '@/lib/api/channels';
 import { notesApi, type Note, type CreateNoteRequest, type UpdateNoteRequest } from '@/lib/api/notes';
-import type { ChatSource } from '@/lib/api/types';
+import type { ChatSource } from '@/lib/api/chat';
 
 // =============================================================================
 // Types
