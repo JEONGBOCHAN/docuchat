@@ -1,0 +1,33 @@
+# 프로젝트 회의록
+
+## 회의 정보
+- 일시: 2025년 1월 15일 오후 2시
+- 참석자: 김개발, 이디자인, 박기획
+- 주제: NotebookLM 클론 프로젝트 킥오프
+
+## 논의 내용
+
+### 1. 프로젝트 목표
+- Google NotebookLM과 유사한 문서 기반 AI 어시스턴트 구현
+- 채널별로 문서를 격리하여 관리
+- Gemini File Search API 활용
+
+### 2. 기술 스택 결정
+- 백엔드: Python + FastAPI
+- 워크플로우: LangGraph
+- AI: Gemini API
+- 데이터베이스: 추후 결정 (PostgreSQL 또는 MongoDB)
+
+### 3. 마일스톤
+- Phase 1: POC 완료 (1주)
+- Phase 2: 핵심 백엔드 구현 (3주)
+- Phase 3: 채널 생애주기 관리 (2주)
+
+### 4. 다음 회의
+- 일시: 2025년 1월 22일 오후 2시
+- 안건: Phase 1 POC 결과 공유
+
+## 액션 아이템
+1. [김개발] Gemini File Search API 문서 분석
+2. [이디자인] UI/UX 초안 작성
+3. [박기획] 상세 요구사항 정리

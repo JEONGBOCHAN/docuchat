@@ -1,0 +1,39 @@
+# Python 프로그래밍 가이드
+
+## Python이란?
+Python은 1991년 귀도 반 로섬(Guido van Rossum)이 개발한 고급 프로그래밍 언어입니다.
+
+## Python의 특징
+1. 간결하고 읽기 쉬운 문법
+2. 동적 타이핑 지원
+3. 풍부한 라이브러리 생태계
+4. 크로스 플랫폼 지원
+
+## 기본 문법 예시
+
+### 변수 선언
+```python
+name = "홍길동"
+age = 25
+is_student = True
+```
+
+### 함수 정의
+```python
+def greet(name):
+    return f"안녕하세요, {name}님!"
+```
+
+### 클래스 정의
+```python
+class Person:
+    def __init__(self, name, age):
+        self.name = name
+        self.age = age
+```
+
+## 인기 라이브러리
+- NumPy: 수치 계산
+- Pandas: 데이터 분석
+- FastAPI: 웹 API 개발
+- LangChain: LLM 애플리케이션 개발
