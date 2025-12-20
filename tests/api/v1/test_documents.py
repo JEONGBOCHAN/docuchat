@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for Document upload API."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
@@ -13,7 +13,7 @@ from src.services.crawler import get_crawler_service, CrawlResult
 class TestUploadDocument:
     """Tests for POST /api/v1/documents."""
 
-    def test_upload_document_success(self, client: TestClient):
+    def test_upload_document_success(self, client_with_db: TestClient, test_db):
         """Test successful document upload."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -27,7 +27,7 @@ class TestUploadDocument:
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents",
             params={"channel_id": "fileSearchStores/test-store"},
             files={"file": ("test.pdf", b"PDF content here", "application/pdf")},
@@ -39,16 +39,16 @@ class TestUploadDocument:
         assert data["filename"] == "test.pdf"
         assert data["status"] == "processing"
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_upload_document_channel_not_found(self, client: TestClient):
+    def test_upload_document_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test upload to non-existent channel."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = None
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents",
             params={"channel_id": "fileSearchStores/not-exists"},
             files={"file": ("test.pdf", b"PDF content", "application/pdf")},
@@ -56,9 +56,9 @@ class TestUploadDocument:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_upload_document_invalid_extension(self, client: TestClient):
+    def test_upload_document_invalid_extension(self, client_with_db: TestClient, test_db):
         """Test upload with invalid file extension."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -68,7 +68,7 @@ class TestUploadDocument:
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents",
             params={"channel_id": "fileSearchStores/test-store"},
             files={"file": ("test.exe", b"Binary content", "application/octet-stream")},
@@ -77,9 +77,9 @@ class TestUploadDocument:
         assert response.status_code == 400
         assert "not allowed" in response.json()["detail"]
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_upload_document_file_too_large(self, client: TestClient):
+    def test_upload_document_file_too_large(self, client_with_db: TestClient, test_db):
         """Test upload with file exceeding size limit."""
         from src.core.config import get_settings, Settings
 
@@ -98,7 +98,7 @@ class TestUploadDocument:
         # Create content larger than 1MB
         large_content = b"x" * (2 * 1024 * 1024)  # 2MB
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents",
             params={"channel_id": "fileSearchStores/test-store"},
             files={"file": ("large.pdf", large_content, "application/pdf")},
@@ -107,7 +107,8 @@ class TestUploadDocument:
         assert response.status_code == 400
         assert "too large" in response.json()["detail"]
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_settings, None)
 
 
 class TestListDocuments:
@@ -276,8 +277,11 @@ class TestDeleteDocument:
 class TestUploadFromUrl:
     """Tests for POST /api/v1/documents/url."""
 
-    def test_upload_from_url_success(self, client: TestClient):
+    @patch("src.api.v1.documents.os.path.getsize")
+    def test_upload_from_url_success(self, mock_getsize, client_with_db: TestClient, test_db):
         """Test successful URL upload."""
+        mock_getsize.return_value = 1024  # Mock file size
+
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
             "name": "fileSearchStores/test-store",
@@ -300,7 +304,7 @@ class TestUploadFromUrl:
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
         app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents/url",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"url": "https://example.com"},
@@ -312,16 +316,17 @@ class TestUploadFromUrl:
         assert data["filename"] == "Example Page.md"
         assert data["status"] == "processing"
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_crawler_service, None)
 
-    def test_upload_from_url_channel_not_found(self, client: TestClient):
+    def test_upload_from_url_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test URL upload to non-existent channel."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = None
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents/url",
             params={"channel_id": "fileSearchStores/not-exists"},
             json={"url": "https://example.com"},
@@ -329,9 +334,9 @@ class TestUploadFromUrl:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_upload_from_url_invalid_url(self, client: TestClient):
+    def test_upload_from_url_invalid_url(self, client_with_db: TestClient, test_db):
         """Test URL upload with invalid URL."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -345,7 +350,7 @@ class TestUploadFromUrl:
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
         app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents/url",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"url": "not-a-url"},
@@ -354,9 +359,10 @@ class TestUploadFromUrl:
         assert response.status_code == 400
         assert "Invalid URL" in response.json()["detail"]
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_crawler_service, None)
 
-    def test_upload_from_url_crawl_error(self, client: TestClient):
+    def test_upload_from_url_crawl_error(self, client_with_db: TestClient, test_db):
         """Test URL upload handles crawl errors."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -370,7 +376,7 @@ class TestUploadFromUrl:
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
         app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents/url",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"url": "https://example.com"},
@@ -379,16 +385,15 @@ class TestUploadFromUrl:
         assert response.status_code == 500
         assert "Failed to upload from URL" in response.json()["detail"]
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_crawler_service, None)
 
-    def test_upload_from_url_empty_url(self, client: TestClient):
+    def test_upload_from_url_empty_url(self, client_with_db: TestClient, test_db):
         """Test URL upload with empty URL."""
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/documents/url",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"url": ""},
         )
 
         assert response.status_code == 422  # Validation error
-
-        app.dependency_overrides.clear()
