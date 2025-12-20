@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     max_file_size_mb: int = 50
     allowed_extensions: list[str] = [".pdf", ".txt", ".docx"]
 
+    # Database
+    database_url: str = "sqlite:///./data/chalssak.db"
+
+    # Channel Lifecycle
+    channel_inactive_days: int = 90  # Days before channel is considered inactive
+    max_files_per_channel: int = 100
+    max_channel_size_mb: int = 500
+
 
 @lru_cache
 def get_settings() -> Settings:

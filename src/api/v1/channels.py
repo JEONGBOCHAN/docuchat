@@ -5,9 +5,12 @@ from datetime import datetime, UTC
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 from src.models.channel import ChannelCreate, ChannelResponse, ChannelList
 from src.services.gemini import GeminiService, get_gemini_service
+from src.core.database import get_db
+from src.services.channel_repository import ChannelRepository
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 
@@ -21,6 +24,7 @@ router = APIRouter(prefix="/channels", tags=["channels"])
 def create_channel(
     data: ChannelCreate,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> ChannelResponse:
     """Create a new channel (Gemini File Search Store).
 
@@ -28,10 +32,16 @@ def create_channel(
     """
     try:
         store = gemini.create_store(data.name)
+        store_id = store["name"]
+
+        # Save to local metadata DB
+        repo = ChannelRepository(db)
+        channel = repo.create(gemini_store_id=store_id, name=data.name)
+
         return ChannelResponse(
-            id=store["name"],
+            id=store_id,
             name=data.name,
-            created_at=datetime.now(UTC),
+            created_at=channel.created_at,
             file_count=0,
         )
     except Exception as e:
@@ -48,19 +58,26 @@ def create_channel(
 )
 def list_channels(
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> ChannelList:
     """List all channels (File Search Stores)."""
     try:
         stores = gemini.list_stores()
-        channels = [
-            ChannelResponse(
-                id=store["name"],
-                name=store.get("display_name", ""),
-                created_at=datetime.now(UTC),  # API doesn't return created_at
-                file_count=0,  # Would need separate API call
+        repo = ChannelRepository(db)
+
+        channels = []
+        for store in stores:
+            store_id = store["name"]
+            # Get local metadata if exists
+            local_meta = repo.get_by_gemini_id(store_id)
+            channels.append(
+                ChannelResponse(
+                    id=store_id,
+                    name=store.get("display_name", ""),
+                    created_at=local_meta.created_at if local_meta else datetime.now(UTC),
+                    file_count=local_meta.file_count if local_meta else 0,
+                )
             )
-            for store in stores
-        ]
         return ChannelList(channels=channels, total=len(channels))
     except Exception as e:
         raise HTTPException(
@@ -77,6 +94,7 @@ def list_channels(
 def get_channel(
     channel_id: str,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> ChannelResponse:
     """Get a specific channel by its ID.
 
@@ -88,11 +106,16 @@ def get_channel(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
+
+    # Update last accessed time in local DB
+    repo = ChannelRepository(db)
+    local_meta = repo.touch(channel_id)
+
     return ChannelResponse(
         id=store["name"],
         name=store.get("display_name", ""),
-        created_at=datetime.now(UTC),
-        file_count=0,
+        created_at=local_meta.created_at if local_meta else datetime.now(UTC),
+        file_count=local_meta.file_count if local_meta else 0,
     )
 
 
@@ -104,6 +127,7 @@ def get_channel(
 def delete_channel(
     channel_id: str,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Delete a channel and all its documents.
 
@@ -123,4 +147,9 @@ def delete_channel(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete channel",
         )
+
+    # Delete from local DB (also cascades to chat history)
+    repo = ChannelRepository(db)
+    repo.delete(channel_id)
+
     return None

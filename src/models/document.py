@@ -47,3 +47,9 @@ class DocumentUploadResponse(BaseModel):
     filename: str
     status: UploadStatus = Field(default=UploadStatus.PROCESSING)
     message: str = Field(default="Upload in progress")
+
+
+class UrlUploadRequest(BaseModel):
+    """Request model for URL upload."""
+
+    url: str = Field(..., description="URL to crawl and upload", min_length=1)

@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """Chat API endpoints."""
 
+import json
 from datetime import datetime, UTC
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
 from src.models.chat import (
     ChatRequest,
@@ -14,12 +16,10 @@ from src.models.chat import (
     GroundingSource,
 )
 from src.services.gemini import GeminiService, get_gemini_service
+from src.core.database import get_db
+from src.services.channel_repository import ChannelRepository, ChatHistoryRepository
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-# In-memory chat history storage (for simplicity)
-# In production, use a database
-_chat_histories: dict[str, list[ChatMessage]] = {}
 
 
 @router.post(
@@ -31,6 +31,7 @@ def send_message(
     channel_id: Annotated[str, Query(description="Channel ID to query")],
     request: ChatRequest,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> ChatResponse:
     """Send a question and get an AI-generated answer.
 
@@ -43,6 +44,19 @@ def send_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
+
+    # Get or create local channel metadata
+    channel_repo = ChannelRepository(db)
+    channel_meta = channel_repo.get_by_gemini_id(channel_id)
+    if not channel_meta:
+        # Create if not exists (for channels created before DB integration)
+        channel_meta = channel_repo.create(
+            gemini_store_id=channel_id,
+            name=store.get("display_name", "unknown"),
+        )
+    else:
+        # Update last accessed time
+        channel_repo.touch(channel_id)
 
     # Search and generate answer
     result = gemini.search_and_answer(channel_id, request.query)
@@ -69,28 +83,23 @@ def send_message(
         created_at=datetime.now(UTC),
     )
 
-    # Store in history
-    if channel_id not in _chat_histories:
-        _chat_histories[channel_id] = []
+    # Store in DB
+    chat_repo = ChatHistoryRepository(db)
 
     # Add user message
-    _chat_histories[channel_id].append(
-        ChatMessage(
-            role="user",
-            content=request.query,
-            sources=[],
-            created_at=datetime.now(UTC),
-        )
+    chat_repo.add_message(
+        channel=channel_meta,
+        role="user",
+        content=request.query,
+        sources=None,
     )
 
     # Add assistant message
-    _chat_histories[channel_id].append(
-        ChatMessage(
-            role="assistant",
-            content=response.response,
-            sources=sources,
-            created_at=datetime.now(UTC),
-        )
+    chat_repo.add_message(
+        channel=channel_meta,
+        role="assistant",
+        content=response.response,
+        sources=[{"source": s.source, "content": s.content} for s in sources],
     )
 
     return response
@@ -104,6 +113,7 @@ def send_message(
 def get_chat_history(
     channel_id: Annotated[str, Query(description="Channel ID")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> ChatHistory:
     """Get the chat history for a channel."""
     # Validate channel exists
@@ -114,7 +124,31 @@ def get_chat_history(
             detail=f"Channel not found: {channel_id}",
         )
 
-    messages = _chat_histories.get(channel_id, [])
+    # Get channel metadata
+    channel_repo = ChannelRepository(db)
+    channel_meta = channel_repo.get_by_gemini_id(channel_id)
+
+    if not channel_meta:
+        # No local metadata means no chat history
+        return ChatHistory(channel_id=channel_id, messages=[], total=0)
+
+    # Get messages from DB
+    chat_repo = ChatHistoryRepository(db)
+    db_messages = chat_repo.get_history(channel_meta)
+
+    # Convert to ChatMessage models
+    messages = [
+        ChatMessage(
+            role=msg.role,
+            content=msg.content,
+            sources=[
+                GroundingSource(source=s.get("source", ""), content=s.get("content", ""))
+                for s in json.loads(msg.sources_json)
+            ],
+            created_at=msg.created_at,
+        )
+        for msg in db_messages
+    ]
 
     return ChatHistory(
         channel_id=channel_id,
@@ -131,6 +165,7 @@ def get_chat_history(
 def clear_chat_history(
     channel_id: Annotated[str, Query(description="Channel ID")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     """Clear the chat history for a channel."""
     # Validate channel exists
@@ -141,7 +176,13 @@ def clear_chat_history(
             detail=f"Channel not found: {channel_id}",
         )
 
-    if channel_id in _chat_histories:
-        del _chat_histories[channel_id]
+    # Get channel metadata
+    channel_repo = ChannelRepository(db)
+    channel_meta = channel_repo.get_by_gemini_id(channel_id)
+
+    if channel_meta:
+        # Clear chat history from DB
+        chat_repo = ChatHistoryRepository(db)
+        chat_repo.clear_history(channel_meta)
 
     return None

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.services.gemini import get_gemini_service
+from src.services.crawler import get_crawler_service, CrawlResult
 
 
 class TestUploadDocument:
@@ -238,5 +239,126 @@ class TestDeleteDocument:
         response = client.delete("/api/v1/documents/files/file-123")
 
         assert response.status_code == 500
+
+        app.dependency_overrides.clear()
+
+
+class TestUploadFromUrl:
+    """Tests for POST /api/v1/documents/url."""
+
+    def test_upload_from_url_success(self, client: TestClient):
+        """Test successful URL upload."""
+        mock_gemini = MagicMock()
+        mock_gemini.get_store.return_value = {
+            "name": "fileSearchStores/test-store",
+            "display_name": "Test Channel",
+        }
+        mock_gemini.upload_file.return_value = {
+            "name": "operations/upload-123",
+            "done": False,
+        }
+
+        mock_crawler = MagicMock()
+        mock_crawler.fetch_url.return_value = CrawlResult(
+            url="https://example.com",
+            title="Example Page",
+            content="Example content here",
+            content_type="text/html",
+        )
+        mock_crawler.save_to_temp_file.return_value = "/tmp/test.md"
+
+        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
+
+        response = client.post(
+            "/api/v1/documents/url",
+            params={"channel_id": "fileSearchStores/test-store"},
+            json={"url": "https://example.com"},
+        )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["id"] == "operations/upload-123"
+        assert data["filename"] == "Example Page.md"
+        assert data["status"] == "processing"
+
+        app.dependency_overrides.clear()
+
+    def test_upload_from_url_channel_not_found(self, client: TestClient):
+        """Test URL upload to non-existent channel."""
+        mock_gemini = MagicMock()
+        mock_gemini.get_store.return_value = None
+
+        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+
+        response = client.post(
+            "/api/v1/documents/url",
+            params={"channel_id": "fileSearchStores/not-exists"},
+            json={"url": "https://example.com"},
+        )
+
+        assert response.status_code == 404
+
+        app.dependency_overrides.clear()
+
+    def test_upload_from_url_invalid_url(self, client: TestClient):
+        """Test URL upload with invalid URL."""
+        mock_gemini = MagicMock()
+        mock_gemini.get_store.return_value = {
+            "name": "fileSearchStores/test-store",
+            "display_name": "Test Channel",
+        }
+
+        mock_crawler = MagicMock()
+        mock_crawler.fetch_url.side_effect = ValueError("Invalid URL: not-a-url")
+
+        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
+
+        response = client.post(
+            "/api/v1/documents/url",
+            params={"channel_id": "fileSearchStores/test-store"},
+            json={"url": "not-a-url"},
+        )
+
+        assert response.status_code == 400
+        assert "Invalid URL" in response.json()["detail"]
+
+        app.dependency_overrides.clear()
+
+    def test_upload_from_url_crawl_error(self, client: TestClient):
+        """Test URL upload handles crawl errors."""
+        mock_gemini = MagicMock()
+        mock_gemini.get_store.return_value = {
+            "name": "fileSearchStores/test-store",
+            "display_name": "Test Channel",
+        }
+
+        mock_crawler = MagicMock()
+        mock_crawler.fetch_url.side_effect = Exception("Connection failed")
+
+        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
+
+        response = client.post(
+            "/api/v1/documents/url",
+            params={"channel_id": "fileSearchStores/test-store"},
+            json={"url": "https://example.com"},
+        )
+
+        assert response.status_code == 500
+        assert "Failed to upload from URL" in response.json()["detail"]
+
+        app.dependency_overrides.clear()
+
+    def test_upload_from_url_empty_url(self, client: TestClient):
+        """Test URL upload with empty URL."""
+        response = client.post(
+            "/api/v1/documents/url",
+            params={"channel_id": "fileSearchStores/test-store"},
+            json={"url": ""},
+        )
+
+        assert response.status_code == 422  # Validation error
 
         app.dependency_overrides.clear()

@@ -15,8 +15,10 @@ from src.models.document import (
     DocumentList,
     DocumentUploadResponse,
     UploadStatus,
+    UrlUploadRequest,
 )
 from src.services.gemini import GeminiService, get_gemini_service
+from src.services.crawler import CrawlerService, get_crawler_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -104,6 +106,67 @@ async def upload_document(
     finally:
         # Clean up temp file
         if "tmp_path" in locals():
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+@router.post(
+    "/url",
+    response_model=DocumentUploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Upload document from URL",
+)
+def upload_from_url(
+    channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
+    request: UrlUploadRequest,
+    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    crawler: Annotated[CrawlerService, Depends(get_crawler_service)],
+) -> DocumentUploadResponse:
+    """Crawl a URL and upload the content as a document.
+
+    The URL content will be fetched, converted to markdown, and uploaded to the channel.
+    """
+    # Validate channel exists
+    store = gemini.get_store(channel_id)
+    if not store:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Channel not found: {channel_id}",
+        )
+
+    tmp_path = None
+    try:
+        # Crawl the URL
+        result = crawler.fetch_url(request.url)
+
+        # Save to temp file
+        tmp_path = crawler.save_to_temp_file(result)
+
+        # Upload to Gemini
+        operation = gemini.upload_file(channel_id, tmp_path)
+
+        return DocumentUploadResponse(
+            id=operation["name"],
+            filename=f"{result.title}.md",
+            status=UploadStatus.PROCESSING if not operation["done"] else UploadStatus.COMPLETED,
+            message="URL content uploaded" if not operation["done"] else "Upload completed",
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload from URL: {str(e)}",
+        )
+    finally:
+        # Clean up temp file
+        if tmp_path:
             try:
                 os.unlink(tmp_path)
             except OSError:

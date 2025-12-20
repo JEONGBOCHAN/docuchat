@@ -7,21 +7,13 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.services.gemini import get_gemini_service
-from src.api.v1.chat import _chat_histories
-
-
-@pytest.fixture(autouse=True)
-def clear_history():
-    """Clear chat history before each test."""
-    _chat_histories.clear()
-    yield
-    _chat_histories.clear()
+from src.core.database import get_db
 
 
 class TestSendMessage:
     """Tests for POST /api/v1/chat."""
 
-    def test_send_message_success(self, client: TestClient):
+    def test_send_message_success(self, client_with_db: TestClient, test_db):
         """Test successful chat message."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -37,7 +29,7 @@ class TestSendMessage:
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/chat",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"query": "What is the main topic?"},
@@ -50,16 +42,16 @@ class TestSendMessage:
         assert len(data["sources"]) == 1
         assert data["sources"][0]["source"] == "document.pdf"
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_send_message_channel_not_found(self, client: TestClient):
+    def test_send_message_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test sending message to non-existent channel."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = None
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/chat",
             params={"channel_id": "fileSearchStores/not-exists"},
             json={"query": "What is this?"},
@@ -67,11 +59,11 @@ class TestSendMessage:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_send_message_empty_query(self, client: TestClient):
+    def test_send_message_empty_query(self, client_with_db: TestClient, test_db):
         """Test sending empty query fails."""
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/chat",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"query": ""},
@@ -79,7 +71,7 @@ class TestSendMessage:
 
         assert response.status_code == 422  # Validation error
 
-    def test_send_message_api_error(self, client: TestClient):
+    def test_send_message_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -94,7 +86,7 @@ class TestSendMessage:
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.post(
+        response = client_with_db.post(
             "/api/v1/chat",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"query": "What is this?"},
@@ -102,13 +94,13 @@ class TestSendMessage:
 
         assert response.status_code == 500
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
 
 class TestGetChatHistory:
     """Tests for GET /api/v1/chat/history."""
 
-    def test_get_history_empty(self, client: TestClient):
+    def test_get_history_empty(self, client_with_db: TestClient, test_db):
         """Test getting empty history."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -118,7 +110,7 @@ class TestGetChatHistory:
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.get(
+        response = client_with_db.get(
             "/api/v1/chat/history",
             params={"channel_id": "fileSearchStores/test-store"},
         )
@@ -129,9 +121,9 @@ class TestGetChatHistory:
         assert data["messages"] == []
         assert data["total"] == 0
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_get_history_with_messages(self, client: TestClient):
+    def test_get_history_with_messages(self, client_with_db: TestClient, test_db):
         """Test getting history after sending messages."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -146,14 +138,14 @@ class TestGetChatHistory:
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
         # Send a message first
-        client.post(
+        client_with_db.post(
             "/api/v1/chat",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"query": "Hello?"},
         )
 
         # Get history
-        response = client.get(
+        response = client_with_db.get(
             "/api/v1/chat/history",
             params={"channel_id": "fileSearchStores/test-store"},
         )
@@ -166,29 +158,29 @@ class TestGetChatHistory:
         assert data["messages"][1]["role"] == "assistant"
         assert data["messages"][1]["content"] == "Answer here"
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_get_history_channel_not_found(self, client: TestClient):
+    def test_get_history_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test getting history for non-existent channel."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = None
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.get(
+        response = client_with_db.get(
             "/api/v1/chat/history",
             params={"channel_id": "fileSearchStores/not-exists"},
         )
 
         assert response.status_code == 404
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
 
 class TestClearChatHistory:
     """Tests for DELETE /api/v1/chat/history."""
 
-    def test_clear_history_success(self, client: TestClient):
+    def test_clear_history_success(self, client_with_db: TestClient, test_db):
         """Test clearing chat history."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = {
@@ -203,14 +195,14 @@ class TestClearChatHistory:
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
         # Send a message first
-        client.post(
+        client_with_db.post(
             "/api/v1/chat",
             params={"channel_id": "fileSearchStores/test-store"},
             json={"query": "Hello?"},
         )
 
         # Clear history
-        response = client.delete(
+        response = client_with_db.delete(
             "/api/v1/chat/history",
             params={"channel_id": "fileSearchStores/test-store"},
         )
@@ -218,26 +210,26 @@ class TestClearChatHistory:
         assert response.status_code == 204
 
         # Verify history is cleared
-        response = client.get(
+        response = client_with_db.get(
             "/api/v1/chat/history",
             params={"channel_id": "fileSearchStores/test-store"},
         )
         assert response.json()["total"] == 0
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
 
-    def test_clear_history_channel_not_found(self, client: TestClient):
+    def test_clear_history_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test clearing history for non-existent channel."""
         mock_gemini = MagicMock()
         mock_gemini.get_store.return_value = None
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client.delete(
+        response = client_with_db.delete(
             "/api/v1/chat/history",
             params={"channel_id": "fileSearchStores/not-exists"},
         )
 
         assert response.status_code == 404
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_gemini_service, None)
