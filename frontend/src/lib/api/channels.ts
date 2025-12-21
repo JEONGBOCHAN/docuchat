@@ -6,6 +6,7 @@ export interface Channel {
   description?: string;
   file_count: number;
   created_at: string;
+  is_favorited?: boolean;
 }
 
 export interface ChannelList {

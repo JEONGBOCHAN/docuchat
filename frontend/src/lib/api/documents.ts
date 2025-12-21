@@ -10,6 +10,7 @@ export interface Document {
   status: UploadStatus;
   channel_id: string;
   created_at: string;
+  error_message?: string;
 }
 
 export interface DocumentList {
