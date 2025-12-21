@@ -48,6 +48,44 @@ class TestEndpointMetrics:
         )
         assert metrics.error_rate == 20.0
 
+    def test_add_latency(self):
+        """Test adding latency measurements."""
+        metrics = EndpointMetrics()
+        metrics.add_latency(10.0)
+        metrics.add_latency(20.0)
+        metrics.add_latency(30.0)
+
+        assert len(metrics.latencies) == 3
+        assert metrics.min_latency_ms == 10.0
+        assert metrics.max_latency_ms == 30.0
+
+    def test_add_latency_bounds_list(self):
+        """Test that latencies list is bounded to 1000."""
+        metrics = EndpointMetrics()
+        for i in range(1100):
+            metrics.add_latency(float(i))
+
+        assert len(metrics.latencies) == 1000
+
+    def test_percentile_calculation(self):
+        """Test percentile calculation."""
+        metrics = EndpointMetrics()
+        for i in range(1, 101):
+            metrics.add_latency(float(i))
+
+        # Percentile calculation: index = len * percentile / 100
+        # For 100 elements: p50 -> index 50 -> value 51.0
+        assert metrics.p50_latency_ms == 51.0
+        assert metrics.p95_latency_ms == 96.0
+        assert metrics.p99_latency_ms == 100.0
+
+    def test_percentile_empty(self):
+        """Test percentile with no measurements."""
+        metrics = EndpointMetrics()
+        assert metrics.p50_latency_ms == 0.0
+        assert metrics.p95_latency_ms == 0.0
+        assert metrics.p99_latency_ms == 0.0
+
 
 class TestApiMetricsService:
     """Tests for ApiMetricsService."""
@@ -87,6 +125,28 @@ class TestApiMetricsService:
         assert metrics.total_latency_ms == 60.0
         assert metrics.avg_latency_ms == 20.0
 
+    def test_record_call_with_method(self):
+        """Test recording calls with HTTP method."""
+        service = ApiMetricsService()
+        service.record_call("/api/v1/test", success=True, latency_ms=10.0, method="GET")
+        service.record_call("/api/v1/test", success=True, latency_ms=20.0, method="GET")
+        service.record_call("/api/v1/test", success=True, latency_ms=30.0, method="POST")
+
+        metrics = service.get_endpoint_metrics("/api/v1/test")
+        assert metrics.method_counts["GET"] == 2
+        assert metrics.method_counts["POST"] == 1
+
+    def test_record_call_tracks_percentiles(self):
+        """Test that record_call tracks latencies for percentiles."""
+        service = ApiMetricsService()
+        for i in range(1, 101):
+            service.record_call("/api/v1/test", success=True, latency_ms=float(i))
+
+        metrics = service.get_endpoint_metrics("/api/v1/test")
+        # Percentile calculation: index = len * percentile / 100
+        assert metrics.p50_latency_ms == 51.0
+        assert metrics.p95_latency_ms == 96.0
+
     def test_record_gemini_call(self):
         """Test recording Gemini API calls."""
         service = ApiMetricsService()
@@ -106,6 +166,9 @@ class TestApiMetricsService:
         assert stats["error_rate_percent"] == 0
         assert stats["gemini_api_calls"] == 0
         assert stats["top_endpoints"] == []
+        assert stats["p50_latency_ms"] == 0
+        assert stats["p95_latency_ms"] == 0
+        assert stats["p99_latency_ms"] == 0
 
     def test_get_stats_with_calls(self):
         """Test getting stats with recorded calls."""

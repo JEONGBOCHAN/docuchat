@@ -14,6 +14,7 @@ from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
 from src.services.note_repository import NoteRepository
+from src.services.trash_repository import TrashRepository
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
@@ -195,7 +196,11 @@ def delete_note(
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    """Delete a note."""
+    """Delete a note (moves to trash).
+
+    The note can be restored from the trash within 30 days.
+    Use DELETE /trash/note/{id} for permanent deletion.
+    """
     store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
 
     note_repo = NoteRepository(db)
@@ -207,5 +212,7 @@ def delete_note(
             detail=f"Note not found: {note_id}",
         )
 
-    note_repo.delete(note)
+    # Soft delete (move to trash)
+    trash_repo = TrashRepository(db)
+    trash_repo.soft_delete_note(note_id)
     return None

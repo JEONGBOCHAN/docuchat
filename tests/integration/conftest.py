@@ -4,6 +4,10 @@
 import os
 import pytest
 from datetime import datetime, UTC
+from dotenv import load_dotenv
+
+# Load .env file for integration tests
+load_dotenv()
 
 from src.services.gemini import GeminiService
 from src.core.config import get_settings

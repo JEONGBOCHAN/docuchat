@@ -50,9 +50,12 @@ class NoteRepository:
             note_id: The note ID
 
         Returns:
-            NoteDB or None
+            NoteDB or None (excludes soft-deleted notes)
         """
-        return self.db.query(NoteDB).filter(NoteDB.id == note_id).first()
+        return self.db.query(NoteDB).filter(
+            NoteDB.id == note_id,
+            NoteDB.deleted_at.is_(None),
+        ).first()
 
     def get_by_channel(
         self, channel: ChannelMetadata, limit: int = 100, offset: int = 0
@@ -65,11 +68,14 @@ class NoteRepository:
             offset: Number of notes to skip
 
         Returns:
-            List of notes
+            List of notes (excludes soft-deleted notes)
         """
         return (
             self.db.query(NoteDB)
-            .filter(NoteDB.channel_id == channel.id)
+            .filter(
+                NoteDB.channel_id == channel.id,
+                NoteDB.deleted_at.is_(None),
+            )
             .order_by(NoteDB.updated_at.desc())
             .offset(offset)
             .limit(limit)
@@ -83,9 +89,12 @@ class NoteRepository:
             channel: The channel metadata
 
         Returns:
-            Number of notes
+            Number of notes (excludes soft-deleted notes)
         """
-        return self.db.query(NoteDB).filter(NoteDB.channel_id == channel.id).count()
+        return self.db.query(NoteDB).filter(
+            NoteDB.channel_id == channel.id,
+            NoteDB.deleted_at.is_(None),
+        ).count()
 
     def update(
         self,

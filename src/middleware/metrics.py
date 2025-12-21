@@ -39,17 +39,23 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         # Get endpoint path for grouping
         endpoint = request.url.path
 
+        method = request.method
+
         try:
             response = await call_next(request)
             latency_ms = (time.time() - start_time) * 1000
 
             # Record successful call (2xx/3xx status codes)
             success = response.status_code < 400
-            metrics.record_call(endpoint, success=success, latency_ms=latency_ms)
+            metrics.record_call(
+                endpoint, success=success, latency_ms=latency_ms, method=method
+            )
 
             return response
 
         except Exception:
             latency_ms = (time.time() - start_time) * 1000
-            metrics.record_call(endpoint, success=False, latency_ms=latency_ms)
+            metrics.record_call(
+                endpoint, success=False, latency_ms=latency_ms, method=method
+            )
             raise

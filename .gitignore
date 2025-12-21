@@ -31,3 +31,10 @@ Thumbs.db
 
 # 로컬 데이터베이스
 data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Claude Code
+CLAUDE.md
+.claude/

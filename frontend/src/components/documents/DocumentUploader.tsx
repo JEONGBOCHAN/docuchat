@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { documentsApi, type DocumentUploadResponse } from '@/lib/api/documents';
 import { ApiClientError } from '@/lib/api';
+import { GoogleDrivePicker } from '@/components/google-drive';
 
 interface DocumentUploaderProps {
   channelId: string;
@@ -104,11 +105,13 @@ const ACCEPTED_TYPES = [
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
+type UploadMode = 'file' | 'url' | 'drive';
+
 export default function DocumentUploader({ channelId, onUploadComplete }: DocumentUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [urlInput, setUrlInput] = useState('');
-  const [isUrlMode, setIsUrlMode] = useState(false);
+  const [uploadMode, setUploadMode] = useState<UploadMode>('file');
   const [urlError, setUrlError] = useState<string | null>(null);
   const [isUrlUploading, setIsUrlUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -304,7 +307,7 @@ export default function DocumentUploader({ channelId, onUploadComplete }: Docume
     try {
       await documentsApi.uploadFromUrl(channelId, urlInput);
       setUrlInput('');
-      setIsUrlMode(false);
+      setUploadMode('file');
       onUploadComplete();
     } catch (err) {
       setUrlError(err instanceof Error ? err.message : 'Failed to fetch URL');
@@ -320,30 +323,43 @@ export default function DocumentUploader({ channelId, onUploadComplete }: Docume
   return (
     <div className="space-y-4">
       {/* Upload Mode Toggle */}
-      <div className="flex gap-2">
+      <div className="flex gap-1 flex-wrap">
         <button
-          onClick={() => setIsUrlMode(false)}
+          onClick={() => setUploadMode('file')}
           className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-            !isUrlMode
+            uploadMode === 'file'
               ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
-          File Upload
+          File
         </button>
         <button
-          onClick={() => setIsUrlMode(true)}
+          onClick={() => setUploadMode('url')}
           className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-            isUrlMode
+            uploadMode === 'url'
               ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           URL
         </button>
+        <button
+          onClick={() => setUploadMode('drive')}
+          className={`px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5 ${
+            uploadMode === 'drive'
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972a6.033 6.033 0 110-12.064c1.498 0 2.866.549 3.921 1.453l2.814-2.814A9.969 9.969 0 0012.545 2C7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748l-9.426-.013z" />
+          </svg>
+          Drive
+        </button>
       </div>
 
-      {!isUrlMode ? (
+      {uploadMode === 'file' ? (
         <>
           {/* Drop Zone */}
           <div
@@ -406,7 +422,7 @@ export default function DocumentUploader({ channelId, onUploadComplete }: Docume
             </div>
           </div>
         </>
-      ) : (
+      ) : uploadMode === 'url' ? (
         /* URL Input */
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -440,6 +456,14 @@ export default function DocumentUploader({ channelId, onUploadComplete }: Docume
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Enter a URL to fetch and add as a document
           </p>
+        </div>
+      ) : (
+        /* Google Drive Picker */
+        <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+          <GoogleDrivePicker
+            channelId={channelId}
+            onImportComplete={onUploadComplete}
+          />
         </div>
       )}
 

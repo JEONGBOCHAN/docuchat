@@ -5,7 +5,7 @@ import json
 from datetime import datetime, UTC
 from typing import Annotated, Generator
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,7 @@ from src.services.channel_repository import (
 from src.services.cache_service import CacheService, get_cache_service
 from src.services.search_repository import SearchHistoryRepository
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/channels/{channel_id}/chat", tags=["chat"])
 
 
 def _format_sse_event(data: dict) -> str:
@@ -57,7 +57,7 @@ def _get_conversation_history(
 @limiter.limit(RateLimits.CHAT)
 def send_message(
     request: Request,
-    channel_id: Annotated[str, Query(description="Channel ID to query")],
+    channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
@@ -204,7 +204,7 @@ def send_message(
 @limiter.limit(RateLimits.CHAT)
 def send_message_stream(
     request: Request,
-    channel_id: Annotated[str, Query(description="Channel ID to query")],
+    channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
@@ -325,7 +325,7 @@ def send_message_stream(
 @limiter.limit(RateLimits.DEFAULT)
 def get_chat_history(
     request: Request,
-    channel_id: Annotated[str, Query(description="Channel ID")],
+    channel_id: Annotated[str, Path(description="Channel ID")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
@@ -380,7 +380,7 @@ def get_chat_history(
 @limiter.limit(RateLimits.DEFAULT)
 def clear_chat_history(
     request: Request,
-    channel_id: Annotated[str, Query(description="Channel ID")],
+    channel_id: Annotated[str, Path(description="Channel ID")],
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
 ):
@@ -417,7 +417,7 @@ def clear_chat_history(
 @limiter.limit(RateLimits.DEFAULT)
 def create_session(
     request: Request,
-    channel_id: Annotated[str, Query(description="Channel ID")],
+    channel_id: Annotated[str, Path(description="Channel ID")],
     body: CreateSessionRequest,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],

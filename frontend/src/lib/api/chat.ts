@@ -48,7 +48,7 @@ export interface StreamController {
 export const chatApi = {
   sendMessage: (channelId: string, message: string) => {
     return apiClient.post<ChatResponse>(`/api/v1/channels/${channelId}/chat`, {
-      message,
+      query: message,
     });
   },
 
@@ -104,7 +104,7 @@ export const chatApi = {
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({ query: message }),
             signal: abortController.signal,
           }
         );

@@ -3,8 +3,17 @@ import type { GroundingSource } from './types';
 
 export type { GroundingSource };
 
+/**
+ * Note entity - represents a user note in a channel.
+ *
+ * Note: `id` is a number (database auto-increment ID), unlike Channel/Document
+ * which use string UUIDs. This is intentional as notes are stored in our DB
+ * while channels/documents use external Gemini store IDs.
+ */
 export interface Note {
+  /** Database auto-increment ID (number, not UUID) */
   id: number;
+  /** Parent channel's Gemini store ID */
   channel_id: string;
   title: string;
   content: string;

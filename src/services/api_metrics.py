@@ -4,14 +4,15 @@
 This module provides a service for tracking API call counts and latencies.
 """
 
-import logging
-import time
+import heapq
 from collections import defaultdict
 from datetime import datetime, UTC
 from dataclasses import dataclass, field
 from threading import Lock
 
-logger = logging.getLogger(__name__)
+from src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -22,6 +23,12 @@ class EndpointMetrics:
     success_count: int = 0
     error_count: int = 0
     total_latency_ms: float = 0.0
+    min_latency_ms: float = float("inf")
+    max_latency_ms: float = 0.0
+    latencies: list = field(default_factory=list)  # For percentile calculation
+
+    # HTTP method breakdown
+    method_counts: dict = field(default_factory=lambda: defaultdict(int))
 
     @property
     def avg_latency_ms(self) -> float:
@@ -36,6 +43,50 @@ class EndpointMetrics:
         if self.total_calls == 0:
             return 0.0
         return (self.error_count / self.total_calls) * 100
+
+    def add_latency(self, latency_ms: float) -> None:
+        """Add a latency measurement for percentile calculation.
+
+        Keeps only the last 1000 measurements to bound memory usage.
+        """
+        self.latencies.append(latency_ms)
+        if len(self.latencies) > 1000:
+            self.latencies.pop(0)
+
+        self.min_latency_ms = min(self.min_latency_ms, latency_ms)
+        self.max_latency_ms = max(self.max_latency_ms, latency_ms)
+
+    def get_percentile(self, percentile: float) -> float:
+        """Get a percentile latency value.
+
+        Args:
+            percentile: The percentile to calculate (0-100)
+
+        Returns:
+            The latency at the given percentile
+        """
+        if not self.latencies:
+            return 0.0
+
+        sorted_latencies = sorted(self.latencies)
+        index = int(len(sorted_latencies) * percentile / 100)
+        index = min(index, len(sorted_latencies) - 1)
+        return sorted_latencies[index]
+
+    @property
+    def p50_latency_ms(self) -> float:
+        """Get median (p50) latency."""
+        return self.get_percentile(50)
+
+    @property
+    def p95_latency_ms(self) -> float:
+        """Get p95 latency."""
+        return self.get_percentile(95)
+
+    @property
+    def p99_latency_ms(self) -> float:
+        """Get p99 latency."""
+        return self.get_percentile(99)
 
 
 class ApiMetricsService:
@@ -72,6 +123,7 @@ class ApiMetricsService:
         endpoint: str,
         success: bool = True,
         latency_ms: float = 0.0,
+        method: str = "GET",
     ):
         """Record an API call.
 
@@ -79,11 +131,14 @@ class ApiMetricsService:
             endpoint: The endpoint path (e.g., "/api/v1/channels")
             success: Whether the call was successful
             latency_ms: Latency in milliseconds
+            method: HTTP method (GET, POST, etc.)
         """
         with self._lock:
             metrics = self._endpoints[endpoint]
             metrics.total_calls += 1
             metrics.total_latency_ms += latency_ms
+            metrics.add_latency(latency_ms)
+            metrics.method_counts[method] += 1
 
             if success:
                 metrics.success_count += 1
@@ -131,9 +186,28 @@ class ApiMetricsService:
                     "calls": metrics.total_calls,
                     "errors": metrics.error_count,
                     "avg_latency_ms": round(metrics.avg_latency_ms, 2),
+                    "p50_latency_ms": round(metrics.p50_latency_ms, 2),
+                    "p95_latency_ms": round(metrics.p95_latency_ms, 2),
+                    "p99_latency_ms": round(metrics.p99_latency_ms, 2),
+                    "min_latency_ms": round(metrics.min_latency_ms, 2) if metrics.min_latency_ms != float("inf") else 0,
+                    "max_latency_ms": round(metrics.max_latency_ms, 2),
+                    "methods": dict(metrics.method_counts),
                 }
                 for endpoint, metrics in sorted_endpoints[:10]
             ]
+
+            # Calculate overall percentiles
+            all_latencies = []
+            for m in self._endpoints.values():
+                all_latencies.extend(m.latencies)
+            all_latencies.sort()
+
+            def get_percentile(percentile: float) -> float:
+                if not all_latencies:
+                    return 0.0
+                index = int(len(all_latencies) * percentile / 100)
+                index = min(index, len(all_latencies) - 1)
+                return all_latencies[index]
 
             return {
                 "uptime_seconds": int((datetime.now(UTC) - self._started_at).total_seconds()),
@@ -142,6 +216,9 @@ class ApiMetricsService:
                 "total_errors": total_errors,
                 "error_rate_percent": round((total_errors / total_calls * 100) if total_calls > 0 else 0, 2),
                 "avg_latency_ms": round(total_latency / total_calls if total_calls > 0 else 0, 2),
+                "p50_latency_ms": round(get_percentile(50), 2),
+                "p95_latency_ms": round(get_percentile(95), 2),
+                "p99_latency_ms": round(get_percentile(99), 2),
                 "gemini_api_calls": self._gemini_api_calls,
                 "top_endpoints": top_endpoints,
             }

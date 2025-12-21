@@ -12,6 +12,7 @@ from src.core.database import SessionLocal
 from src.services.channel_repository import ChannelRepository
 from src.services.lifecycle_policy import LifecyclePolicy, ChannelState
 from src.services.gemini import GeminiService
+from src.services.trash_repository import TrashRepository
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,68 @@ def update_channel_statistics():
 
     except Exception as e:
         logger.error(f"Error during statistics update: {e}")
+        raise
+    finally:
+        db.close()
+
+
+def cleanup_expired_trash(retention_days: int = 30):
+    """Clean up expired items in trash.
+
+    Permanently deletes channels and notes that have been in the trash
+    for longer than the retention period.
+
+    Args:
+        retention_days: Number of days to retain items in trash (default: 30)
+    """
+    logger.info(f"Starting expired trash cleanup (retention_days={retention_days})...")
+
+    db = SessionLocal()
+    try:
+        trash_repo = TrashRepository(db)
+        gemini = GeminiService()
+
+        # Get trashed channels that will be deleted for Gemini cleanup
+        from src.models.db_models import ChannelMetadata
+        from datetime import timedelta
+
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        expired_channels = db.query(ChannelMetadata).filter(
+            ChannelMetadata.deleted_at.isnot(None),
+            ChannelMetadata.deleted_at < cutoff,
+        ).all()
+
+        # Delete from Gemini first
+        gemini_deleted = 0
+        gemini_failed = 0
+        for channel in expired_channels:
+            try:
+                gemini.delete_store(channel.gemini_store_id, force=True)
+                gemini_deleted += 1
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete from Gemini: {channel.gemini_store_id}: {e}"
+                )
+                gemini_failed += 1
+
+        # Then delete from DB
+        deleted_channels, deleted_notes = trash_repo.cleanup_expired_trash(retention_days)
+
+        logger.info(
+            f"Expired trash cleanup complete. "
+            f"Channels: {deleted_channels} (Gemini: {gemini_deleted} ok, {gemini_failed} failed), "
+            f"Notes: {deleted_notes}"
+        )
+
+        return {
+            "deleted_channels": deleted_channels,
+            "deleted_notes": deleted_notes,
+            "gemini_deleted": gemini_deleted,
+            "gemini_failed": gemini_failed,
+        }
+
+    except Exception as e:
+        logger.error(f"Error during expired trash cleanup: {e}")
         raise
     finally:
         db.close()

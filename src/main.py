@@ -1,26 +1,31 @@
 # -*- coding: utf-8 -*-
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from src.api.v1.router import api_router
 from src.core.config import get_settings
 from src.core.database import init_db
+from src.core.logging import get_logger, setup_logging
 from src.core.rate_limiter import limiter
+from src.core.sentry import setup_sentry
 from src.middleware.metrics import MetricsMiddleware
+from src.middleware.request_logging import RequestLoggingMiddleware
 from src.services.scheduler import get_scheduler
 from src.services.scheduler_jobs import (
     scan_inactive_channels,
     update_channel_statistics,
+    cleanup_expired_trash,
 )
 
+# Initialize structured logging first
+setup_logging()
+
 settings = get_settings()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def setup_scheduler():
@@ -42,6 +47,14 @@ def setup_scheduler():
         hours=6,
     )
 
+    # Clean up expired trash daily at 3 AM UTC
+    scheduler.add_cron_job(
+        job_id="cleanup_expired_trash",
+        func=cleanup_expired_trash,
+        hour=3,
+        minute=0,
+    )
+
     scheduler.start()
     logger.info("Background scheduler configured and started")
 
@@ -49,11 +62,21 @@ def setup_scheduler():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
+    # Startup: Initialize Sentry error tracking
+    setup_sentry()
+
     # Startup: Initialize database tables
     init_db()
 
     # Startup: Start background scheduler
     setup_scheduler()
+
+    logger.info(
+        "Application started",
+        app_name=settings.app_name,
+        version=settings.app_version,
+        environment=settings.app_env.value,
+    )
 
     yield
 
@@ -116,6 +139,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request logging middleware (should be outermost for accurate timing)
+app.add_middleware(RequestLoggingMiddleware)
 
 # Metrics tracking middleware
 app.add_middleware(MetricsMiddleware)

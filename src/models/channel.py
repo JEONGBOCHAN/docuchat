@@ -32,6 +32,7 @@ class ChannelResponse(BaseModel):
     description: str | None = Field(default=None, description="Channel description")
     created_at: datetime = Field(default_factory=_utc_now)
     file_count: int = Field(default=0, description="Number of files in channel")
+    is_favorited: bool = Field(default=False, description="Whether the channel is favorited")
 
 
 class ChannelList(BaseModel):

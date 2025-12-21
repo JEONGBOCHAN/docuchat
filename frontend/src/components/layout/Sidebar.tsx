@@ -10,13 +10,29 @@ interface Channel {
 
 interface SidebarProps {
   channels?: Channel[];
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ channels = [] }: SidebarProps) {
+export default function Sidebar({ channels = [], isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 h-[calc(100vh-3.5rem)] border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 fixed top-14 left-0 overflow-y-auto">
+    <>
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`w-64 h-[calc(100vh-3.5rem)] border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 fixed top-14 left-0 overflow-y-auto z-40 transition-transform duration-200 lg:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -83,6 +99,7 @@ export default function Sidebar({ channels = [] }: SidebarProps) {
           Settings
         </Link>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

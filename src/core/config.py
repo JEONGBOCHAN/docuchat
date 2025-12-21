@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # Google Gemini
     google_api_key: str = ""
 
+    # Google Drive Integration (OAuth)
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_redirect_uri: str = "http://localhost:3000/integrations/google-drive/callback"
+
     # File Search
     max_file_size_mb: int = 50
     allowed_extensions: list[str] = [".pdf", ".txt", ".docx"]
@@ -61,6 +66,12 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+    log_format: str = "json"  # "json" for production, "console" for development
+
+    # Sentry (Error Tracking)
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.1
+    sentry_profiles_sample_rate: float = 0.1
 
     @property
     def is_development(self) -> bool:

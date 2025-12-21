@@ -232,23 +232,24 @@ class TestChatIntegration:
 
         return channel
 
-    @pytest.mark.skip(reason="Chat requires file to be fully indexed, which takes time")
+    @pytest.mark.skip(reason="File indexing takes significant time - run manually before releases")
     def test_chat_with_context(self, gemini_service, channel_with_content):
         """Test chat with document context.
 
         Note: This test is skipped by default because file indexing
         takes significant time in the Gemini API.
         """
-        response = gemini_service.chat(
+        response = gemini_service.search_and_answer(
             store_name=channel_with_content["name"],
             query="What is Python known for?",
         )
 
         assert response is not None
-        assert isinstance(response, str)
-        assert len(response) > 0
+        assert "response" in response
+        assert isinstance(response["response"], str)
+        assert len(response["response"]) > 0
         # Response should mention something about Python
-        assert "python" in response.lower() or "programming" in response.lower()
+        assert "python" in response["response"].lower() or "programming" in response["response"].lower()
 
 
 class TestAPILimits:

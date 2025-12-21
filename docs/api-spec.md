@@ -194,6 +194,66 @@ DELETE /documents/{document_id}
 
 ---
 
+## YouTube 소스 API
+
+### YouTube 소스 추가
+
+```
+POST /channels/{channel_id}/sources/youtube
+```
+
+**Request Body:**
+```json
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "video_id": "VIDEO_ID",
+  "title": "YouTube: VIDEO_ID",
+  "document_id": "operations/upload-123",
+  "transcript_length": 5000,
+  "language": "ko",
+  "message": "YouTube transcript added successfully",
+  "created_at": "2025-12-20T12:00:00Z"
+}
+```
+
+**에러 응답:**
+- 400: 잘못된 YouTube URL
+- 404: 채널을 찾을 수 없음
+- 413: 용량 초과
+- 422: 자막을 사용할 수 없음
+
+### YouTube 자막 미리보기
+
+```
+GET /channels/{channel_id}/sources/youtube/preview?url=YOUTUBE_URL
+```
+
+**Query Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| url | string | O | YouTube 영상 URL |
+
+**Response (200 OK):**
+```json
+{
+  "video_id": "VIDEO_ID",
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "language": "ko",
+  "segment_count": 150,
+  "character_count": 5000,
+  "preview": "자막 내용 미리보기...",
+  "available": true
+}
+```
+
+---
+
 ## 채팅 API
 
 ### 질문하기
@@ -518,6 +578,121 @@ POST /scheduler/jobs/{job_id}/run
 
 ---
 
+## 휴지통 API
+
+### 휴지통 목록 조회
+
+```
+GET /trash
+```
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "type": "channel",
+      "name": "삭제된 채널",
+      "description": "채널 설명",
+      "deleted_at": "2025-12-20T12:00:00Z",
+      "gemini_store_id": "fileSearchStores/abc123",
+      "file_count": 5,
+      "channel_id": null
+    },
+    {
+      "id": 2,
+      "type": "note",
+      "name": "삭제된 노트",
+      "description": "노트 내용 미리보기...",
+      "deleted_at": "2025-12-20T11:00:00Z",
+      "gemini_store_id": null,
+      "file_count": null,
+      "channel_id": 1
+    }
+  ],
+  "total": 2
+}
+```
+
+### 휴지통 항목 복원
+
+```
+POST /trash/{type}/{id}/restore
+```
+
+**Path Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| type | string | O | 항목 타입 ('channel' 또는 'note') |
+| id | integer | O | 항목 ID |
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "type": "channel",
+  "message": "Channel '삭제된 채널' has been restored",
+  "restored_at": "2025-12-20T12:30:00Z"
+}
+```
+
+### 휴지통 항목 영구 삭제
+
+```
+DELETE /trash/{type}/{id}
+```
+
+**Path Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| type | string | O | 항목 타입 ('channel' 또는 'note') |
+| id | integer | O | 항목 ID |
+
+**Response (204 No Content)**
+
+### 휴지통 비우기
+
+```
+DELETE /trash?confirm=true
+```
+
+**Query Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| confirm | boolean | O | 삭제 확인 (true 필수) |
+
+**Response (200 OK):**
+```json
+{
+  "deleted_channels": 2,
+  "deleted_notes": 5,
+  "message": "Permanently deleted 2 channels and 5 notes"
+}
+```
+
+### 휴지통 통계 조회
+
+```
+GET /trash/stats
+```
+
+**Response (200 OK):**
+```json
+{
+  "trashed_channels": 2,
+  "trashed_notes": 5,
+  "total": 7
+}
+```
+
+**참고:**
+- 삭제된 항목은 30일 후 자동으로 영구 삭제됩니다.
+- 채널 삭제 시 Soft Delete로 처리되며, 휴지통에서 복원할 수 있습니다.
+- 영구 삭제 시 Gemini File Search Store도 함께 삭제됩니다.
+
+---
+
 ## 헬스체크
 
 ```
@@ -552,6 +727,100 @@ GET /health
 | 413 | 용량 초과 |
 | 422 | 유효성 검사 실패 |
 | 500 | 서버 내부 오류 |
+
+---
+
+## 문서 미리보기 API
+
+### 문서 미리보기 조회
+
+```
+GET /channels/{channel_id}/documents/{document_id}/preview?page=1&page_size=2000&search_term=keyword
+```
+
+**Query Parameters:**
+| 파라미터 | 타입 | 필수 | 기본값 | 설명 |
+|----------|------|------|--------|------|
+| page | integer | X | 1 | 페이지 번호 (1부터 시작) |
+| page_size | integer | X | 2000 | 페이지당 문자 수 (100-10000) |
+| search_term | string | X | - | 하이라이팅할 검색어 |
+
+**Response (200 OK):**
+```json
+{
+  "document_id": "files/abc123",
+  "filename": "api-spec.pdf",
+  "total_pages": 5,
+  "total_characters": 10000,
+  "current_page": 1,
+  "page_size": 2000,
+  "content": "문서 내용...",
+  "highlights": [
+    {
+      "start": 100,
+      "end": 107,
+      "text": "keyword"
+    }
+  ],
+  "has_next": true,
+  "has_previous": false,
+  "cached_at": "2025-12-20T12:00:00Z"
+}
+```
+
+### 특정 페이지 조회
+
+```
+GET /channels/{channel_id}/documents/{document_id}/pages/{page_num}
+```
+
+**Path Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| page_num | integer | O | 페이지 번호 (1부터 시작) |
+
+**Response:** 문서 미리보기 조회와 동일
+
+### 출처 위치 찾기
+
+```
+GET /channels/{channel_id}/documents/{document_id}/find-source?source_text=검색텍스트
+```
+
+**Query Parameters:**
+| 파라미터 | 타입 | 필수 | 설명 |
+|----------|------|------|------|
+| source_text | string | O | 찾을 출처 텍스트 |
+| page_size | integer | X | 페이지 계산용 크기 |
+
+**Response (200 OK):**
+```json
+{
+  "found": true,
+  "location": {
+    "document_id": "files/abc123",
+    "filename": "api-spec.pdf",
+    "page_number": 3,
+    "position": 5000,
+    "context": "...앞뒤 맥락 텍스트...",
+    "highlights": [
+      {
+        "start": 100,
+        "end": 110,
+        "text": "검색텍스트"
+      }
+    ]
+  }
+}
+```
+
+### 미리보기 캐시 삭제
+
+```
+DELETE /channels/{channel_id}/documents/{document_id}/preview-cache
+```
+
+**Response (204 No Content)**
 
 ---
 
