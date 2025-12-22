@@ -12,6 +12,7 @@ __pycache__/
 venv/
 .venv/
 ENV/
+docuchat/
 
 # IDE
 .vscode/
@@ -38,3 +39,17 @@ data/
 # Claude Code
 CLAUDE.md
 .claude/
+docs/claude-parallel-execution.md
+docs/claude-orchestrator-workflow.md
+docs/claude-orchestrator-guide.md
+docs/claude-issue-lead-guide.md
+docs/claude-dev-lead-guide.md
+docs/status-board.md
+docs/messages/
+result_*.txt
+
+# PM 보고용 내부 문서
+docs/deployment-proposal.md
+docs/azure-deployment-troubleshooting.md
+docs/azure-deployment-troubleshooting_for_llm.md
+nul

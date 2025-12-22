@@ -86,7 +86,7 @@ class GeminiService:
             force: Whether to force delete (removes all files first)
 
         Returns:
-            True if deleted successfully
+            True if deleted successfully or resource not found (already deleted)
         """
         url = f"https://generativelanguage.googleapis.com/v1beta/{store_name}"
         if force:
@@ -94,7 +94,8 @@ class GeminiService:
         url += f"&key={self._api_key}" if force else f"?key={self._api_key}"
 
         response = requests.delete(url)
-        return response.status_code == 200
+        # Treat 200 (success) and 404 (not found/already deleted) as success
+        return response.status_code in (200, 404)
 
     # ========== Document Operations ==========
 

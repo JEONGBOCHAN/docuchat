@@ -226,6 +226,55 @@ class TrashRepository:
 
     # ========== Auto Cleanup Operations ==========
 
+    def cleanup_specific_channels(self, channel_ids: list[int]) -> int:
+        """Permanently delete specific trashed channels by their IDs.
+
+        This method is used when Gemini deletion succeeded for specific channels,
+        ensuring we only delete from local DB what was successfully deleted from cloud.
+
+        Args:
+            channel_ids: List of channel IDs (primary keys) to delete
+
+        Returns:
+            Number of channels deleted
+        """
+        if not channel_ids:
+            return 0
+
+        deleted_count = self.db.query(ChannelMetadata).filter(
+            ChannelMetadata.id.in_(channel_ids),
+            ChannelMetadata.deleted_at.isnot(None),  # Must be in trash
+        ).delete(synchronize_session=False)
+
+        self.db.commit()
+        return deleted_count
+
+    def cleanup_expired_notes(self, retention_days: int | None = None) -> int:
+        """Permanently delete trashed notes older than retention period.
+
+        Notes are independent from Gemini (no cloud resources), so they can be
+        deleted purely based on time-based expiration.
+
+        Args:
+            retention_days: Number of days to retain trashed items (default: 30)
+
+        Returns:
+            Number of notes deleted
+        """
+        if retention_days is None:
+            retention_days = self.DEFAULT_RETENTION_DAYS
+
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+
+        # Delete expired notes (no Gemini resources, safe to delete by time)
+        note_count = self.db.query(NoteDB).filter(
+            NoteDB.deleted_at.isnot(None),
+            NoteDB.deleted_at < cutoff,
+        ).delete()
+
+        self.db.commit()
+        return note_count
+
     def cleanup_expired_trash(self, retention_days: int | None = None) -> tuple[int, int]:
         """Permanently delete trashed items older than retention period.
 

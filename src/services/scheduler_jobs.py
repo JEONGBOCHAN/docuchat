@@ -180,6 +180,9 @@ def cleanup_expired_trash(retention_days: int = 30):
     Permanently deletes channels and notes that have been in the trash
     for longer than the retention period.
 
+    IMPORTANT: Only deletes from local DB if Gemini deletion succeeds.
+    This prevents orphan resources in the cloud.
+
     Args:
         retention_days: Number of days to retain items in trash (default: 30)
     """
@@ -200,32 +203,48 @@ def cleanup_expired_trash(retention_days: int = 30):
             ChannelMetadata.deleted_at < cutoff,
         ).all()
 
-        # Delete from Gemini first
-        gemini_deleted = 0
+        # Track which channels were successfully deleted from Gemini
+        successfully_deleted_channel_ids: list[int] = []
         gemini_failed = 0
+
         for channel in expired_channels:
             try:
-                gemini.delete_store(channel.gemini_store_id, force=True)
-                gemini_deleted += 1
+                success = gemini.delete_store(channel.gemini_store_id, force=True)
+                if success:
+                    # Success: 200 (deleted) or 404 (not found/already deleted)
+                    successfully_deleted_channel_ids.append(channel.id)
+                    logger.info(
+                        f"Successfully deleted from Gemini: {channel.gemini_store_id}"
+                    )
+                else:
+                    # Failed: other status codes (e.g., 500, 403)
+                    logger.warning(
+                        f"Failed to delete from Gemini (non-success status): {channel.gemini_store_id}"
+                    )
+                    gemini_failed += 1
             except Exception as e:
                 logger.warning(
                     f"Failed to delete from Gemini: {channel.gemini_store_id}: {e}"
                 )
                 gemini_failed += 1
 
-        # Then delete from DB
-        deleted_channels, deleted_notes = trash_repo.cleanup_expired_trash(retention_days)
+        # Only delete from DB the channels that were successfully deleted from Gemini
+        deleted_channels = trash_repo.cleanup_specific_channels(successfully_deleted_channel_ids)
+
+        # Notes don't have Gemini resources, safe to delete by time-based expiration
+        deleted_notes = trash_repo.cleanup_expired_notes(retention_days)
 
         logger.info(
             f"Expired trash cleanup complete. "
-            f"Channels: {deleted_channels} (Gemini: {gemini_deleted} ok, {gemini_failed} failed), "
+            f"Channels: {deleted_channels} deleted from DB "
+            f"(Gemini: {len(successfully_deleted_channel_ids)} ok, {gemini_failed} failed), "
             f"Notes: {deleted_notes}"
         )
 
         return {
             "deleted_channels": deleted_channels,
             "deleted_notes": deleted_notes,
-            "gemini_deleted": gemini_deleted,
+            "gemini_deleted": len(successfully_deleted_channel_ids),
             "gemini_failed": gemini_failed,
         }
 
