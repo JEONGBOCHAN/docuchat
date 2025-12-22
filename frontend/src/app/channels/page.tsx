@@ -62,9 +62,14 @@ function ChannelsContent() {
 
   const handleDeleteChannel = async () => {
     if (!deleteChannel) return;
-    await channelsApi.delete(deleteChannel.id);
-    await fetchChannels();
-    setDeleteChannel(null);
+    try {
+      await channelsApi.delete(deleteChannel.id);
+      await fetchChannels();
+      setDeleteChannel(null);
+    } catch (err) {
+      console.error('Failed to delete channel:', err);
+      alert(`채널 삭제 실패: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   };
 
   const handleCloseCreateModal = () => {
