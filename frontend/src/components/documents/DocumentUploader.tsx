@@ -178,6 +178,20 @@ export default function DocumentUploader({ channelId, onUploadComplete }: Docume
       return;
     }
 
+    // If upload is already done (synchronous completion), skip polling
+    if (response.done) {
+      setUploadingFiles(prev =>
+        prev.map(f => (f.id === id ? { ...f, progress: 100, status: 'completed' } : f))
+      );
+      onUploadComplete();
+
+      setTimeout(() => {
+        setUploadingFiles(prev => prev.filter(f => f.id !== id));
+      }, 2000);
+
+      return;
+    }
+
     // Step 3: Poll for processing status
     setUploadingFiles(prev =>
       prev.map(f => (f.id === id ? { ...f, progress: 70, status: 'processing' } : f))
