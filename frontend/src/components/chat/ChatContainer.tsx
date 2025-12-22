@@ -86,23 +86,35 @@ export default function ChatContainer({ channelId, onSaveAsNote }: ChatContainer
           setStreamingSources(sources);
         },
         onError: (err) => {
+          console.error('Streaming error:', err.message);
           setError(err.message);
           setIsStreaming(false);
           streamControllerRef.current = null;
+          // Fetch history in case the backend saved a partial response
+          fetchHistory();
         },
         onComplete: () => {
-          // Add the complete AI message using refs to avoid stale closure
-          if (streamingContentRef.current) {
+          // Capture values before resetting to avoid race conditions
+          const finalContent = streamingContentRef.current;
+          const finalSources = [...streamingSourcesRef.current];
+
+          // Add the complete AI message
+          if (finalContent) {
             setMessages((prev) => [
               ...prev,
               {
                 id: generateMessageId(),
                 role: 'assistant',
-                content: streamingContentRef.current,
-                sources: streamingSourcesRef.current,
+                content: finalContent,
+                sources: finalSources,
                 created_at: new Date().toISOString(),
               },
             ]);
+          } else {
+            // Fallback: if streaming completed but no content captured,
+            // refresh history to get the saved message from backend
+            console.warn('Streaming completed with empty content, fetching history...');
+            fetchHistory();
           }
           setIsStreaming(false);
           setStreamingContent('');
