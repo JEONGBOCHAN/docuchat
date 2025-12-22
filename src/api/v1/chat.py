@@ -29,11 +29,13 @@ from src.services.channel_repository import (
 from src.services.cache_service import CacheService, get_cache_service
 from src.services.search_repository import SearchHistoryRepository
 
-router = APIRouter(prefix="/channels/{channel_id}/chat", tags=["chat"])
+router = APIRouter(prefix="/channels", tags=["chat"])
 
 
-def _format_sse_event(data: dict) -> str:
+def _format_sse_event(data: dict | str) -> str:
     """Format data as SSE event."""
+    if isinstance(data, str):
+        return f"data: {data}\n\n"
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
@@ -50,7 +52,7 @@ def _get_conversation_history(
 
 
 @router.post(
-    "",
+    "/{channel_id:path}/chat",
     response_model=ChatResponse,
     summary="Send a chat message",
 )
@@ -198,7 +200,7 @@ def send_message(
 
 
 @router.post(
-    "/stream",
+    "/{channel_id:path}/chat/stream",
     summary="Send a chat message with streaming response",
 )
 @limiter.limit(RateLimits.CHAT)
@@ -260,7 +262,7 @@ def send_message_stream(
 
         # Send session ID first if available
         if session_id_response:
-            yield _format_sse_event({"type": "session", "session_id": session_id_response})
+            yield _format_sse_event({"session_id": session_id_response})
 
         for event in gemini.search_and_answer_stream(
             channel_id,
@@ -270,12 +272,15 @@ def send_message_stream(
             event_type = event.get("type")
 
             if event_type == "content":
-                full_response += event.get("text", "")
-                yield _format_sse_event(event)
+                text = event.get("text", "")
+                full_response += text
+                # Send in format frontend expects: {"chunk": "..."}
+                yield _format_sse_event({"chunk": text})
 
             elif event_type == "sources":
                 all_sources = event.get("sources", [])
-                yield _format_sse_event(event)
+                # Send sources in format frontend expects: {"sources": [...]}
+                yield _format_sse_event({"sources": all_sources})
 
             elif event_type == "done":
                 # Store in DB before signaling done
@@ -301,10 +306,11 @@ def send_message_stream(
                     session=session,
                 )
 
-                yield _format_sse_event(event)
+                # Send done signal in format frontend expects: [DONE]
+                yield _format_sse_event("[DONE]")
 
             elif event_type == "error":
-                yield _format_sse_event(event)
+                yield _format_sse_event({"error": event.get("error", "Unknown error")})
 
     return StreamingResponse(
         generate_stream(),
@@ -318,7 +324,7 @@ def send_message_stream(
 
 
 @router.get(
-    "/history",
+    "/{channel_id:path}/chat/history",
     response_model=ChatHistory,
     summary="Get chat history",
 )
@@ -373,7 +379,7 @@ def get_chat_history(
 
 
 @router.delete(
-    "/history",
+    "/{channel_id:path}/chat/history",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Clear chat history",
 )
@@ -409,7 +415,7 @@ def clear_chat_history(
 
 
 @router.post(
-    "/sessions",
+    "/{channel_id:path}/chat/sessions",
     response_model=ChatSession,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new chat session",
@@ -461,13 +467,14 @@ def create_session(
 
 
 @router.get(
-    "/sessions/{session_id}",
+    "/{channel_id:path}/chat/sessions/{session_id}",
     response_model=ChatSession,
     summary="Get session information",
 )
 @limiter.limit(RateLimits.DEFAULT)
 def get_session(
     request: Request,
+    channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
@@ -502,13 +509,14 @@ def get_session(
 
 
 @router.get(
-    "/sessions/{session_id}/history",
+    "/{channel_id:path}/chat/sessions/{session_id}/history",
     response_model=ChatHistory,
     summary="Get session chat history",
 )
 @limiter.limit(RateLimits.DEFAULT)
 def get_session_history(
     request: Request,
+    channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
@@ -552,13 +560,14 @@ def get_session_history(
 
 
 @router.delete(
-    "/sessions/{session_id}",
+    "/{channel_id:path}/chat/sessions/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a chat session",
 )
 @limiter.limit(RateLimits.DEFAULT)
 def delete_session(
     request: Request,
+    channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
     db: Annotated[Session, Depends(get_db)],
 ):
