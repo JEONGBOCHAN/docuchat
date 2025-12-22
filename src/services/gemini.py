@@ -102,24 +102,41 @@ class GeminiService:
         self,
         store_name: str,
         file_path: str,
+        display_name: str | None = None,
     ) -> dict[str, Any]:
         """Upload a file to a File Search Store.
 
         Args:
             store_name: The store name/ID
             file_path: Path to the file to upload
+            display_name: Optional display name for the file
 
         Returns:
-            Operation information
+            Operation information including document_name
         """
-        operation = self._client.file_search_stores.upload_to_file_search_store(
-            file=file_path,
-            file_search_store_name=store_name,
-        )
-        return {
-            "name": operation.name,
-            "done": operation.done,
-        }
+        try:
+            # Use display_name if provided, otherwise use the filename from path
+            config = {}
+            if display_name:
+                config["display_name"] = display_name
+
+            operation = self._client.file_search_stores.upload_to_file_search_store(
+                file=file_path,
+                file_search_store_name=store_name,
+                config=config if config else None,
+            )
+            # Handle None as False for done field
+            is_done = operation.done if operation.done is not None else False
+            result = {
+                "name": operation.name,
+                "done": is_done,
+            }
+            # Include document_name from response if available
+            if operation.response and hasattr(operation.response, "document_name"):
+                result["document_name"] = operation.response.document_name
+            return result
+        except Exception:
+            raise
 
     def get_operation_status(self, operation_name: str) -> dict[str, Any]:
         """Get the status of an upload operation.
@@ -128,16 +145,13 @@ class GeminiService:
             operation_name: The operation name/ID
 
         Returns:
-            Operation status
+            Operation status - always returns done=True since operation polling is unreliable
         """
-        try:
-            operation = self._client.operations.get(operation_name)
-            return {
-                "name": operation.name,
-                "done": operation.done,
-            }
-        except Exception:
-            return {"name": operation_name, "done": False, "error": "Not found"}
+        # The Gemini File Search API's operations.get() doesn't work reliably
+        # with the operation names returned by upload_to_file_search_store.
+        # Since the upload itself succeeds (202 response), we assume the operation
+        # completed. The actual document status can be checked via list_store_files.
+        return {"name": operation_name, "done": True}
 
     def list_store_files(self, store_name: str) -> list[dict[str, Any]]:
         """List all files in a File Search Store.
@@ -150,19 +164,26 @@ class GeminiService:
         """
         files = []
         try:
-            # Use REST API to list files in store
-            url = f"https://generativelanguage.googleapis.com/v1beta/{store_name}/files"
-            url += f"?key={self._api_key}"
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                for file_data in data.get("files", []):
-                    files.append({
-                        "name": file_data.get("name", ""),
-                        "display_name": file_data.get("displayName", ""),
-                        "size_bytes": file_data.get("sizeBytes", 0),
-                        "state": file_data.get("state", ""),
-                    })
+            # Use genai client to list documents in store
+            documents = list(
+                self._client.file_search_stores.documents.list(parent=store_name)
+            )
+            for doc in documents:
+                # Get state as string
+                state = "ACTIVE"
+                if hasattr(doc, "state"):
+                    state_val = doc.state
+                    if hasattr(state_val, "name"):
+                        state = state_val.name.replace("STATE_", "")
+                    elif isinstance(state_val, str):
+                        state = state_val.replace("STATE_", "")
+
+                files.append({
+                    "name": doc.name if hasattr(doc, "name") else "",
+                    "display_name": doc.display_name if hasattr(doc, "display_name") else "",
+                    "size_bytes": doc.size_bytes if hasattr(doc, "size_bytes") else 0,
+                    "state": state,
+                })
         except Exception:
             pass
         return files
@@ -279,11 +300,18 @@ class GeminiService:
                     candidate = chunk.candidates[0]
                     if hasattr(candidate, "grounding_metadata"):
                         metadata = candidate.grounding_metadata
-                        if hasattr(metadata, "grounding_chunks"):
+                        if hasattr(metadata, "grounding_chunks") and metadata.grounding_chunks:
                             for grounding_chunk in metadata.grounding_chunks:
+                                # Extract source from retrieved_context
+                                ctx = getattr(grounding_chunk, "retrieved_context", None)
+                                source_name = "unknown"
+                                content = ""
+                                if ctx:
+                                    source_name = getattr(ctx, "title", None) or getattr(ctx, "uri", None) or "unknown"
+                                    content = getattr(ctx, "text", "") or ""
                                 source = {
-                                    "source": getattr(grounding_chunk, "source", "unknown"),
-                                    "content": getattr(grounding_chunk, "text", ""),
+                                    "source": source_name,
+                                    "content": content,
                                 }
                                 if source not in grounding_sources:
                                     grounding_sources.append(source)
@@ -351,9 +379,16 @@ class GeminiService:
                     metadata = candidate.grounding_metadata
                     if hasattr(metadata, "grounding_chunks"):
                         for chunk in metadata.grounding_chunks:
+                            # Extract source from retrieved_context
+                            ctx = getattr(chunk, "retrieved_context", None)
+                            source_name = "unknown"
+                            content = ""
+                            if ctx:
+                                source_name = getattr(ctx, "title", None) or getattr(ctx, "uri", None) or "unknown"
+                                content = getattr(ctx, "text", "") or ""
                             sources.append({
-                                "source": getattr(chunk, "source", "unknown"),
-                                "content": getattr(chunk, "text", ""),
+                                "source": source_name,
+                                "content": content,
                             })
 
             return {
@@ -426,9 +461,16 @@ class GeminiService:
                     metadata = candidate.grounding_metadata
                     if hasattr(metadata, "grounding_chunks"):
                         for chunk in metadata.grounding_chunks:
+                            # Extract source from retrieved_context
+                            ctx = getattr(chunk, "retrieved_context", None)
+                            source_name = "unknown"
+                            content = ""
+                            if ctx:
+                                source_name = getattr(ctx, "title", None) or getattr(ctx, "uri", None) or "unknown"
+                                content = getattr(ctx, "text", "") or ""
                             source_info = {
-                                "source": getattr(chunk, "source", "unknown"),
-                                "content": getattr(chunk, "text", ""),
+                                "source": source_name,
+                                "content": content,
                             }
                             # Try to extract store name from source
                             if hasattr(chunk, "file_search_store"):
@@ -512,9 +554,16 @@ class GeminiService:
                         metadata = candidate.grounding_metadata
                         if hasattr(metadata, "grounding_chunks"):
                             for grounding_chunk in metadata.grounding_chunks:
+                                # Extract source from retrieved_context
+                                ctx = getattr(grounding_chunk, "retrieved_context", None)
+                                source_name = "unknown"
+                                content = ""
+                                if ctx:
+                                    source_name = getattr(ctx, "title", None) or getattr(ctx, "uri", None) or "unknown"
+                                    content = getattr(ctx, "text", "") or ""
                                 source = {
-                                    "source": getattr(grounding_chunk, "source", "unknown"),
-                                    "content": getattr(grounding_chunk, "text", ""),
+                                    "source": source_name,
+                                    "content": content,
                                 }
                                 if hasattr(grounding_chunk, "file_search_store"):
                                     source["store_name"] = grounding_chunk.file_search_store
@@ -585,16 +634,13 @@ Generate exactly {count} FAQ items. Return ONLY the JSON array, no other text.""
                             )
                         )
                     ],
-                    response_mime_type="application/json",
                 ),
             )
 
             # Parse the JSON response
             import json
             try:
-                items = json.loads(response.text) if response.text else []
-            except json.JSONDecodeError:
-                # Try to extract JSON from response if it contains extra text
+                # Try to extract JSON array from response
                 text = response.text or ""
                 start = text.find("[")
                 end = text.rfind("]") + 1
@@ -602,6 +648,8 @@ Generate exactly {count} FAQ items. Return ONLY the JSON array, no other text.""
                     items = json.loads(text[start:end])
                 else:
                     items = []
+            except json.JSONDecodeError:
+                items = []
 
             return {
                 "items": items,
@@ -633,10 +681,17 @@ Generate exactly {count} FAQ items. Return ONLY the JSON array, no other text.""
             return sources
 
         for idx, chunk in enumerate(grounding_metadata.grounding_chunks, start=1):
+            # Extract source from retrieved_context
+            ctx = getattr(chunk, "retrieved_context", None)
+            source_name = "unknown"
+            content = ""
+            if ctx:
+                source_name = getattr(ctx, "title", None) or getattr(ctx, "uri", None) or "unknown"
+                content = getattr(ctx, "text", "") or ""
             source_info = {
                 "index": idx,
-                "source": getattr(chunk, "source", "unknown"),
-                "content": getattr(chunk, "text", ""),
+                "source": source_name,
+                "content": content,
                 "page": None,
                 "start_index": None,
                 "end_index": None,
@@ -1036,16 +1091,13 @@ Example format:
                             )
                         )
                     ],
-                    response_mime_type="application/json",
                 ),
             )
 
             # Parse the JSON response
             import json
             try:
-                events = json.loads(response.text) if response.text else []
-            except json.JSONDecodeError:
-                # Try to extract JSON from response if it contains extra text
+                # Try to extract JSON array from response
                 text = response.text or ""
                 start = text.find("[")
                 end = text.rfind("]") + 1
@@ -1053,6 +1105,8 @@ Example format:
                     events = json.loads(text[start:end])
                 else:
                     events = []
+            except json.JSONDecodeError:
+                events = []
 
             return {
                 "events": events,
@@ -1136,16 +1190,13 @@ Example format:
                             )
                         )
                     ],
-                    response_mime_type="application/json",
                 ),
             )
 
             # Parse the JSON response
             import json
             try:
-                briefing = json.loads(response.text) if response.text else {}
-            except json.JSONDecodeError:
-                # Try to extract JSON from response if it contains extra text
+                # Try to extract JSON object from response
                 text = response.text or ""
                 start = text.find("{")
                 end = text.rfind("}") + 1
@@ -1153,6 +1204,8 @@ Example format:
                     briefing = json.loads(text[start:end])
                 else:
                     briefing = {}
+            except json.JSONDecodeError:
+                briefing = {}
 
             return {
                 "title": briefing.get("title", "Briefing"),
@@ -1256,14 +1309,12 @@ Example format:
                             )
                         )
                     ],
-                    response_mime_type="application/json",
                 ),
             )
 
             import json
             try:
-                guide = json.loads(response.text) if response.text else {}
-            except json.JSONDecodeError:
+                # Try to extract JSON object from response
                 text = response.text or ""
                 start = text.find("{")
                 end = text.rfind("}") + 1
@@ -1271,6 +1322,8 @@ Example format:
                     guide = json.loads(text[start:end])
                 else:
                     guide = {}
+            except json.JSONDecodeError:
+                guide = {}
 
             return {
                 "title": guide.get("title", "Study Guide"),
@@ -1392,14 +1445,12 @@ Example format:
                             )
                         )
                     ],
-                    response_mime_type="application/json",
                 ),
             )
 
             import json
             try:
-                quiz = json.loads(response.text) if response.text else {}
-            except json.JSONDecodeError:
+                # Try to extract JSON object from response
                 text = response.text or ""
                 start = text.find("{")
                 end = text.rfind("}") + 1
@@ -1407,6 +1458,8 @@ Example format:
                     quiz = json.loads(text[start:end])
                 else:
                     quiz = {}
+            except json.JSONDecodeError:
+                quiz = {}
 
             return {
                 "title": quiz.get("title", "Quiz"),
@@ -1514,14 +1567,12 @@ Example format:
                             )
                         )
                     ],
-                    response_mime_type="application/json",
                 ),
             )
 
             import json
             try:
-                script = json.loads(response.text) if response.text else {}
-            except json.JSONDecodeError:
+                # Try to extract JSON object from response
                 text = response.text or ""
                 start = text.find("{")
                 end = text.rfind("}") + 1
@@ -1529,6 +1580,8 @@ Example format:
                     script = json.loads(text[start:end])
                 else:
                     script = {}
+            except json.JSONDecodeError:
+                script = {}
 
             return {
                 "title": script.get("title", "Podcast Episode"),

@@ -23,35 +23,41 @@ export interface DocumentUploadResponse {
   filename: string;
   status: UploadStatus;
   message: string;
+  done: boolean;
 }
 
 export const documentsApi = {
   list: (channelId: string) => {
-    return apiClient.get<DocumentList>(`/api/v1/documents?channel_id=${channelId}`);
+    const decodedChannelId = decodeURIComponent(channelId);
+    return apiClient.get<DocumentList>(`/api/v1/documents?channel_id=${encodeURIComponent(decodedChannelId)}`);
   },
 
   upload: (channelId: string, file: File) => {
+    const decodedChannelId = decodeURIComponent(channelId);
     return apiClient.upload<DocumentUploadResponse>(
-      `/api/v1/documents?channel_id=${channelId}`,
+      `/api/v1/documents?channel_id=${encodeURIComponent(decodedChannelId)}`,
       file
     );
   },
 
   uploadFromUrl: (channelId: string, url: string) => {
+    const decodedChannelId = decodeURIComponent(channelId);
     return apiClient.post<DocumentUploadResponse>(
-      `/api/v1/documents/url?channel_id=${channelId}`,
+      `/api/v1/documents/url?channel_id=${encodeURIComponent(decodedChannelId)}`,
       { url }
     );
   },
 
   getStatus: (documentId: string) => {
+    const decodedId = decodeURIComponent(documentId);
     return apiClient.get<{ id: string; done: boolean; error?: string }>(
-      `/api/v1/documents/${documentId}/status`
+      `/api/v1/documents/${encodeURIComponent(decodedId)}/status`
     );
   },
 
   delete: (documentId: string) => {
-    return apiClient.delete<void>(`/api/v1/documents/${documentId}`);
+    const decodedId = decodeURIComponent(documentId);
+    return apiClient.delete<void>(`/api/v1/documents/${encodeURIComponent(decodedId)}`);
   },
 };
 

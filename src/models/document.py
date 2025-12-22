@@ -47,6 +47,7 @@ class DocumentUploadResponse(BaseModel):
     filename: str
     status: UploadStatus = Field(default=UploadStatus.PROCESSING)
     message: str = Field(default="Upload in progress")
+    done: bool = Field(default=False, description="Whether upload is already complete")
 
 
 class UrlUploadRequest(BaseModel):

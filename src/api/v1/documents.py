@@ -98,19 +98,18 @@ async def upload_document(
             detail=str(e),
         )
 
-    # Save to temporary file for upload
+    # Save to temporary file for upload (preserve original filename)
     try:
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=Path(file.filename or "document").suffix,
-        ) as tmp:
-            content = await file.read()
+        original_filename = file.filename or "document"
+        tmp_dir = tempfile.mkdtemp()
+        tmp_path = os.path.join(tmp_dir, original_filename)
+        content = await file.read()
+        with open(tmp_path, "wb") as tmp:
             tmp.write(content)
-            tmp_path = tmp.name
-            actual_size = len(content)
+        actual_size = len(content)
 
-        # Upload to Gemini
-        operation = gemini.upload_file(channel_id, tmp_path)
+        # Upload to Gemini with original filename as display_name
+        operation = gemini.upload_file(channel_id, tmp_path, display_name=original_filename)
 
         # Update capacity tracking after successful upload
         capacity_service.update_after_upload(channel_id, actual_size)
@@ -124,6 +123,7 @@ async def upload_document(
             filename=file.filename or "document",
             status=UploadStatus.PROCESSING if not operation["done"] else UploadStatus.COMPLETED,
             message="Upload initiated" if not operation["done"] else "Upload completed",
+            done=operation["done"],
         )
 
     except CapacityExceededError as e:
@@ -137,10 +137,15 @@ async def upload_document(
             detail=f"Failed to upload document: {str(e)}",
         )
     finally:
-        # Clean up temp file
+        # Clean up temp file and directory
         if "tmp_path" in locals():
             try:
                 os.unlink(tmp_path)
+            except OSError:
+                pass
+        if "tmp_dir" in locals():
+            try:
+                os.rmdir(tmp_dir)
             except OSError:
                 pass
 
@@ -192,8 +197,9 @@ def upload_from_url(
                 detail=str(e),
             )
 
-        # Upload to Gemini
-        operation = gemini.upload_file(channel_id, tmp_path)
+        # Upload to Gemini with URL title as display_name
+        url_filename = f"{result.title}.md"
+        operation = gemini.upload_file(channel_id, tmp_path, display_name=url_filename)
 
         # Update capacity tracking
         capacity_service.update_after_upload(channel_id, file_size)
@@ -204,9 +210,10 @@ def upload_from_url(
 
         return DocumentUploadResponse(
             id=operation["name"],
-            filename=f"{result.title}.md",
+            filename=url_filename,
             status=UploadStatus.PROCESSING if not operation["done"] else UploadStatus.COMPLETED,
             message="URL content uploaded" if not operation["done"] else "Upload completed",
+            done=operation["done"],
         )
 
     except HTTPException:
@@ -298,7 +305,11 @@ def get_document_status(
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
 ) -> dict:
     """Get the status of a document upload operation."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Checking status for document_id: {document_id}")
     status_info = gemini.get_operation_status(document_id)
+    logger.info(f"Status result: {status_info}")
     return {
         "id": document_id,
         "done": status_info.get("done", False),
