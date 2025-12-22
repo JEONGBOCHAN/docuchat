@@ -111,11 +111,13 @@ jobs:
             context: .
             image_name: chalssak-backend
             target: production
+            build_args: ""
           - service: frontend
             dockerfile: frontend/Dockerfile
             context: frontend
             image_name: chalssak-frontend
             target: runner
+            build_args: "NEXT_PUBLIC_API_URL=https://chalssak-backend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io"
 
     steps:
       - name: Checkout code
@@ -142,6 +144,7 @@ jobs:
           tags: |
             ${{ matrix.image_name }}:${{ steps.tag.outputs.tag }}
             ${{ matrix.image_name }}:latest
+          build-args: ${{ matrix.build_args }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/${{ matrix.service }}-image.tar
