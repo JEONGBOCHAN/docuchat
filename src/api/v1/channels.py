@@ -113,7 +113,13 @@ def list_channels(
             )
 
         # Sort: favorited channels first, then by created_at
-        channels.sort(key=lambda c: (not c.is_favorited, c.created_at))
+        # Handle timezone-naive/aware datetime comparison (SQLite doesn't preserve timezone)
+        def get_naive_ts(c):
+            ts = c.created_at
+            if ts and ts.tzinfo is not None:
+                return ts.replace(tzinfo=None)
+            return ts if ts else datetime.min
+        channels.sort(key=lambda c: (not c.is_favorited, get_naive_ts(c)))
 
         # Apply pagination
         total = len(channels)
