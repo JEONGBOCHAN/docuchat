@@ -2,6 +2,7 @@ import apiClient from './client';
 
 // URL-safe encoding for channel IDs (replaces / with ~)
 // Used because Azure Container Apps decodes %2F before reaching Next.js
+// Build trigger: 2024-12-22-v2
 export const encodeChannelIdForUrl = (id: string): string => id.replace(/\//g, '~');
 export const decodeChannelIdFromUrl = (urlId: string): string => urlId.replace(/~/g, '/');
 
