@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import type { Channel } from '@/lib/api/channels';
+import { encodeChannelIdForUrl, type Channel } from '@/lib/api/channels';
 
 interface ChannelCardProps {
   channel: Channel;
@@ -23,7 +23,7 @@ export default function ChannelCard({ channel, onEdit, onDelete }: ChannelCardPr
 
   return (
     <div className="group relative bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 hover:border-blue-500 dark:hover:border-blue-500 transition-colors">
-      <Link href={`/channels/${encodeURIComponent(channel.id)}`} className="block p-4">
+      <Link href={`/channels/${encodeChannelIdForUrl(channel.id)}`} className="block p-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-md flex items-center justify-center flex-shrink-0">
             <svg

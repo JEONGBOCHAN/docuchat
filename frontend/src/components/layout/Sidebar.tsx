@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { encodeChannelIdForUrl } from '@/lib/api/channels';
 
 interface Channel {
   id: string;
@@ -53,12 +54,12 @@ export default function Sidebar({ channels = [], isOpen = true, onClose }: Sideb
             </p>
           ) : (
             channels.map((channel) => {
-              const encodedId = encodeURIComponent(channel.id);
-              const isActive = pathname === `/channels/${encodedId}`;
+              const urlSafeId = encodeChannelIdForUrl(channel.id);
+              const isActive = pathname === `/channels/${urlSafeId}`;
               return (
                 <Link
                   key={channel.id}
-                  href={`/channels/${encodedId}`}
+                  href={`/channels/${urlSafeId}`}
                   className={`block px-3 py-2 rounded-md text-sm transition-colors ${
                     isActive
                       ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'

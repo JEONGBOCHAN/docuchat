@@ -6,7 +6,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import { ChatContainer } from '@/components/chat';
 import { DocumentUploader, DocumentList } from '@/components/documents';
 import { NotesList, NoteEditor, DeleteNoteModal } from '@/components/notes';
-import { channelsApi, type Channel } from '@/lib/api/channels';
+import { channelsApi, decodeChannelIdFromUrl, type Channel } from '@/lib/api/channels';
 import { notesApi, type Note, type CreateNoteRequest, type UpdateNoteRequest } from '@/lib/api/notes';
 import type { ChatSource } from '@/lib/api/chat';
 
@@ -214,8 +214,8 @@ function channelPageReducer(state: ChannelPageState, action: ChannelPageAction):
 export default function ChannelDetailPage() {
   const params = useParams();
   const router = useRouter();
-  // Decode URL-encoded channel ID (e.g., fileSearchStores%2Fxxx -> fileSearchStores/xxx)
-  const channelId = decodeURIComponent(params.id as string);
+  // Decode URL-safe channel ID (e.g., fileSearchStores~xxx -> fileSearchStores/xxx)
+  const channelId = decodeChannelIdFromUrl(params.id as string);
 
   const [state, dispatch] = useReducer(channelPageReducer, initialState);
   const requestIdRef = useRef(0);

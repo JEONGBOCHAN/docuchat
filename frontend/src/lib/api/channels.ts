@@ -1,5 +1,10 @@
 import apiClient from './client';
 
+// URL-safe encoding for channel IDs (replaces / with ~)
+// Used because Azure Container Apps decodes %2F before reaching Next.js
+export const encodeChannelIdForUrl = (id: string): string => id.replace(/\//g, '~');
+export const decodeChannelIdFromUrl = (urlId: string): string => urlId.replace(/~/g, '/');
+
 export interface Channel {
   id: string;
   name: string;
@@ -34,7 +39,8 @@ export const channelsApi = {
   },
 
   get: (channelId: string) => {
-    return apiClient.get<Channel>(`/api/v1/channels/${channelId}`);
+    const decodedId = decodeURIComponent(channelId);
+    return apiClient.get<Channel>(`/api/v1/channels/${encodeURIComponent(decodedId)}`);
   },
 
   create: (data: CreateChannelRequest) => {
@@ -42,11 +48,13 @@ export const channelsApi = {
   },
 
   update: (channelId: string, data: UpdateChannelRequest) => {
-    return apiClient.put<Channel>(`/api/v1/channels/${channelId}`, data);
+    const decodedId = decodeURIComponent(channelId);
+    return apiClient.put<Channel>(`/api/v1/channels/${encodeURIComponent(decodedId)}`, data);
   },
 
   delete: (channelId: string) => {
-    return apiClient.delete<void>(`/api/v1/channels/${channelId}`);
+    const decodedId = decodeURIComponent(channelId);
+    return apiClient.delete<void>(`/api/v1/channels/${encodeURIComponent(decodedId)}`);
   },
 };
 
