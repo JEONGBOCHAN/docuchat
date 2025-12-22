@@ -38,9 +38,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Copy application code
 COPY --chown=appuser:appgroup src/ ./src/
-COPY --chown=appuser:appgroup data/ ./data/
 
-# Create data directory for SQLite
+# Create data directory (for SQLite fallback if needed)
 RUN mkdir -p /app/data && chown -R appuser:appgroup /app/data
 
 # Switch to non-root user

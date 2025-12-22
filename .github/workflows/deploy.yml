@@ -110,10 +110,12 @@ jobs:
             dockerfile: Dockerfile
             context: .
             image_name: chalssak-backend
+            target: production
           - service: frontend
             dockerfile: frontend/Dockerfile
             context: frontend
             image_name: chalssak-frontend
+            target: runner
 
     steps:
       - name: Checkout code
@@ -135,6 +137,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
           push: false
           tags: |
             ${{ matrix.image_name }}:${{ steps.tag.outputs.tag }}
