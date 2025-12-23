@@ -41,7 +41,7 @@ Try it now: **[https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azure
 |------------|---------|
 | **FastAPI** | REST API server |
 | **LangGraph** | Agentic workflow orchestration |
-| **Gemini 2.5 Flash** | LLM for generation |
+| **Gemini Flash** | LLM for generation |
 | **Gemini File Search API** | Document retrieval (RAG) |
 | **SQLite + SQLAlchemy** | Local metadata storage |
 | **APScheduler** | Background job scheduling |
@@ -79,11 +79,27 @@ Try it now: **[https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azure
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   LangGraph Agentic Workflow                    │
-│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐      │
-│  │  Input  │ -> │ Retrieve│ -> │ Context │ -> │ Generate│      │
-│  │ Process │    │   RAG   │    │  Build  │    │ Response│      │
-│  └─────────┘    └─────────┘    └─────────┘    └─────────┘      │
+│              LangGraph Agentic Workflow (ReAct Loop)            │
+│                                                                 │
+│    ┌─────────┐      ┌─────────┐      ┌─────────┐               │
+│    │  THINK  │ ──▶  │   ACT   │ ──▶  │ OBSERVE │               │
+│    │         │      │         │      │         │               │
+│    │ Decide  │      │ Execute │      │ Record  │               │
+│    │ action  │      │  tool   │      │ result  │               │
+│    └─────────┘      └─────────┘      └────┬────┘               │
+│         ▲                                 │                     │
+│         │         ┌──────────────┐        │                     │
+│         └─────────│   Continue?  │◀───────┘                     │
+│                   │  (max 3x)    │                              │
+│                   └──────┬───────┘                              │
+│                          │ Done                                 │
+│                          ▼                                      │
+│                   ┌─────────────┐                               │
+│                   │   FINISH    │                               │
+│                   │ Final answer│                               │
+│                   └─────────────┘                               │
+│                                                                 │
+│    Tools: [search_documents] [finish]                           │
 └─────────────────────────────────────────────────────────────────┘
                               │
               ┌───────────────┴───────────────┐
