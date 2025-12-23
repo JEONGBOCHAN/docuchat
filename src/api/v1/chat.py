@@ -28,60 +28,33 @@ from src.services.channel_repository import (
 )
 from src.services.cache_service import CacheService, get_cache_service
 from src.services.search_repository import SearchHistoryRepository
-from src.agent import Agent, AgentConfig, SearchDocumentsTool, FinishTool
+from src.workflows import run_rag_agent
 
 router = APIRouter(prefix="/channels", tags=["chat"])
 
 
 def _run_agent_chat(
-    gemini: GeminiService,
     channel_id: str,
     query: str,
     conversation_history: list[dict[str, str]] | None = None,
     max_iterations: int = 3,
-    verbose: bool = False,
 ) -> dict:
-    """Run the agent to answer a query using documents in the channel.
+    """Run the LangGraph agent to answer a query using documents in the channel.
 
     Args:
-        gemini: GeminiService instance
         channel_id: The channel ID to search in
         query: User's question
         conversation_history: Previous conversation for context
         max_iterations: Maximum agent iterations (default 3)
-        verbose: Whether to print debug logs
 
     Returns:
         Dict with 'response', 'sources', and 'iterations'
     """
-    # Create search function for the agent
-    def search_fn(store_name: str, search_query: str) -> dict:
-        return gemini.search_documents(store_name, search_query)
-
-    # Create tools
-    tools = [
-        SearchDocumentsTool(search_fn),
-        FinishTool(),
-    ]
-
-    # Create agent with config
-    config = AgentConfig(
-        max_iterations=max_iterations,
-        max_result_chars=8000,
-        verbose=verbose,
-    )
-
-    agent = Agent(
-        gemini_service=gemini,
-        tools=tools,
-        config=config,
-    )
-
-    # Run agent
-    return agent.run(
+    return run_rag_agent(
         channel_id=channel_id,
         query=query,
         conversation_history=conversation_history,
+        max_iterations=max_iterations,
     )
 
 
@@ -188,14 +161,12 @@ def send_message(
     else:
         # Use agent or direct search based on request
         if body.use_agent:
-            # Use agentic loop (ReAct pattern)
+            # Use LangGraph agentic loop (ReAct pattern)
             result = _run_agent_chat(
-                gemini=gemini,
                 channel_id=channel_id,
                 query=body.query,
                 conversation_history=conversation_history,
                 max_iterations=3,
-                verbose=False,
             )
         else:
             # Direct search and answer (legacy mode)

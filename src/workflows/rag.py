@@ -1,222 +1,355 @@
 # -*- coding: utf-8 -*-
-"""RAG workflow using LangGraph.
+"""
+RAG Agent workflow using LangGraph.
 
-This workflow implements a Retrieval-Augmented Generation pipeline:
-1. Process user query
-2. Search documents using Gemini File Search API
-3. Build context from search results
-4. Generate response with grounding information
+Implements the ReAct (Reasoning + Acting) pattern:
+1. Think: LLM decides what to do next
+2. Act: Execute the chosen tool
+3. Observe: Record the result and update state
+4. Repeat until finish or max iterations
 """
 
-from typing import TypedDict, Annotated, Sequence
+from typing import TypedDict, Literal, Any
 from langgraph.graph import StateGraph, END
 
-
-class GroundingChunk(TypedDict):
-    """A chunk of grounding information from search results."""
-
-    content: str
-    source: str  # file name
-    page: int | None  # page number if available
+from src.services.gemini import GeminiService
 
 
-class RAGState(TypedDict):
-    """State for RAG workflow.
+# ============================================================
+# State Definition
+# ============================================================
+
+class AgentState(TypedDict):
+    """State for the RAG agent workflow.
 
     Attributes:
-        channel_id: The channel (FileSearchStore) ID
+        channel_id: The channel (FileSearchStore) ID to search in
         query: User's question
-        search_results: Raw search results from Gemini API
-        context_chunks: Processed context chunks with source info
-        response: Generated response
-        grounding_sources: List of sources used in the response
+        conversation_history: Previous messages for context
+        iteration: Current iteration count
+        max_iterations: Maximum allowed iterations
+        tool_results: Accumulated results from tool executions
+        sources: Sources found during search
+        final_answer: The final answer to return
         error: Error message if any step fails
     """
-
     channel_id: str
     query: str
-    search_results: list[dict] | None
-    context_chunks: list[GroundingChunk]
-    response: str
-    grounding_sources: list[str]
+    conversation_history: list[dict]
+    iteration: int
+    max_iterations: int
+    tool_results: list[dict]
+    sources: list[dict]
+    final_answer: str | None
     error: str | None
 
 
-def process_query(state: RAGState) -> RAGState:
-    """Process and validate the user query.
+# ============================================================
+# System Prompt
+# ============================================================
 
-    This node:
-    - Validates the query is not empty
-    - Prepares the query for search
+RAG_AGENT_SYSTEM_PROMPT = """You are a document analysis assistant. Your task is to answer user questions based on uploaded documents.
+
+## Available Tools
+You have access to the following tools:
+1. **search_documents**: Search for relevant information in the uploaded documents
+2. **finish**: Complete the task and provide the final answer
+
+## Instructions
+1. When the user asks a question, use the search_documents tool to find relevant information
+2. If the search results are insufficient, try searching with different keywords
+3. Once you have enough information, use the finish tool to provide a complete answer
+4. Always cite your sources in the answer
+
+## Important Rules
+- You MUST use the finish tool to complete the task
+- Include citations from the documents in your final answer
+- If no relevant information is found after searching, inform the user honestly
+- Do not make up information - only use what you find in the documents
+"""
+
+
+# ============================================================
+# Tool Definitions for Gemini Function Calling
+# ============================================================
+
+AGENT_TOOLS = [
+    {
+        "name": "search_documents",
+        "description": "Search for information in the uploaded documents. Use this to find relevant content that can help answer the user's question.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query to find relevant information in documents."
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "finish",
+        "description": "Call this when you have gathered enough information and are ready to provide the final answer.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string",
+                    "description": "The complete final answer to the user's question with citations."
+                }
+            },
+            "required": ["answer"]
+        }
+    }
+]
+
+
+# ============================================================
+# Node Functions
+# ============================================================
+
+def think(state: AgentState) -> AgentState:
+    """Think node: LLM decides what to do next.
+
+    Calls Gemini with tools to decide:
+    - search_documents: Need more information
+    - finish: Ready to provide answer
     """
-    query = state.get("query", "").strip()
-
-    if not query:
-        return {**state, "error": "Query cannot be empty"}
-
-    # Query is valid, continue to search
-    return {**state, "query": query, "error": None}
-
-
-def search_documents(state: RAGState) -> RAGState:
-    """Search documents using Gemini File Search API.
-
-    This node:
-    - Calls Gemini File Search API with the query
-    - Returns raw search results
-
-    Note: Actual API call will be implemented in GeminiService
-    """
-    # This will be replaced with actual GeminiService call
-    # For now, return empty results to allow workflow testing
     if state.get("error"):
         return state
 
-    # Placeholder - will be replaced with actual search
+    gemini = GeminiService()
+
+    # Build prompt with context
+    prompt_parts = [
+        RAG_AGENT_SYSTEM_PROMPT,
+        f"\n\nUser Question: {state['query']}"
+    ]
+
+    # Add previous tool results if any
+    if state["tool_results"]:
+        prompt_parts.append("\n\n## Previous Search Results:")
+        for i, result in enumerate(state["tool_results"], 1):
+            prompt_parts.append(f"\n### Search {i}: \"{result['query']}\"")
+            prompt_parts.append(result["result"][:4000])  # Truncate long results
+
+    prompt_parts.append("\n\nBased on the above, decide your next action.")
+    prompt = "\n".join(prompt_parts)
+
+    # Call Gemini with function calling
+    response = gemini.call_with_tools(prompt=prompt, tools=AGENT_TOOLS)
+
+    if "error" in response and response["error"]:
+        return {**state, "error": response["error"]}
+
+    # Store the LLM response in state for act node
     return {
         **state,
-        "search_results": [],
-        "context_chunks": [],
+        "_llm_response": response,
+        "iteration": state["iteration"] + 1,
     }
 
 
-def build_context(state: RAGState) -> RAGState:
-    """Build context from search results.
+def act(state: AgentState) -> AgentState:
+    """Act node: Execute the tool chosen by LLM.
 
-    This node:
-    - Extracts relevant chunks from search results
-    - Formats context with source information
-    - Prepares grounding data
+    Executes either:
+    - search_documents: Search and store results
+    - finish: Set final answer
     """
     if state.get("error"):
         return state
 
-    search_results = state.get("search_results", [])
+    response = state.get("_llm_response", {})
+    tool_call = response.get("tool_call")
 
-    if not search_results:
-        return {
-            **state,
-            "context_chunks": [],
-            "grounding_sources": [],
-        }
+    # If no tool call, LLM gave a direct text response
+    if not tool_call:
+        text_response = response.get("text", "")
+        if text_response:
+            return {**state, "final_answer": text_response}
+        return {**state, "error": "LLM did not provide a response"}
 
-    # Process search results into context chunks
-    context_chunks: list[GroundingChunk] = []
-    sources: set[str] = set()
+    tool_name = tool_call.get("name")
+    tool_args = tool_call.get("args", {})
 
-    for result in search_results:
-        chunk: GroundingChunk = {
-            "content": result.get("content", ""),
-            "source": result.get("source", "unknown"),
-            "page": result.get("page"),
-        }
-        context_chunks.append(chunk)
-        sources.add(chunk["source"])
+    # Handle finish tool
+    if tool_name == "finish":
+        answer = tool_args.get("answer", "Task completed.")
+        return {**state, "final_answer": answer}
 
-    return {
-        **state,
-        "context_chunks": context_chunks,
-        "grounding_sources": list(sources),
-    }
+    # Handle search_documents tool
+    if tool_name == "search_documents":
+        search_query = tool_args.get("query", state["query"])
+        gemini = GeminiService()
+
+        # Perform search
+        search_result = gemini.search_documents(
+            store_name=state["channel_id"],
+            query=search_query,
+        )
+
+        # Format results
+        sources = search_result.get("sources", [])
+        if sources:
+            formatted_parts = []
+            for i, source in enumerate(sources, 1):
+                source_name = source.get("source", "unknown")
+                content = source.get("content", "")
+                formatted_parts.append(f"[Source {i}: {source_name}]\n{content}")
+
+                # Track sources
+                if not any(s.get("source") == source_name for s in state["sources"]):
+                    state["sources"].append(source)
+
+            result_text = f"Found {len(sources)} relevant sections:\n\n" + "\n\n---\n\n".join(formatted_parts)
+        else:
+            result_text = "No relevant documents found for this query."
+
+        # Store result
+        new_tool_results = state["tool_results"] + [{
+            "query": search_query,
+            "result": result_text,
+        }]
+
+        return {**state, "tool_results": new_tool_results, "sources": state["sources"]}
+
+    # Unknown tool
+    return {**state, "error": f"Unknown tool: {tool_name}"}
 
 
-def generate_response(state: RAGState) -> RAGState:
-    """Generate response using LLM with context.
+def observe(state: AgentState) -> AgentState:
+    """Observe node: Clean up state after action.
 
-    This node:
-    - Builds prompt with context
-    - Calls LLM to generate response
-    - Includes grounding information in response
+    Prepares state for next iteration or completion.
     """
-    if state.get("error"):
-        return state
-
-    context_chunks = state.get("context_chunks", [])
-    query = state.get("query", "")
-
-    if not context_chunks:
-        return {
-            **state,
-            "response": "No relevant documents found for your query.",
-        }
-
-    # Build context string
-    context_parts = []
-    for i, chunk in enumerate(context_chunks, 1):
-        source_info = f"[Source: {chunk['source']}"
-        if chunk.get("page"):
-            source_info += f", Page {chunk['page']}"
-        source_info += "]"
-        context_parts.append(f"{source_info}\n{chunk['content']}")
-
-    context = "\n\n".join(context_parts)
-
-    # Placeholder response - will be replaced with actual LLM call
-    response = f"Based on the documents, here is the answer to: {query}\n\n[Response will be generated by LLM]"
-
-    return {**state, "response": response}
+    # Remove temporary LLM response from state
+    new_state = {k: v for k, v in state.items() if not k.startswith("_")}
+    return new_state
 
 
-def should_continue(state: RAGState) -> str:
-    """Determine if workflow should continue or end due to error."""
+# ============================================================
+# Routing Functions
+# ============================================================
+
+def should_continue(state: AgentState) -> Literal["think", "end"]:
+    """Determine if the agent should continue or stop.
+
+    Stops when:
+    - final_answer is set (task complete)
+    - error occurred
+    - max_iterations reached
+    """
+    # Stop if error
     if state.get("error"):
         return "end"
-    return "continue"
+
+    # Stop if final answer
+    if state.get("final_answer"):
+        return "end"
+
+    # Stop if max iterations reached
+    if state["iteration"] >= state["max_iterations"]:
+        return "end"
+
+    # Continue to next iteration
+    return "think"
 
 
-def create_rag_workflow() -> StateGraph:
-    """Create the RAG workflow graph.
+# ============================================================
+# Workflow Creation
+# ============================================================
+
+def create_rag_agent() -> StateGraph:
+    """Create the RAG agent workflow graph.
 
     Workflow:
-        process_query -> search_documents -> build_context -> generate_response -> END
+        think → act → observe → (continue?) → think ... → END
 
     Returns:
         Compiled LangGraph workflow
     """
-    # Create the graph
-    workflow = StateGraph(RAGState)
+    workflow = StateGraph(AgentState)
 
     # Add nodes
-    workflow.add_node("process_query", process_query)
-    workflow.add_node("search_documents", search_documents)
-    workflow.add_node("build_context", build_context)
-    workflow.add_node("generate_response", generate_response)
+    workflow.add_node("think", think)
+    workflow.add_node("act", act)
+    workflow.add_node("observe", observe)
 
     # Set entry point
-    workflow.set_entry_point("process_query")
+    workflow.set_entry_point("think")
 
-    # Add edges with conditional routing
+    # Add edges
+    workflow.add_edge("think", "act")
+    workflow.add_edge("act", "observe")
+
+    # Conditional edge: continue loop or end
     workflow.add_conditional_edges(
-        "process_query",
+        "observe",
         should_continue,
         {
-            "continue": "search_documents",
-            "end": END,
-        },
+            "think": "think",  # Loop back
+            "end": END,        # Exit
+        }
     )
-
-    workflow.add_conditional_edges(
-        "search_documents",
-        should_continue,
-        {
-            "continue": "build_context",
-            "end": END,
-        },
-    )
-
-    workflow.add_conditional_edges(
-        "build_context",
-        should_continue,
-        {
-            "continue": "generate_response",
-            "end": END,
-        },
-    )
-
-    workflow.add_edge("generate_response", END)
 
     return workflow.compile()
 
 
-# Create a singleton instance for easy import
-rag_workflow = create_rag_workflow()
+# ============================================================
+# Agent Runner
+# ============================================================
+
+def run_rag_agent(
+    channel_id: str,
+    query: str,
+    conversation_history: list[dict] | None = None,
+    max_iterations: int = 3,
+) -> dict[str, Any]:
+    """Run the RAG agent to answer a query.
+
+    Args:
+        channel_id: The channel ID to search in
+        query: User's question
+        conversation_history: Previous messages for context
+        max_iterations: Maximum iterations (default 3)
+
+    Returns:
+        Dict with 'response', 'sources', 'iterations', and optional 'error'
+    """
+    # Create initial state
+    initial_state: AgentState = {
+        "channel_id": channel_id,
+        "query": query,
+        "conversation_history": conversation_history or [],
+        "iteration": 0,
+        "max_iterations": max_iterations,
+        "tool_results": [],
+        "sources": [],
+        "final_answer": None,
+        "error": None,
+    }
+
+    # Create and run workflow
+    agent = create_rag_agent()
+    final_state = agent.invoke(initial_state)
+
+    # Handle max iterations without answer
+    if not final_state.get("final_answer") and not final_state.get("error"):
+        # Generate forced answer from accumulated results
+        if final_state["tool_results"]:
+            gemini = GeminiService()
+            context = "\n\n".join([r["result"] for r in final_state["tool_results"]])
+            prompt = f"Based on the following search results, answer the question: {query}\n\n{context}"
+            result = gemini.generate(prompt)
+            final_state["final_answer"] = result.get("text", "Unable to generate answer.")
+        else:
+            final_state["final_answer"] = "No relevant information found in the documents."
+
+    return {
+        "response": final_state.get("final_answer") or final_state.get("error") or "No response generated.",
+        "sources": final_state.get("sources", []),
+        "iterations": final_state.get("iteration", 0),
+        "error": final_state.get("error"),
+    }

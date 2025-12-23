@@ -1,6 +1,20 @@
 # -*- coding: utf-8 -*-
-"""LangGraph workflows for RAG pipeline."""
+"""
+Workflows module for Docuchat.
 
-from src.workflows.rag import create_rag_workflow, RAGState
+Provides LangGraph-based agentic workflows.
+"""
 
-__all__ = ["create_rag_workflow", "RAGState"]
+from src.workflows.rag import (
+    create_rag_agent,
+    run_rag_agent,
+    AgentState,
+    RAG_AGENT_SYSTEM_PROMPT,
+)
+
+__all__ = [
+    "create_rag_agent",
+    "run_rag_agent",
+    "AgentState",
+    "RAG_AGENT_SYSTEM_PROMPT",
+]
