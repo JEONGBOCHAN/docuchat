@@ -24,7 +24,7 @@
 
 **Docuchat**은 문서를 업로드하고, 질문하고, 문서 내용에 기반한 정확한 답변을 받을 수 있는 지능형 문서 어시스턴트입니다. RAG(Retrieval-Augmented Generation)와 LangGraph 기반 에이전틱 워크플로우로 구축되었습니다.
 
-**지금 바로 사용해보세요**: [라이브 데모](https://docuchat-frontend-staging.YOUR-SUBDOMAIN.eastus.azurecontainerapps.io) <!-- TODO: Azure 재배포 후 URL 업데이트 필요 -->
+**지금 바로 사용해보세요**: [라이브 데모](https://docuchat-frontend-staging.wonderfulsky-2a5ed695.eastus.azurecontainerapps.io)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
