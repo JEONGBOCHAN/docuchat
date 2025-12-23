@@ -1,21 +1,48 @@
 # Docuchat
 
+<div align="center">
+
+![Python](https://img.shields.io/badge/Python-3.11+-green.svg)
+![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+
+![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-purple.svg)
+![Gemini](https://img.shields.io/badge/Gemini-Powered-blue.svg)
+![Azure](https://img.shields.io/badge/Azure-Deployed-0078D4.svg)
+
 **Document Analysis Tool powered by RAG + AI Agent**
 
-An intelligent document assistant that lets you upload documents, ask questions, and get accurate answers grounded in your content. Built with Retrieval-Augmented Generation (RAG) and agentic workflows.
+[Features](#features) • [Quick Start](#quick-start) • [Architecture](#architecture) • [API](#api-documentation)
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Azure-blue)](https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io)
-[![Python](https://img.shields.io/badge/Python-3.11+-green)](https://python.org)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[한국어](README_KR.md)
 
-## Live Demo
+</div>
 
-Try it now: **[https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io](https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io)**
+---
+
+## Overview
+
+**Docuchat** is an intelligent document assistant that lets you upload documents, ask questions, and get accurate answers grounded in your content. Built with Retrieval-Augmented Generation (RAG) and LangGraph-powered agentic workflows.
+
+**Try it now**: [Live Demo](https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Docuchat                              │
+│                                                              │
+│   Documents ──▶ RAG Agent ──▶ Analysis ──▶ Answers          │
+│                     │                                        │
+│              ┌──────┴──────┐                                 │
+│              ▼             ▼                                 │
+│        Gemini API    File Search                             │
+│        (LLM)         (RAG)                                   │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Features
 
-### Core Features
+### Core Capabilities
+
 - **Document Upload** - Upload PDFs, text files, markdown, and more
 - **URL Import** - Crawl web pages and import content as documents
 - **AI Chat** - Ask questions and get answers grounded in your documents
@@ -23,12 +50,14 @@ Try it now: **[https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azure
 - **Channel Organization** - Organize documents into separate channels
 
 ### AI Capabilities
-- **RAG (Retrieval-Augmented Generation)** - Answers are grounded in your actual documents
-- **Agentic Workflows** - LangGraph-powered workflows for complex reasoning
+
+- **RAG (Retrieval-Augmented Generation)** - Answers grounded in actual documents
+- **Agentic Workflows** - LangGraph-powered ReAct loop for complex reasoning
 - **Gemini File Search** - Powered by Google's Gemini File Search API
 - **Multi-turn Conversations** - Context-aware chat with conversation history
 
 ### Additional Features
+
 - **Document Summaries** - Generate concise or detailed summaries
 - **Audio Overview** - Convert documents to podcast-style audio (TTS)
 - **Study Guide** - Auto-generate study materials from documents
@@ -113,6 +142,7 @@ Try it now: **[https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azure
 ## Quick Start
 
 ### Prerequisites
+
 - Python 3.11+
 - Node.js 18+
 - Docker (optional)
@@ -231,15 +261,14 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Google Gemini](https://ai.google.dev/) - AI/ML capabilities
-- [LangGraph](https://github.com/langchain-ai/langgraph) - Agentic workflow framework
-- [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
-- [Next.js](https://nextjs.org/) - Frontend framework
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**[한국어 버전 (Korean)](./README_KR.md)**
+<div align="center">
+
+**Built with LangGraph and Gemini**
+
+[Report Bug](https://github.com/JEONGBOCHAN/docuchat/issues) • [Request Feature](https://github.com/JEONGBOCHAN/docuchat/issues)
+
+</div>

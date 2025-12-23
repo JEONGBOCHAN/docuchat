@@ -1,21 +1,48 @@
 # Docuchat
 
+<div align="center">
+
+![Python](https://img.shields.io/badge/Python-3.11+-green.svg)
+![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+
+![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-purple.svg)
+![Gemini](https://img.shields.io/badge/Gemini-Powered-blue.svg)
+![Azure](https://img.shields.io/badge/Azure-Deployed-0078D4.svg)
+
 **RAG + AI Agent 기반 문서 분석 도구**
 
-문서를 업로드하고, 질문하고, 문서 내용에 기반한 정확한 답변을 받을 수 있는 지능형 문서 어시스턴트입니다. RAG(Retrieval-Augmented Generation)와 에이전틱 워크플로우로 구축되었습니다.
+[주요 기능](#주요-기능) • [빠른 시작](#빠른-시작) • [아키텍처](#아키텍처) • [API](#api-문서)
 
-[![라이브 데모](https://img.shields.io/badge/라이브%20데모-Azure-blue)](https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io)
-[![Python](https://img.shields.io/badge/Python-3.11+-green)](https://python.org)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[English](README.md)
 
-## 라이브 데모
+</div>
 
-지금 바로 사용해보세요: **[https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io](https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io)**
+---
+
+## 개요
+
+**Docuchat**은 문서를 업로드하고, 질문하고, 문서 내용에 기반한 정확한 답변을 받을 수 있는 지능형 문서 어시스턴트입니다. RAG(Retrieval-Augmented Generation)와 LangGraph 기반 에이전틱 워크플로우로 구축되었습니다.
+
+**지금 바로 사용해보세요**: [라이브 데모](https://chalssak-frontend-staging.graysmoke-543aab46.eastus.azurecontainerapps.io)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Docuchat                              │
+│                                                              │
+│   문서 ──▶ RAG 에이전트 ──▶ 분석 ──▶ 답변                    │
+│                  │                                           │
+│           ┌──────┴──────┐                                    │
+│           ▼             ▼                                    │
+│     Gemini API    File Search                                │
+│       (LLM)         (RAG)                                    │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## 주요 기능
 
 ### 핵심 기능
+
 - **문서 업로드** - PDF, 텍스트 파일, 마크다운 등 다양한 형식 지원
 - **URL 가져오기** - 웹 페이지를 크롤링하여 문서로 가져오기
 - **AI 채팅** - 문서 내용에 기반한 질문과 답변
@@ -23,12 +50,14 @@
 - **채널 구성** - 문서를 별도의 채널로 구성
 
 ### AI 기능
+
 - **RAG (Retrieval-Augmented Generation)** - 실제 문서에 기반한 답변 생성
-- **에이전틱 워크플로우** - LangGraph 기반 복잡한 추론 워크플로우
+- **에이전틱 워크플로우** - LangGraph 기반 ReAct 루프로 복잡한 추론
 - **Gemini File Search** - Google Gemini File Search API 활용
 - **멀티턴 대화** - 대화 기록을 활용한 맥락 인식 채팅
 
 ### 추가 기능
+
 - **문서 요약** - 간략하거나 상세한 요약 생성
 - **오디오 오버뷰** - 문서를 팟캐스트 스타일 오디오로 변환 (TTS)
 - **학습 가이드** - 문서에서 자동으로 학습 자료 생성
@@ -113,6 +142,7 @@
 ## 빠른 시작
 
 ### 사전 요구사항
+
 - Python 3.11+
 - Node.js 18+
 - Docker (선택사항)
@@ -231,15 +261,14 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ## 라이선스
 
-이 프로젝트는 MIT 라이선스 하에 있습니다 - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
-
-## 감사의 글
-
-- [Google Gemini](https://ai.google.dev/) - AI/ML 기능
-- [LangGraph](https://github.com/langchain-ai/langgraph) - 에이전틱 워크플로우 프레임워크
-- [FastAPI](https://fastapi.tiangolo.com/) - 백엔드 프레임워크
-- [Next.js](https://nextjs.org/) - 프론트엔드 프레임워크
+MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
 ---
 
-**[English Version](./README.md)**
+<div align="center">
+
+**LangGraph와 Gemini로 구축됨**
+
+[버그 리포트](https://github.com/JEONGBOCHAN/docuchat/issues) • [기능 요청](https://github.com/JEONGBOCHAN/docuchat/issues)
+
+</div>
