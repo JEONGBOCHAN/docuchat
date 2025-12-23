@@ -252,7 +252,7 @@ class GeminiService:
         store_name: str,
         query: str,
         conversation_history: list[dict[str, str]] | None = None,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ):
         """Search documents and generate a streaming answer.
 
@@ -338,7 +338,7 @@ class GeminiService:
         store_name: str,
         query: str,
         conversation_history: list[dict[str, str]] | None = None,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Search documents and generate an answer.
 
@@ -410,7 +410,7 @@ class GeminiService:
         self,
         store_names: list[str],
         query: str,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Search across multiple File Search Stores and generate an answer.
 
@@ -494,7 +494,7 @@ class GeminiService:
         self,
         store_names: list[str],
         query: str,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ):
         """Search across multiple File Search Stores with streaming response.
 
@@ -593,7 +593,7 @@ class GeminiService:
         self,
         store_name: str,
         count: int = 5,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Generate FAQ items based on documents in the store.
 
@@ -794,7 +794,7 @@ Generate exactly {count} FAQ items. Return ONLY the JSON array, no other text.""
         self,
         store_name: str,
         query: str,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Search documents and generate an answer with inline citations.
 
@@ -853,7 +853,7 @@ Generate exactly {count} FAQ items. Return ONLY the JSON array, no other text.""
         self,
         store_name: str,
         query: str,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ):
         """Search documents with streaming and inline citations.
 
@@ -925,7 +925,7 @@ Generate exactly {count} FAQ items. Return ONLY the JSON array, no other text.""
         self,
         store_name: str,
         summary_type: str = "short",
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Summarize all documents in a channel.
 
@@ -981,7 +981,7 @@ Focus on the main topic and the most important points. Be clear and informative.
         store_name: str,
         document_name: str,
         summary_type: str = "short",
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Summarize a specific document in a channel.
 
@@ -1040,7 +1040,7 @@ Focus on the main topic and the most important points from this specific documen
         self,
         store_name: str,
         max_events: int = 20,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Generate a timeline of events from documents in the store.
 
@@ -1126,7 +1126,7 @@ Example format:
         store_name: str,
         style: str = "executive",
         max_sections: int = 5,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Generate a briefing document from the content in the store.
 
@@ -1234,7 +1234,7 @@ Example format:
         include_summary: bool = True,
         max_sections: int = 5,
         difficulty: str = "medium",
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Generate a study guide from documents in the store.
 
@@ -1353,7 +1353,7 @@ Example format:
         quiz_type: str = "mixed",
         difficulty: str = "medium",
         include_explanations: bool = True,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Generate a quiz based on documents in the store.
 
@@ -1484,7 +1484,7 @@ Example format:
         duration_minutes: int = 5,
         style: str = "conversational",
         language: str = "ko",
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> dict[str, Any]:
         """Generate a podcast script from documents in the store.
 
