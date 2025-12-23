@@ -24,6 +24,7 @@ docuchat/
 .pytest_cache/
 .coverage
 htmlcov/
+.playwright-mcp/
 
 # 기타
 *.log
