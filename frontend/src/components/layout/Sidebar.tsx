@@ -1,22 +1,34 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { encodeChannelIdForUrl } from '@/lib/api/channels';
-
-interface Channel {
-  id: string;
-  name: string;
-}
+import { channelsApi, encodeChannelIdForUrl, type Channel } from '@/lib/api/channels';
 
 interface SidebarProps {
-  channels?: Channel[];
   isOpen?: boolean;
   onClose?: () => void;
 }
 
-export default function Sidebar({ channels = [], isOpen = true, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchChannels = async () => {
+      try {
+        const response = await channelsApi.list();
+        setChannels(response.channels);
+      } catch (error) {
+        console.error('Failed to fetch channels for sidebar:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchChannels();
+  }, [pathname]); // Re-fetch when pathname changes (e.g., after creating a channel)
 
   return (
     <>
@@ -48,7 +60,11 @@ export default function Sidebar({ channels = [], isOpen = true, onClose }: Sideb
         </div>
 
         <nav className="space-y-1">
-          {channels.length === 0 ? (
+          {isLoading ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
+              Loading...
+            </p>
+          ) : channels.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
               No channels yet
             </p>
