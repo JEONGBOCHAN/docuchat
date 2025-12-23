@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
 import { ChannelCard, CreateChannelModal, DeleteConfirmModal, EmptyState } from '@/components/channels';
 import { channelsApi, type Channel, type CreateChannelRequest, type UpdateChannelRequest } from '@/lib/api/channels';
+import { triggerSidebarRefresh } from '@/components/layout/Sidebar';
 
 function ChannelsContent() {
   const searchParams = useSearchParams();
@@ -52,6 +53,7 @@ function ChannelsContent() {
       await channelsApi.create(data as CreateChannelRequest);
     }
     await fetchChannels();
+    triggerSidebarRefresh(); // Update sidebar
     setEditChannel(null);
   };
 
@@ -65,6 +67,7 @@ function ChannelsContent() {
     try {
       await channelsApi.delete(deleteChannel.id);
       await fetchChannels();
+      triggerSidebarRefresh(); // Update sidebar
       setDeleteChannel(null);
     } catch (err) {
       console.error('Failed to delete channel:', err);

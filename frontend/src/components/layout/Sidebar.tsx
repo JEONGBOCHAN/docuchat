@@ -1,9 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { channelsApi, encodeChannelIdForUrl, type Channel } from '@/lib/api/channels';
+
+// Custom event name for channel updates
+export const CHANNELS_UPDATED_EVENT = 'channels-updated';
+
+// Helper function to trigger sidebar refresh from other components
+export function triggerSidebarRefresh() {
+  window.dispatchEvent(new CustomEvent(CHANNELS_UPDATED_EVENT));
+}
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -15,20 +23,32 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const fetchChannels = useCallback(async () => {
+    try {
+      const response = await channelsApi.list();
+      setChannels(response.channels);
+    } catch (error) {
+      console.error('Failed to fetch channels for sidebar:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchChannels = async () => {
-      try {
-        const response = await channelsApi.list();
-        setChannels(response.channels);
-      } catch (error) {
-        console.error('Failed to fetch channels for sidebar:', error);
-      } finally {
-        setIsLoading(false);
-      }
+    fetchChannels();
+  }, [pathname, fetchChannels]);
+
+  // Listen for custom event to refresh channels
+  useEffect(() => {
+    const handleChannelsUpdated = () => {
+      fetchChannels();
     };
 
-    fetchChannels();
-  }, [pathname]); // Re-fetch when pathname changes (e.g., after creating a channel)
+    window.addEventListener(CHANNELS_UPDATED_EVENT, handleChannelsUpdated);
+    return () => {
+      window.removeEventListener(CHANNELS_UPDATED_EVENT, handleChannelsUpdated);
+    };
+  }, [fetchChannels]);
 
   return (
     <>
