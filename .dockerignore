@@ -47,8 +47,6 @@ docs
 
 # Development files
 poc
-tests
-pytest.ini
 
 # Environment
 .env

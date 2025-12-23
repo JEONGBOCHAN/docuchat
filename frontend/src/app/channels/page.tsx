@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
 import { ChannelCard, CreateChannelModal, DeleteConfirmModal, EmptyState } from '@/components/channels';
-import { channelsApi, type Channel, type CreateChannelRequest, type UpdateChannelRequest } from '@/lib/api/channels';
+import { channelsApi, type Channel, type CreateChannelRequest, type UpdateChannelRequest, type SortBy, type SortOrder } from '@/lib/api/channels';
 import { triggerSidebarRefresh } from '@/components/layout/Sidebar';
 
 function ChannelsContent() {
@@ -14,6 +14,10 @@ function ChannelsContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Sort states
+  const [sortBy, setSortBy] = useState<SortBy>('created_at');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editChannel, setEditChannel] = useState<Channel | null>(null);
@@ -22,14 +26,14 @@ function ChannelsContent() {
   const fetchChannels = useCallback(async () => {
     try {
       setError(null);
-      const response = await channelsApi.list();
+      const response = await channelsApi.list({ sort_by: sortBy, sort_order: sortOrder });
       setChannels(response.channels);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load channels');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [sortBy, sortOrder]);
 
   useEffect(() => {
     fetchChannels();
@@ -93,27 +97,84 @@ function ChannelsContent() {
               Manage your document channels
             </p>
           </div>
-          {channels.length > 0 && (
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-sm text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          <div className="flex items-center gap-3">
+            {/* Sort Buttons */}
+            {channels.length > 0 && (
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <button
+                  onClick={() => {
+                    if (sortBy === 'created_at') {
+                      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+                    } else {
+                      setSortBy('created_at');
+                      setSortOrder('desc');
+                    }
+                  }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors ${
+                    sortBy === 'created_at'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Time
+                  {sortBy === 'created_at' && (
+                    <svg className={`w-3 h-3 transition-transform ${sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    if (sortBy === 'name') {
+                      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+                    } else {
+                      setSortBy('name');
+                      setSortOrder('asc');
+                    }
+                  }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors ${
+                    sortBy === 'name'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                  </svg>
+                  Name
+                  {sortBy === 'name' && (
+                    <svg className={`w-3 h-3 transition-transform ${sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )}
+            {channels.length > 0 && (
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-4 py-2 bg-blue-600 text-sm text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              New Channel
-            </button>
-          )}
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                New Channel
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content */}

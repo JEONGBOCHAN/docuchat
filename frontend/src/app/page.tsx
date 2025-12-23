@@ -32,7 +32,7 @@ export default function Home() {
           </p>
           <div className="flex gap-4 justify-center">
             <Link
-              href="/channels/new"
+              href="/channels?create=true"
               className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium"
             >
               Create Channel

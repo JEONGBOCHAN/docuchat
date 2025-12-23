@@ -47,7 +47,8 @@ export interface StreamController {
 
 export const chatApi = {
   sendMessage: (channelId: string, message: string) => {
-    return apiClient.post<ChatResponse>(`/api/v1/channels/${channelId}/chat`, {
+    const decodedId = decodeURIComponent(channelId);
+    return apiClient.post<ChatResponse>(`/api/v1/channels/${encodeURIComponent(decodedId)}/chat`, {
       query: message,
     });
   },
@@ -97,8 +98,9 @@ export const chatApi = {
       }, 5000);
 
       try {
+        const decodedId = decodeURIComponent(channelId);
         const response = await fetch(
-          `${API_BASE_URL}/api/v1/channels/${channelId}/chat/stream`,
+          `${API_BASE_URL}/api/v1/channels/${encodeURIComponent(decodedId)}/chat/stream`,
           {
             method: 'POST',
             headers: {
@@ -188,18 +190,21 @@ export const chatApi = {
   },
 
   getHistory: (channelId: string, limit?: number) => {
+    const decodedId = decodeURIComponent(channelId);
     const params = limit ? `?limit=${limit}` : '';
     return apiClient.get<{ messages: ChatMessage[] }>(
-      `/api/v1/channels/${channelId}/chat/history${params}`
+      `/api/v1/channels/${encodeURIComponent(decodedId)}/chat/history${params}`
     );
   },
 
   clearHistory: (channelId: string) => {
-    return apiClient.delete<void>(`/api/v1/channels/${channelId}/chat/history`);
+    const decodedId = decodeURIComponent(channelId);
+    return apiClient.delete<void>(`/api/v1/channels/${encodeURIComponent(decodedId)}/chat/history`);
   },
 
   summarizeChannel: (channelId: string, summaryType: 'short' | 'detailed' = 'short') => {
-    return apiClient.post<SummarizeResponse>(`/api/v1/channels/${channelId}/summarize`, {
+    const decodedId = decodeURIComponent(channelId);
+    return apiClient.post<SummarizeResponse>(`/api/v1/channels/${encodeURIComponent(decodedId)}/summarize`, {
       summary_type: summaryType,
     });
   },
@@ -209,8 +214,10 @@ export const chatApi = {
     documentId: string,
     summaryType: 'short' | 'detailed' = 'short'
   ) => {
+    const decodedChannelId = decodeURIComponent(channelId);
+    const decodedDocId = decodeURIComponent(documentId);
     return apiClient.post<SummarizeResponse>(
-      `/api/v1/channels/${channelId}/documents/${documentId}/summarize`,
+      `/api/v1/channels/${encodeURIComponent(decodedChannelId)}/documents/${encodeURIComponent(decodedDocId)}/summarize`,
       { summary_type: summaryType }
     );
   },

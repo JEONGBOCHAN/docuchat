@@ -30,11 +30,16 @@ export interface UpdateChannelRequest {
   description?: string;
 }
 
+export type SortBy = 'created_at' | 'name';
+export type SortOrder = 'asc' | 'desc';
+
 export const channelsApi = {
-  list: (params?: { limit?: number; offset?: number }) => {
+  list: (params?: { limit?: number; offset?: number; sort_by?: SortBy; sort_order?: SortOrder }) => {
     const searchParams = new URLSearchParams();
     if (params?.limit) searchParams.set('limit', String(params.limit));
     if (params?.offset) searchParams.set('offset', String(params.offset));
+    if (params?.sort_by) searchParams.set('sort_by', params.sort_by);
+    if (params?.sort_order) searchParams.set('sort_order', params.sort_order);
     const query = searchParams.toString();
     return apiClient.get<ChannelList>(`/api/v1/channels${query ? `?${query}` : ''}`);
   },

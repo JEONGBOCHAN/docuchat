@@ -40,34 +40,39 @@ export interface UpdateNoteRequest {
 
 export const notesApi = {
   list: (channelId: string, params?: { limit?: number; offset?: number }) => {
+    const decodedChannelId = decodeURIComponent(channelId);
     const searchParams = new URLSearchParams();
-    searchParams.set('channel_id', channelId);
+    searchParams.set('channel_id', decodedChannelId);
     if (params?.limit) searchParams.set('limit', String(params.limit));
     if (params?.offset) searchParams.set('offset', String(params.offset));
     return apiClient.get<NoteList>(`/api/v1/notes?${searchParams.toString()}`);
   },
 
   get: (channelId: string, noteId: number) => {
+    const decodedChannelId = decodeURIComponent(channelId);
     const searchParams = new URLSearchParams();
-    searchParams.set('channel_id', channelId);
+    searchParams.set('channel_id', decodedChannelId);
     return apiClient.get<Note>(`/api/v1/notes/${noteId}?${searchParams.toString()}`);
   },
 
   create: (channelId: string, data: CreateNoteRequest) => {
+    const decodedChannelId = decodeURIComponent(channelId);
     const searchParams = new URLSearchParams();
-    searchParams.set('channel_id', channelId);
+    searchParams.set('channel_id', decodedChannelId);
     return apiClient.post<Note>(`/api/v1/notes?${searchParams.toString()}`, data);
   },
 
   update: (channelId: string, noteId: number, data: UpdateNoteRequest) => {
+    const decodedChannelId = decodeURIComponent(channelId);
     const searchParams = new URLSearchParams();
-    searchParams.set('channel_id', channelId);
+    searchParams.set('channel_id', decodedChannelId);
     return apiClient.put<Note>(`/api/v1/notes/${noteId}?${searchParams.toString()}`, data);
   },
 
   delete: (channelId: string, noteId: number) => {
+    const decodedChannelId = decodeURIComponent(channelId);
     const searchParams = new URLSearchParams();
-    searchParams.set('channel_id', channelId);
+    searchParams.set('channel_id', decodedChannelId);
     return apiClient.delete<void>(`/api/v1/notes/${noteId}?${searchParams.toString()}`);
   },
 };

@@ -225,11 +225,222 @@ claude -p "기능 B 추가" > feature_b.txt &
 
 ---
 
+## 대규모 병렬 실행 테스트
+
+2개 병렬 실행이 성공한 후, 더 많은 인스턴스를 동시에 실행할 수 있는지 테스트했습니다.
+
+### 시도 7: 6개 병렬 실행 - 한글 프롬프트 (실패)
+
+```powershell
+$tasks = @(
+    @{ id = 1; prompt = "src/api/v1/channels.py 파일의 주요 엔드포인트 3개만 나열해" },
+    @{ id = 2; prompt = "src/api/v1/documents.py 파일의 주요 엔드포인트 3개만 나열해" },
+    # ... 6개 작업
+)
+```
+
+**오류**:
+```
+'src/api/v1/documents.py' 토큰은 올바르지 않습니다.
+해시 리터럴이 닫히지 않았습니다.
+```
+
+**원인**:
+- PowerShell 스크립트 파일이 UTF-8로 저장되었지만
+- Windows PowerShell이 한글 문자열을 파싱할 때 인코딩 문제 발생
+- 특히 `@{ }` 해시테이블 내부의 한글 문자열에서 파싱 실패
+
+**시도한 해결책**:
+1. `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` 추가 → 실패
+2. BOM 있는 UTF-8로 저장 시도 → 복잡함
+
+---
+
+### 시도 8: 6개 병렬 실행 - 영어 프롬프트 (성공!)
+
+```powershell
+$tasks = @(
+    @{ id = 1; prompt = "List 3 main endpoints in src/api/v1/channels.py" },
+    @{ id = 2; prompt = "List 3 main endpoints in src/api/v1/documents.py" },
+    @{ id = 3; prompt = "List 3 main endpoints in src/api/v1/chat.py" },
+    @{ id = 4; prompt = "List 3 main methods in src/services/gemini.py" },
+    @{ id = 5; prompt = "Count test files in tests/api/v1 folder" },
+    @{ id = 6; prompt = "List 5 main dependencies in requirements.txt" }
+)
+```
+
+**결과**: 성공!
+
+```
+=== Starting 6 parallel Claude instances ===
+Start time: 09:19:50
+
+Started Job 1: List 3 main endpoints in src/api/v1/channels.py
+Started Job 2: List 3 main endpoints in src/api/v1/documents.py
+Started Job 3: List 3 main endpoints in src/api/v1/chat.py
+Started Job 4: List 3 main methods in src/services/gemini.py
+Started Job 5: Count test files in tests/api/v1 folder
+Started Job 6: List 5 main dependencies in requirements.txt
+
+Waiting for all jobs to complete...
+
+=== All jobs completed ===
+End time: 09:20:11
+Total duration: 20.9115434 seconds
+```
+
+**성공 요인**:
+- 프롬프트를 영어로 작성하여 인코딩 문제 회피
+- 각 작업이 독립적으로 실행되어 서로 간섭 없음
+
+---
+
+### 시도 9: 8개 병렬 실행 (성공!)
+
+6개가 성공했으므로 8개도 테스트:
+
+```powershell
+$tasks = @(
+    @{ id = 1; prompt = "Count lines in src/api/v1/channels.py" },
+    @{ id = 2; prompt = "Count lines in src/api/v1/documents.py" },
+    @{ id = 3; prompt = "Count lines in src/api/v1/chat.py" },
+    @{ id = 4; prompt = "Count lines in src/api/v1/notes.py" },
+    @{ id = 5; prompt = "Count lines in src/services/gemini.py" },
+    @{ id = 6; prompt = "Count lines in src/services/cache_service.py" },
+    @{ id = 7; prompt = "Count files in src/api folder recursively" },
+    @{ id = 8; prompt = "Count files in tests folder recursively" }
+)
+```
+
+**결과**:
+```
+=== Starting 8 parallel Claude instances ===
+Start time: 09:20:45
+  Job 1 started
+  Job 2 started
+  Job 3 started
+  Job 4 started
+  Job 5 started
+  Job 6 started
+  Job 7 started
+  Job 8 started
+
+Waiting...
+
+=== Results (8 jobs in 18.7452431 seconds) ===
+Job 1: Count lines in src/api/v1/channels.py => 301
+Job 2: Count lines in src/api/v1/documents.py => 339
+Job 3: Count lines in src/api/v1/chat.py => 574
+Job 4: Count lines in src/api/v1/notes.py => 218
+Job 5: Count lines in src/services/gemini.py => 1555
+Job 6: Count lines in src/services/cache_service.py => 383
+Job 7: Count files in src/api folder recursively => 48
+Job 8: Count files in tests folder recursively => 100
+```
+
+---
+
+## 대규모 병렬 실행 스크립트 (최종)
+
+```powershell
+# parallel_multi.ps1
+# 사용법: powershell.exe -ExecutionPolicy Bypass -File parallel_multi.ps1
+
+$projectPath = "C:\Users\wjd86\t\study\chalssak"
+$startTime = Get-Date
+
+# 작업 목록 정의 (영어 프롬프트 권장)
+$tasks = @(
+    @{ id = 1; prompt = "Task 1 description" },
+    @{ id = 2; prompt = "Task 2 description" },
+    @{ id = 3; prompt = "Task 3 description" }
+    # 필요한 만큼 추가
+)
+
+$processes = @()
+
+Write-Host "=== Starting $($tasks.Count) parallel Claude instances ==="
+Write-Host "Start time: $($startTime.ToString('HH:mm:ss'))"
+
+# 모든 작업을 동시에 시작
+foreach ($task in $tasks) {
+    $resultFile = "$projectPath\result_$($task.id).txt"
+    $proc = Start-Process -FilePath "cmd.exe" `
+        -ArgumentList "/c cd /d $projectPath && claude -p `"$($task.prompt)`" --output-format text > $resultFile 2>&1" `
+        -NoNewWindow -PassThru
+    $processes += @{ proc = $proc; id = $task.id; prompt = $task.prompt }
+    Write-Host "  Job $($task.id) started"
+}
+
+Write-Host ""
+Write-Host "Waiting for all jobs..."
+
+# 모든 프로세스 완료 대기
+foreach ($p in $processes) {
+    $p.proc.WaitForExit()
+}
+
+$endTime = Get-Date
+$duration = ($endTime - $startTime).TotalSeconds
+
+Write-Host ""
+Write-Host "=== All $($tasks.Count) jobs completed in $duration seconds ==="
+
+# 결과 출력
+foreach ($task in $tasks) {
+    Write-Host ""
+    Write-Host "===== Result $($task.id) ====="
+    Write-Host "Prompt: $($task.prompt)"
+    Write-Host "-----"
+    Get-Content "$projectPath\result_$($task.id).txt"
+}
+```
+
+---
+
+## 성능 비교 (최종)
+
+| 병렬 수 | 소요 시간 | 순차 예상 | 절감률 |
+|---------|-----------|-----------|--------|
+| 2개 | 25초 | ~40초 | 37% |
+| 6개 | 21초 | ~100초 | 79% |
+| 8개 | 19초 | ~140초 | **86%** |
+
+**핵심 발견**:
+- 병렬 수가 늘어도 총 시간은 거의 동일 (~20초)
+- 가장 느린 작업의 시간이 전체 시간을 결정
+- 이론적으로 API rate limit까지 확장 가능
+
+---
+
+## 주의사항 (업데이트)
+
+1. **인코딩**: 한글 출력 시 UTF-8 설정 필요
+2. **경로**: 공백이 있는 경로는 따옴표로 감싸기
+3. **프롬프트 이스케이프**: 쌍따옴표 내부의 따옴표는 백틱(`)으로 이스케이프
+4. **작업 디렉토리**: `cd /d`로 드라이브까지 포함해서 이동
+5. **한글 프롬프트**: PowerShell 스크립트 파일 내에서는 **영어 프롬프트 권장**
+   - 한글 사용 시 인코딩 파싱 오류 발생 가능
+   - 실행 시 claude가 한글로 응답하는 것은 문제없음
+
+---
+
+## 제약 요소
+
+1. **API Rate Limit**: Anthropic 계정의 요청 제한
+2. **시스템 리소스**: CPU, 메모리, 네트워크 대역폭
+3. **동시 프로세스**: Windows의 프로세스 수 제한
+4. **결과 파일**: 디스크 I/O 병목 가능성
+
+---
+
 ## 결론
 
 추가 MCP 설치 없이 **PowerShell의 Start-Process**만으로 Claude Code 병렬 실행이 가능합니다.
 
-핵심은:
+**핵심 요약**:
 1. `cmd.exe`를 통해 claude 호출 (Node.js 래퍼 호환성)
 2. `Start-Process -PassThru`로 프로세스 핸들 획득
 3. 결과는 파일로 저장 후 읽기
+4. **8개 이상 동시 실행 가능**, 시간은 가장 느린 작업 기준
+5. PowerShell 스크립트 내 프롬프트는 **영어 권장** (인코딩 문제 회피)

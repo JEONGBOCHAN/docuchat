@@ -79,6 +79,8 @@ def list_channels(
     cache: Annotated[CacheService, Depends(get_cache_service)],
     limit: Annotated[int | None, Query(description="Maximum number of channels", ge=1, le=100)] = None,
     offset: Annotated[int, Query(description="Number of channels to skip", ge=0)] = 0,
+    sort_by: Annotated[str, Query(description="Sort by field: created_at or name")] = "created_at",
+    sort_order: Annotated[str, Query(description="Sort order: asc or desc")] = "desc",
 ) -> ChannelList:
     """List all channels (File Search Stores)."""
     try:
@@ -129,14 +131,24 @@ def list_channels(
                 )
             )
 
-        # Sort: favorited channels first, then by created_at
+        # Sort: favorited channels first, then by specified field
         # Handle timezone-naive/aware datetime comparison (SQLite doesn't preserve timezone)
         def get_naive_ts(c):
             ts = c.created_at
             if ts and ts.tzinfo is not None:
                 return ts.replace(tzinfo=None)
             return ts if ts else datetime.min
-        channels.sort(key=lambda c: (not c.is_favorited, get_naive_ts(c)))
+
+        # Two-step stable sort: first by field, then by favorited
+        # This ensures favorited channels always come first regardless of sort direction
+        reverse = sort_order == "desc"
+        if sort_by == "name":
+            channels.sort(key=lambda c: c.name.lower(), reverse=reverse)
+        else:  # created_at (default)
+            channels.sort(key=lambda c: get_naive_ts(c), reverse=reverse)
+
+        # Stable sort by favorited (favorited first) - preserves field order within each group
+        channels.sort(key=lambda c: not c.is_favorited)
 
         # Apply pagination
         total = len(channels)
