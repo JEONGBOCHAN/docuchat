@@ -1,13 +1,29 @@
 'use client';
 
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 
 /**
  * 설정 페이지
  *
- * 사용자 설정 관리 (Coming Soon)
+ * Dark Mode toggle enabled, other settings Coming Soon
  */
 export default function SettingsPage() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDarkMode = mounted ? resolvedTheme === 'dark' : false;
+
+  const handleToggle = () => {
+    setTheme(isDarkMode ? 'light' : 'dark');
+  };
+
   return (
     <MainLayout>
       <div className="max-w-4xl mx-auto">
@@ -21,41 +37,9 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* Coming Soon Message */}
-        <div className="flex flex-col items-center justify-center py-16">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
-            <svg
-              className="w-10 h-10 text-gray-400 dark:text-gray-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            Settings Coming Soon
-          </h2>
-          <p className="text-gray-500 dark:text-gray-400 text-center max-w-md">
-            We&apos;re working on settings for theme preferences, API key management,
-            and other customization options.
-          </p>
-        </div>
-
-        {/* Placeholder Settings Sections */}
-        <div className="space-y-6 opacity-50 pointer-events-none">
-          {/* Theme Section */}
+        {/* Settings Sections */}
+        <div className="space-y-6">
+          {/* Theme Section - Active */}
           <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
               Appearance
@@ -69,15 +53,94 @@ export default function SettingsPage() {
                   Toggle between light and dark theme
                 </p>
               </div>
-              <div className="w-12 h-6 bg-gray-200 dark:bg-gray-700 rounded-full" />
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isDarkMode}
+                aria-label="Toggle dark mode"
+                onClick={handleToggle}
+                disabled={!mounted}
+                className={`
+                  relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full
+                  border-2 border-transparent transition-colors duration-200 ease-in-out
+                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                  dark:focus:ring-offset-gray-900
+                  ${!mounted ? 'opacity-50 cursor-not-allowed' : ''}
+                  ${isDarkMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}
+                `}
+              >
+                <span
+                  className={`
+                    pointer-events-none inline-block h-5 w-5 transform rounded-full
+                    bg-white shadow ring-0 transition duration-200 ease-in-out
+                    ${isDarkMode ? 'translate-x-5' : 'translate-x-0'}
+                  `}
+                />
+              </button>
+            </div>
+            {/* Theme Options */}
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Theme Preference
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setTheme('light')}
+                  disabled={!mounted}
+                  className={`
+                    px-4 py-2 text-sm rounded-md border transition-colors
+                    ${theme === 'light'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }
+                    ${!mounted ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                >
+                  Light
+                </button>
+                <button
+                  onClick={() => setTheme('dark')}
+                  disabled={!mounted}
+                  className={`
+                    px-4 py-2 text-sm rounded-md border transition-colors
+                    ${theme === 'dark'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }
+                    ${!mounted ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                >
+                  Dark
+                </button>
+                <button
+                  onClick={() => setTheme('system')}
+                  disabled={!mounted}
+                  className={`
+                    px-4 py-2 text-sm rounded-md border transition-colors
+                    ${theme === 'system'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }
+                    ${!mounted ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                >
+                  System
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* API Section */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              API Configuration
-            </h3>
+          {/* API Section - Coming Soon */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 opacity-50 pointer-events-none">
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                API Configuration
+              </h3>
+              <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded">
+                Coming Soon
+              </span>
+            </div>
             <div>
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Gemini API Key
@@ -88,11 +151,16 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Data Section */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Data Management
-            </h3>
+          {/* Data Section - Coming Soon */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 opacity-50 pointer-events-none">
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                Data Management
+              </h3>
+              <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded">
+                Coming Soon
+              </span>
+            </div>
             <div>
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Export Data

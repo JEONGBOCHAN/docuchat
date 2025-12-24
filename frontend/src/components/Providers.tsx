@@ -1,5 +1,6 @@
 'use client';
 
+import { ThemeProvider } from 'next-themes';
 import { ToastProvider } from '@/components/ui';
 
 interface ProvidersProps {
@@ -7,5 +8,9 @@ interface ProvidersProps {
 }
 
 export default function Providers({ children }: ProvidersProps) {
-  return <ToastProvider>{children}</ToastProvider>;
+  return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ToastProvider>{children}</ToastProvider>
+    </ThemeProvider>
+  );
 }
