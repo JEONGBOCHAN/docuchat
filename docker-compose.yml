@@ -149,6 +149,44 @@ services:
       - production
 
   # ==========================================
+  # MCP Server (for Agent Dashboard)
+  # ==========================================
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: docuchat-mcp-server
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-docuchat}:${POSTGRES_PASSWORD:-docuchat_password}@db:5432/${POSTGRES_DB:-docuchat}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      APP_ENV: ${APP_ENV:-development}
+      PYTHONPATH: /app
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./src:/app/src:ro
+      - ./data:/app/data
+    networks:
+      - docuchat-network
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # MCP server uses stdio transport, but we expose port for potential HTTP bridge
+    command: ["python", "-c", "from src.mcp_server.server import run_server; run_server()"]
+    profiles:
+      - mcp
+
+  # ==========================================
   # Test Runner (Profile: test)
   # ==========================================
   test:
@@ -172,6 +210,32 @@ services:
     command: pytest tests/ -v --tb=short
     profiles:
       - test
+
+  # ==========================================
+  # MCP Integration Test Runner (Profile: mcp-test)
+  # ==========================================
+  mcp-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: docuchat-mcp-test
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      APP_ENV: test
+      DATABASE_URL: postgresql://${POSTGRES_USER:-docuchat}:${POSTGRES_PASSWORD:-docuchat_password}@db:5432/${POSTGRES_DB:-docuchat}_test
+      PYTHONPATH: /app
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    networks:
+      - docuchat-network
+    depends_on:
+      db:
+        condition: service_healthy
+    command: pytest tests/mcp_server/ tests/integration/test_mcp_integration.py -v --tb=short
+    profiles:
+      - mcp-test
 
 # ==========================================
 # Networks

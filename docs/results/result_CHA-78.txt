@@ -1,0 +1,50 @@
+STATUS: SUCCESS
+
+## Decision Log
+- [No Separate MCP Deployment]: MCP server code is included in backend image, no separate Azure deployment needed
+- [CI/CD Enhancement]: Added dedicated MCP server test step to GitHub Actions workflow
+- [Test Enforcement]: MCP tests are set to fail the pipeline (continue-on-error: false) to ensure quality
+
+## Alternatives Considered
+- [Separate MCP Server Container App] -> Not selected: MCP server shares codebase with backend, separate deployment adds complexity
+- [MCP Server as Azure Function] -> Not selected: MCP uses stdio transport, not HTTP-based
+- [Skip CI Testing for MCP] -> Not selected: Critical functionality requires CI validation
+
+## Implementation Summary
+1. Analyzed existing Azure deployment workflow:
+   - Backend image already includes MCP server code (same Dockerfile)
+   - No additional infrastructure changes needed
+   - MCP server is part of backend deployment
+
+2. Updated GitHub Actions workflow (.github/workflows/deploy.yml):
+   - Added dedicated "Run MCP server tests" step
+   - Tests both unit tests (tests/mcp_server/) and integration tests
+   - Set continue-on-error: false to enforce test passing
+
+3. Deployment architecture:
+   - MCP server code deployed with backend to Azure Container Apps
+   - MCP functionality available within backend container
+   - Dashboard UI served via MCP resource endpoint
+
+## Files Changed
+- .github/workflows/deploy.yml: Added MCP server test step
+
+## Test Results
+Local test verification:
+- MCP Server Unit Tests: 69 passed
+- MCP Integration Tests: 30 passed
+- Total: 99 tests passed
+
+CI/CD workflow validated:
+- Test step added with proper environment variables
+- Test failure will block deployment
+
+## Potential Risks or TODOs
+- Monitor first CI/CD run to verify MCP tests pass in GitHub Actions environment
+- Consider adding MCP-specific E2E tests with actual API calls (requires GOOGLE_API_KEY)
+- Future: May need separate MCP server deployment for high-traffic scenarios
+
+## Side Effects Analysis
+- Analyzed: Yes
+- Potential Side Effects: CI pipeline may fail if MCP tests have issues (by design)
+- Mitigation: Tests have been validated locally; CI failure is intentional to catch regressions

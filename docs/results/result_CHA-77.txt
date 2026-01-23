@@ -1,0 +1,57 @@
+STATUS: SUCCESS
+
+## Decision Log
+- [Docker Compose Service Addition]: Added mcp-server and mcp-test services with separate profiles (mcp, mcp-test) to avoid impacting existing infrastructure
+- [Profile-based Isolation]: Used Docker Compose profiles to keep MCP services optional, only activated when explicitly requested
+- [Port Configuration]: Assigned port 8001 for MCP server to avoid conflict with backend (8000)
+- [Service Dependencies]: MCP server depends on db (healthy) and backend (healthy) to ensure proper startup order
+
+## Alternatives Considered
+- [Single Container for All Services] -> Not selected: MCP server has different runtime requirements (stdio transport)
+- [Separate Repository for MCP Server] -> Not selected: MCP server is tightly integrated with agent code
+- [MCP Server as Backend Sidecar] -> Not selected: Profile-based approach offers better flexibility
+
+## Implementation Summary
+1. Added mcp-server service to docker-compose.yml:
+   - Uses development target from existing Dockerfile
+   - Runs MCP server via Python command
+   - Exposed on port 8001
+   - Uses 'mcp' profile for optional activation
+
+2. Added mcp-test service to docker-compose.yml:
+   - Runs MCP-specific tests
+   - Uses 'mcp-test' profile
+   - Tests both unit tests (tests/mcp_server/) and integration tests (tests/integration/test_mcp_integration.py)
+
+3. Validated Docker Compose configuration:
+   - All profiles validated successfully
+   - Services: db, backend, frontend, mcp-server, mcp-test, test
+
+## Files Changed
+- docker-compose.yml: Added mcp-server and mcp-test services
+
+## Test Results
+MCP Server Unit Tests (tests/mcp_server/):
+============================= test session starts =============================
+69 passed, 71 warnings in 0.10s
+=============================
+
+MCP Integration Tests (tests/integration/test_mcp_integration.py):
+============================= test session starts =============================
+30 passed, 71 warnings in 0.09s
+=============================
+
+Total: 99 tests passed
+
+Note: Docker container build/run tests could not be executed as Docker Desktop was not running.
+Docker Compose configuration has been validated and is ready for container testing.
+
+## Potential Risks or TODOs
+- Docker container tests should be run manually when Docker Desktop is available
+- MCP server uses stdio transport; HTTP bridge may be needed for web-based integrations
+- Consider adding health check for MCP server that validates tool registration
+
+## Side Effects Analysis
+- Analyzed: Yes
+- Potential Side Effects: None identified - changes are additive with profile isolation
+- Mitigation: Profile-based services don't affect existing deployment
