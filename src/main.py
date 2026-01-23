@@ -138,6 +138,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Mcp-Session-Id"],  # Allow browser to read MCP session header
 )
 
 # Request logging middleware (should be outermost for accurate timing)
