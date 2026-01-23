@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from fastapi import APIRouter
 
-from src.api.v1 import health, channels, documents, chat, capacity, scheduler, admin, notes, faq, summarize, search, citations, favorites, preview, trash, export, timeline, youtube, study, audio, google_drive
+from src.api.v1 import health, channels, documents, chat, capacity, scheduler, admin, notes, faq, summarize, search, citations, favorites, preview, trash, export, timeline, youtube, study, audio, google_drive, dashboard, mcp
 
 api_router = APIRouter()
 
@@ -66,6 +66,12 @@ api_router.include_router(audio.router)
 
 # Google Drive Integration API
 api_router.include_router(google_drive.router)
+
+# Agent Dashboard (MCP Apps browser testing)
+api_router.include_router(dashboard.router)
+
+# MCP Streamable HTTP Transport (for frontend MCP client)
+api_router.include_router(mcp.router)
 
 # Channel CRUD
 api_router.include_router(channels.router)
