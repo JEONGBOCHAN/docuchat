@@ -7,7 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.audio import get_channel_port
+from src.application.ports.channel import ChannelDTO
 from src.models.audio import AudioStatus, VoiceType
 from src.models.db_models import ChannelMetadata, AudioOverviewDB
 
@@ -27,13 +28,13 @@ class TestGenerateAudioOverview:
         test_db.add(channel)
         test_db.commit()
 
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         with patch.object(threading, "Thread") as mock_thread:
             mock_thread_instance = MagicMock()
@@ -57,14 +58,14 @@ class TestGenerateAudioOverview:
             assert data["audio_url"] is None
             mock_thread_instance.start.assert_called_once()
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_audio_overview_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test audio generation for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/audio",
@@ -73,17 +74,17 @@ class TestGenerateAudioOverview:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_audio_overview_channel_metadata_not_found(self, client_with_db: TestClient, test_db):
         """Test audio generation when channel exists in Gemini but not in database."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/audio",
@@ -93,7 +94,7 @@ class TestGenerateAudioOverview:
         assert response.status_code == 404
         assert "metadata" in response.json()["detail"].lower()
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestListAudioOverviews:
@@ -302,13 +303,13 @@ class TestPreviewScript:
         test_db.add(channel)
         test_db.commit()
 
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = PodcastScriptDTO(
@@ -338,14 +339,14 @@ class TestPreviewScript:
         assert len(data["script"]["dialogue"]) == 2
         assert "generated_at" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_preview_script_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test script preview for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/audio/preview-script",
@@ -354,7 +355,7 @@ class TestPreviewScript:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_preview_script_api_error(self, client_with_db: TestClient, test_db):
         """Test script preview handles API errors."""
@@ -365,13 +366,13 @@ class TestPreviewScript:
         test_db.add(channel)
         test_db.commit()
 
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         mock_use_case = MagicMock()
         mock_use_case.execute.side_effect = Exception("API Error")
@@ -388,7 +389,7 @@ class TestPreviewScript:
         assert response.status_code == 500
         assert "Failed to generate script" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestStreamAudio:

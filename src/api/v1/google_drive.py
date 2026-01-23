@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 from src.core.config import get_settings
 from src.core.database import get_db
 from src.core.logging import get_logger
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.application.ports.document import DocumentPort
+from src.infrastructure.di.container import create_channel_port, create_document_port
 from src.services.capacity_service import CapacityService, CapacityExceededError
 from src.services.cache_service import CacheService, get_cache_service
 
@@ -25,6 +27,16 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/integrations/google-drive", tags=["google-drive"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
+def get_document_port() -> DocumentPort:
+    """Get document port instance."""
+    return create_document_port()
 
 # OAuth 2.0 scopes for Google Drive
 SCOPES = [
@@ -242,7 +254,8 @@ async def list_files(
 async def import_file(
     channel_id: str,
     request: ImportFileRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
 ):
@@ -314,8 +327,8 @@ async def import_file(
         actual_size = len(file_content)
 
         # Validate channel exists
-        store = gemini.get_store(channel_id)
-        if not store:
+        channel = channel_port.get_channel(channel_id)
+        if not channel:
             raise HTTPException(
                 status_code=404,
                 detail=f"Channel not found: {channel_id}",
@@ -338,7 +351,7 @@ async def import_file(
 
         try:
             # Upload to Gemini store
-            operation = gemini.upload_file(channel_id, tmp_path)
+            result = document_port.upload_document(channel_id, tmp_path)
 
             # Update capacity tracking
             capacity_service.update_after_upload(channel_id, actual_size)
@@ -351,13 +364,13 @@ async def import_file(
                 "Successfully imported file from Google Drive",
                 file_name=file_name,
                 channel_id=channel_id,
-                document_id=operation.get("name"),
+                document_id=result.operation_name,
             )
 
             return ImportFileResponse(
-                id=operation.get("name", ""),
+                id=result.operation_name,
                 filename=file_name,
-                status="processing" if not operation.get("done") else "completed",
+                status="processing" if not result.done else "completed",
                 message=f"Successfully imported {file_name} from Google Drive",
             )
 

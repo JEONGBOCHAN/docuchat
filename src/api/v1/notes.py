@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from src.models.note import NoteCreate, NoteUpdate, NoteResponse, NoteList
 from src.models.chat import GroundingSource
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
@@ -19,12 +20,17 @@ from src.services.trash_repository import TrashRepository
 router = APIRouter(prefix="/notes", tags=["notes"])
 
 
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
 def _get_channel_or_404(
-    channel_id: str, gemini: GeminiService, db: Session
+    channel_id: str, channel_port: ChannelPort, db: Session
 ) -> tuple:
     """Get channel or raise 404."""
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -36,10 +42,10 @@ def _get_channel_or_404(
         # Create if not exists (for channels created before DB integration)
         channel_meta = channel_repo.create(
             gemini_store_id=channel_id,
-            name=store.get("display_name", "unknown"),
+            name=channel.display_name or "unknown",
         )
 
-    return store, channel_meta
+    return channel, channel_meta
 
 
 def _note_to_response(note, gemini_store_id: str) -> NoteResponse:
@@ -70,14 +76,14 @@ def create_note(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
     data: NoteCreate,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> NoteResponse:
     """Create a new note in a channel.
 
     Notes can be created manually or from AI responses.
     """
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     note_repo = NoteRepository(db)
     sources_data = [{"source": s.source, "content": s.content} for s in data.sources]
@@ -101,13 +107,13 @@ def create_note(
 def list_notes(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(description="Maximum number of notes", ge=1, le=100)] = 50,
     offset: Annotated[int, Query(description="Number of notes to skip", ge=0)] = 0,
 ) -> NoteList:
     """List all notes in a channel."""
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     note_repo = NoteRepository(db)
     notes = note_repo.get_by_channel(channel_meta, limit=limit, offset=offset)
@@ -129,11 +135,11 @@ def get_note(
     request: Request,
     note_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> NoteResponse:
     """Get a specific note by its ID."""
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     note_repo = NoteRepository(db)
     note = note_repo.get_by_id(note_id)
@@ -158,11 +164,11 @@ def update_note(
     note_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
     data: NoteUpdate,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> NoteResponse:
     """Update an existing note."""
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     note_repo = NoteRepository(db)
     note = note_repo.get_by_id(note_id)
@@ -193,7 +199,7 @@ def delete_note(
     request: Request,
     note_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ):
     """Delete a note (moves to trash).
@@ -201,7 +207,7 @@ def delete_note(
     The note can be restored from the trash within 30 days.
     Use DELETE /trash/note/{id} for permanent deletion.
     """
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     note_repo = NoteRepository(db)
     note = note_repo.get_by_id(note_id)

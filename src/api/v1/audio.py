@@ -19,16 +19,21 @@ from src.models.audio import (
     AudioOverviewListResponse,
     ScriptOnlyResponse,
 )
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port, create_generate_podcast_script_use_case
 from src.services.tts_service import TTSService, get_tts_service
 from src.services.audio_repository import AudioRepository, to_response
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
-from src.infrastructure.di.container import create_generate_podcast_script_use_case
 from src.application.use_cases.podcast import GeneratePodcastScriptRequest
 
 router = APIRouter(prefix="/channels", tags=["audio"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
 
 
 async def generate_audio_task(
@@ -150,7 +155,7 @@ def generate_audio_overview(
     channel_id: str,
     body: GenerateAudioRequest,
     background_tasks: BackgroundTasks,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> AudioOverviewResponse:
     """Start audio overview generation for a channel.
@@ -162,8 +167,8 @@ def generate_audio_overview(
     Returns immediately with a task ID. Poll the GET endpoint to check status.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -226,7 +231,6 @@ def list_audio_overviews(
     channel_id: str,
     limit: int = 20,
     offset: int = 0,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ) -> AudioOverviewListResponse:
     """List all audio overviews for a channel."""
@@ -370,7 +374,7 @@ def preview_script(
     request: Request,
     channel_id: str,
     body: GenerateAudioRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ScriptOnlyResponse:
     """Generate and preview podcast script without creating audio.
@@ -379,8 +383,8 @@ def preview_script(
     full audio generation.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",

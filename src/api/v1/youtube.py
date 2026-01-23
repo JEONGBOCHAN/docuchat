@@ -13,7 +13,9 @@ from src.models.youtube import (
     YouTubeSourceRequest,
     YouTubeSourceResponse,
 )
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.application.ports.document import DocumentPort
+from src.infrastructure.di.container import create_channel_port, create_document_port
 from src.services.youtube_service import (
     YouTubeService,
     get_youtube_service,
@@ -24,6 +26,16 @@ from src.services.youtube_service import (
 from src.services.capacity_service import CapacityService, CapacityExceededError
 
 router = APIRouter(prefix="/channels", tags=["youtube"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
+def get_document_port() -> DocumentPort:
+    """Get document port instance."""
+    return create_document_port()
 
 
 @router.post(
@@ -37,7 +49,8 @@ def add_youtube_source(
     request: Request,
     channel_id: str,
     body: YouTubeSourceRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     youtube: Annotated[YouTubeService, Depends(get_youtube_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> YouTubeSourceResponse:
@@ -51,8 +64,8 @@ def add_youtube_source(
     Supported languages (in order of preference): Korean, English, Japanese, Chinese.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -85,7 +98,7 @@ def add_youtube_source(
             )
 
         # Upload to Gemini
-        operation = gemini.upload_file(channel_id, tmp_path)
+        result = document_port.upload_document(channel_id, tmp_path)
 
         # Update capacity tracking
         capacity_service.update_after_upload(channel_id, file_size)
@@ -93,7 +106,7 @@ def add_youtube_source(
         return YouTubeSourceResponse(
             video_id=video_id,
             title=f"YouTube: {video_id}",
-            document_id=operation["name"],
+            document_id=result.operation_name,
             transcript_length=len(transcript.full_text),
             language=transcript.language,
             message="YouTube transcript added successfully",
@@ -144,7 +157,7 @@ def preview_youtube_transcript(
     request: Request,
     channel_id: str,
     url: Annotated[str, Query(description="YouTube video URL")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     youtube: Annotated[YouTubeService, Depends(get_youtube_service)],
 ) -> dict:
     """Preview the transcript of a YouTube video before adding it.
@@ -153,8 +166,8 @@ def preview_youtube_transcript(
     without actually adding it to the channel.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",

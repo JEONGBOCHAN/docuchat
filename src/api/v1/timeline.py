@@ -15,16 +15,22 @@ from src.models.timeline import (
     GenerateTimelineRequest,
     GenerateBriefingRequest,
 )
-from src.services.gemini import GeminiService, get_gemini_service
-from src.core.database import get_db
-from src.core.rate_limiter import limiter, RateLimits
-from src.services.channel_repository import ChannelRepository
+from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import (
+    create_channel_port,
     create_generate_timeline_use_case,
     create_generate_briefing_use_case,
 )
+from src.core.database import get_db
+from src.core.rate_limiter import limiter, RateLimits
+from src.services.channel_repository import ChannelRepository
 
 router = APIRouter(prefix="/channels", tags=["timeline"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
 
 
 @router.post(
@@ -37,7 +43,7 @@ def generate_timeline(
     request: Request,
     channel_id: str,
     body: GenerateTimelineRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TimelineResponse:
     """Generate a chronological timeline of events from documents.
@@ -46,8 +52,8 @@ def generate_timeline(
     and organizes them in chronological order.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -99,7 +105,7 @@ def generate_briefing(
     request: Request,
     channel_id: str,
     body: GenerateBriefingRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> BriefingResponse:
     """Generate a structured briefing document from channel content.
@@ -108,8 +114,8 @@ def generate_briefing(
     and key takeaways based on all documents in the channel.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",

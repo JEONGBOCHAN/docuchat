@@ -7,12 +7,27 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.models.faq import FAQItem, FAQGenerateRequest, FAQGenerateResponse
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.application.ports.document import DocumentPort
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_document_port,
+    create_generate_faq_use_case,
+)
 from src.core.database import get_db
 from src.services.channel_repository import ChannelRepository
-from src.infrastructure.di.container import create_generate_faq_use_case
 
 router = APIRouter(prefix="/channels", tags=["faq"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
+def get_document_port() -> DocumentPort:
+    """Get document port instance."""
+    return create_document_port()
 
 
 @router.post(
@@ -23,7 +38,8 @@ router = APIRouter(prefix="/channels", tags=["faq"])
 def generate_faq(
     channel_id: str,
     request: FAQGenerateRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> FAQGenerateResponse:
     """Generate frequently asked questions based on channel documents.
@@ -31,16 +47,16 @@ def generate_faq(
     Analyzes the documents in the channel and generates FAQ items
     with questions that users might naturally ask and their answers.
     """
-    # Validate channel exists (still using gemini service for validation)
-    store = gemini.get_store(channel_id)
-    if not store:
+    # Validate channel exists
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
 
     # Check if channel has documents
-    files = gemini.list_store_files(channel_id)
+    files = document_port.list_documents(channel_id)
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

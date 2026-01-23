@@ -6,7 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.search import get_channel_port
+from src.api.v1.chat import get_channel_port as get_chat_channel_port
+from src.application.ports.channel import ChannelDTO
 from src.services.channel_repository import ChannelRepository
 from src.services.search_repository import SearchHistoryRepository
 
@@ -16,13 +18,13 @@ class TestGetSearchHistory:
 
     def test_get_history_empty(self, client_with_db: TestClient, test_db):
         """Test getting empty search history."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         response = client_with_db.get(
             "/api/v1/search/history",
@@ -34,17 +36,17 @@ class TestGetSearchHistory:
         assert data["history"] == []
         assert data["total"] == 0
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_history_with_entries(self, client_with_db: TestClient, test_db):
         """Test getting search history with entries."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         # Create channel and add search history directly
         channel_repo = ChannelRepository(test_db)
@@ -67,14 +69,14 @@ class TestGetSearchHistory:
         assert data["total"] == 2
         assert len(data["history"]) == 2
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_history_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test getting history for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         response = client_with_db.get(
             "/api/v1/search/history",
@@ -83,7 +85,7 @@ class TestGetSearchHistory:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestGetSearchSuggestions:
@@ -91,13 +93,13 @@ class TestGetSearchSuggestions:
 
     def test_get_suggestions_empty(self, client_with_db: TestClient, test_db):
         """Test getting suggestions when empty."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         response = client_with_db.get(
             "/api/v1/search/suggestions",
@@ -109,17 +111,17 @@ class TestGetSearchSuggestions:
         assert data["suggestions"] == []
         assert data["query"] == "test"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_suggestions_with_prefix(self, client_with_db: TestClient, test_db):
         """Test getting suggestions with matching prefix."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         # Create channel and add search history
         channel_repo = ChannelRepository(test_db)
@@ -143,17 +145,17 @@ class TestGetSearchSuggestions:
         assert len(data["suggestions"]) == 2
         assert all("what" in s["query"].lower() for s in data["suggestions"])
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_suggestions_popular_when_no_prefix(self, client_with_db: TestClient, test_db):
         """Test getting popular suggestions when no prefix."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         # Create channel and add search history with different counts
         channel_repo = ChannelRepository(test_db)
@@ -181,7 +183,7 @@ class TestGetSearchSuggestions:
         assert data["suggestions"][0]["query"] == "popular query"
         assert data["suggestions"][0]["search_count"] == 3
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestGetPopularSearches:
@@ -189,13 +191,13 @@ class TestGetPopularSearches:
 
     def test_get_popular_empty(self, client_with_db: TestClient, test_db):
         """Test getting popular searches when empty."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         response = client_with_db.get(
             "/api/v1/search/popular",
@@ -206,17 +208,17 @@ class TestGetPopularSearches:
         data = response.json()
         assert data["suggestions"] == []
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_popular_sorted_by_count(self, client_with_db: TestClient, test_db):
         """Test that popular searches are sorted by count."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         # Create channel and add search history
         channel_repo = ChannelRepository(test_db)
@@ -248,7 +250,7 @@ class TestGetPopularSearches:
         assert data["suggestions"][2]["query"] == "query A"
         assert data["suggestions"][2]["search_count"] == 1
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestDeleteSearchHistory:
@@ -256,13 +258,13 @@ class TestDeleteSearchHistory:
 
     def test_delete_history_entry(self, client_with_db: TestClient, test_db):
         """Test deleting a search history entry."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         # Create channel and add search history
         channel_repo = ChannelRepository(test_db)
@@ -289,17 +291,17 @@ class TestDeleteSearchHistory:
         )
         assert list_response.json()["total"] == 0
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_delete_history_not_found(self, client_with_db: TestClient, test_db):
         """Test deleting non-existent history entry."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         response = client_with_db.delete(
             "/api/v1/search/history/99999",
@@ -308,7 +310,7 @@ class TestDeleteSearchHistory:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestClearSearchHistory:
@@ -316,13 +318,13 @@ class TestClearSearchHistory:
 
     def test_clear_all_history(self, client_with_db: TestClient, test_db):
         """Test clearing all search history."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
 
         # Create channel and add search history
         channel_repo = ChannelRepository(test_db)
@@ -351,7 +353,7 @@ class TestClearSearchHistory:
         )
         assert list_response.json()["total"] == 0
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestSearchHistoryIntegration:
@@ -359,24 +361,33 @@ class TestSearchHistoryIntegration:
 
     def test_chat_saves_to_search_history(self, client_with_db: TestClient, test_db):
         """Test that chat queries are saved to search history."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.search_and_answer.return_value = {
-            "response": "Test response",
-            "sources": [],
-        }
+        from src.application.use_cases.chat import SendMessageUseCase
+        from src.application.ports.chat import ChatResponseDTO, SourceDTO
+        from unittest.mock import patch
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
-
-        # Send a chat message
-        client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "What is the meaning of life?"},
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
         )
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        app.dependency_overrides[get_chat_channel_port] = lambda: mock_port
+
+        # Mock the use case
+        mock_use_case = MagicMock(spec=SendMessageUseCase)
+        mock_use_case.execute.return_value = ChatResponseDTO(
+            response="Test response",
+            sources=[],
+        )
+
+        with patch("src.api.v1.chat.create_send_message_use_case", return_value=mock_use_case):
+            # Send a chat message
+            client_with_db.post(
+                "/api/v1/chat",
+                params={"channel_id": "fileSearchStores/test-store"},
+                json={"query": "What is the meaning of life?"},
+            )
 
         # Check search history
         response = client_with_db.get(
@@ -389,29 +400,39 @@ class TestSearchHistoryIntegration:
         assert data["history"][0]["query"] == "What is the meaning of life?"
         assert data["history"][0]["search_count"] == 1
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_chat_channel_port, None)
 
     def test_repeated_query_increments_count(self, client_with_db: TestClient, test_db):
         """Test that repeated queries increment search count."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.search_and_answer.return_value = {
-            "response": "Test response",
-            "sources": [],
-        }
+        from src.application.use_cases.chat import SendMessageUseCase
+        from src.application.ports.chat import ChatResponseDTO, SourceDTO
+        from unittest.mock import patch
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_port = MagicMock()
+        mock_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        # Send the same query multiple times
-        for _ in range(3):
-            client_with_db.post(
-                "/api/v1/chat",
-                params={"channel_id": "fileSearchStores/test-store"},
-                json={"query": "repeated question"},
-            )
+        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        app.dependency_overrides[get_chat_channel_port] = lambda: mock_port
+
+        # Mock the use case
+        mock_use_case = MagicMock(spec=SendMessageUseCase)
+        mock_use_case.execute.return_value = ChatResponseDTO(
+            response="Test response",
+            sources=[],
+        )
+
+        with patch("src.api.v1.chat.create_send_message_use_case", return_value=mock_use_case):
+            # Send the same query multiple times
+            for _ in range(3):
+                client_with_db.post(
+                    "/api/v1/chat",
+                    params={"channel_id": "fileSearchStores/test-store"},
+                    json={"query": "repeated question"},
+                )
 
         # Check search history
         response = client_with_db.get(
@@ -424,4 +445,5 @@ class TestSearchHistoryIntegration:
         assert data["history"][0]["query"] == "repeated question"
         assert data["history"][0]["search_count"] == 3
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_chat_channel_port, None)

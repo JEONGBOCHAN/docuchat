@@ -7,12 +7,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from src.models.trash import TrashList, TrashItemType, RestoreResponse, EmptyTrashResponse
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.trash_repository import TrashRepository
 
 router = APIRouter(prefix="/trash", tags=["trash"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
 
 
 @router.get(
@@ -95,7 +101,7 @@ def delete_item_permanently(
     item_type: TrashItemType,
     item_id: int,
     db: Annotated[Session, Depends(get_db)],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
 ):
     """Permanently delete a trashed item. This cannot be undone.
 
@@ -123,7 +129,7 @@ def delete_item_permanently(
             )
 
         # Delete from Gemini
-        gemini.delete_store(channel.gemini_store_id, force=True)
+        channel_port.delete_channel(channel.gemini_store_id, force=True)
 
         # Delete from DB
         if not trash_repo.permanent_delete_channel(item_id):
@@ -156,7 +162,7 @@ def delete_item_permanently(
 def empty_trash(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     confirm: Annotated[bool, Query(description="Confirm permanent deletion")] = False,
 ) -> EmptyTrashResponse:
     """Permanently delete all items in the trash. This cannot be undone.
@@ -178,7 +184,7 @@ def empty_trash(
     ).all()
 
     for channel in trashed_channels:
-        gemini.delete_store(channel.gemini_store_id, force=True)
+        channel_port.delete_channel(channel.gemini_store_id, force=True)
 
     # Then delete from DB
     deleted_channels, deleted_notes = trash_repo.empty_trash()

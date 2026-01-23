@@ -16,15 +16,20 @@ from src.models.citation import (
     CitationRequest,
     CitationDetail,
 )
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port, create_search_with_citations_use_case
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
-from src.infrastructure.di.container import create_search_with_citations_use_case
 from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
 from src.application.ports.citation_search import CitationDTO
 
 router = APIRouter(prefix="/citations", tags=["citations"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
 
 
 def _format_sse_event(data: dict) -> str:
@@ -75,7 +80,7 @@ def query_with_citations(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID to query")],
     body: CitationRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     use_case: Annotated[SearchWithCitationsUseCase, Depends(get_citations_use_case)],
 ) -> CitedResponse:
@@ -86,9 +91,9 @@ def query_with_citations(
     - response_plain: Text without citation markers
     - citations: Detailed list of citations with source info and navigation data
     """
-    # Validate channel exists (still use GeminiService for store validation)
-    store = gemini.get_store(channel_id)
-    if not store:
+    # Validate channel exists
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -131,7 +136,7 @@ def query_with_citations_stream(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID to query")],
     body: CitationRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     use_case: Annotated[SearchWithCitationsUseCase, Depends(get_citations_use_case)],
 ) -> StreamingResponse:
@@ -143,9 +148,9 @@ def query_with_citations_stream(
     - done: Signals completion
     - error: Error information if something went wrong
     """
-    # Validate channel exists (still use GeminiService for store validation)
-    store = gemini.get_store(channel_id)
-    if not store:
+    # Validate channel exists
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -212,7 +217,7 @@ def get_citation_detail(
     channel_id: Annotated[str, Query(description="Channel ID")],
     citation_index: int,
     source: Annotated[str, Query(description="Source file name")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CitationDetail:
     """Get detailed information about a citation for navigation.
@@ -225,8 +230,8 @@ def get_citation_detail(
     - Text to highlight
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",

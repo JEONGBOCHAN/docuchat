@@ -25,8 +25,11 @@ from src.models.study import (
     StudySection,
 )
 from src.services.channel_repository import ChannelRepository
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.application.ports.document import DocumentPort
 from src.infrastructure.di.container import (
+    create_channel_port,
+    create_document_port,
     create_generate_study_guide_use_case,
     create_generate_quiz_use_case,
 )
@@ -34,6 +37,16 @@ from src.infrastructure.di.container import (
 router = APIRouter(prefix="/channels", tags=["study"])
 settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
+def get_document_port() -> DocumentPort:
+    """Get document port instance."""
+    return create_document_port()
 
 
 @router.post(
@@ -46,7 +59,8 @@ limiter = Limiter(key_func=get_remote_address)
 async def generate_study_guide(
     request: Request,
     channel_id: str,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     db: Annotated[Session, Depends(get_db)],
     body: StudyGuideGenerateRequest | None = None,
 ):
@@ -69,12 +83,12 @@ async def generate_study_guide(
         body = StudyGuideGenerateRequest()
 
     # Verify channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
 
     # Check if channel has documents
-    files = gemini.list_store_files(channel_id)
+    files = document_port.list_documents(channel_id)
     if not files:
         raise HTTPException(
             status_code=400,
@@ -141,7 +155,8 @@ async def generate_study_guide(
 async def generate_quiz(
     request: Request,
     channel_id: str,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     db: Annotated[Session, Depends(get_db)],
     body: QuizGenerateRequest | None = None,
 ):
@@ -164,12 +179,12 @@ async def generate_quiz(
         body = QuizGenerateRequest()
 
     # Verify channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
 
     # Check if channel has documents
-    files = gemini.list_store_files(channel_id)
+    files = document_port.list_documents(channel_id)
     if not files:
         raise HTTPException(
             status_code=400,

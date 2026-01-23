@@ -12,7 +12,8 @@ from src.models.search import (
     SearchSuggestion,
     SearchSuggestionList,
 )
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
 from src.services.channel_repository import ChannelRepository
 from src.services.search_repository import SearchHistoryRepository
@@ -20,12 +21,17 @@ from src.services.search_repository import SearchHistoryRepository
 router = APIRouter(prefix="/search", tags=["search"])
 
 
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
 def _get_channel_or_404(
-    channel_id: str, gemini: GeminiService, db: Session
+    channel_id: str, channel_port: ChannelPort, db: Session
 ) -> tuple:
     """Get channel or raise 404."""
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -36,10 +42,10 @@ def _get_channel_or_404(
     if not channel_meta:
         channel_meta = channel_repo.create(
             gemini_store_id=channel_id,
-            name=store.get("display_name", "unknown"),
+            name=channel.display_name or "unknown",
         )
 
-    return store, channel_meta
+    return channel, channel_meta
 
 
 def _history_to_response(history, gemini_store_id: str) -> SearchHistoryItem:
@@ -61,7 +67,7 @@ def _history_to_response(history, gemini_store_id: str) -> SearchHistoryItem:
 )
 def get_search_history(
     channel_id: Annotated[str, Query(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(description="Maximum number of entries", ge=1, le=100)] = 50,
     offset: Annotated[int, Query(description="Number of entries to skip", ge=0)] = 0,
@@ -70,7 +76,7 @@ def get_search_history(
 
     Returns search queries sorted by most recent first.
     """
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     search_repo = SearchHistoryRepository(db)
     history = search_repo.get_history(channel_meta, limit=limit, offset=offset)
@@ -89,7 +95,7 @@ def get_search_history(
 )
 def get_search_suggestions(
     channel_id: Annotated[str, Query(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     q: Annotated[str, Query(description="Query prefix for suggestions")] = "",
     limit: Annotated[int, Query(description="Maximum number of suggestions", ge=1, le=20)] = 10,
@@ -98,7 +104,7 @@ def get_search_suggestions(
 
     If no prefix is provided, returns popular searches.
     """
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     search_repo = SearchHistoryRepository(db)
     suggestions = search_repo.get_suggestions(channel_meta, q, limit=limit)
@@ -119,7 +125,7 @@ def get_search_suggestions(
 )
 def get_popular_searches(
     channel_id: Annotated[str, Query(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(description="Maximum number of entries", ge=1, le=20)] = 10,
 ) -> SearchSuggestionList:
@@ -127,7 +133,7 @@ def get_popular_searches(
 
     Returns searches sorted by search count (most searched first).
     """
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     search_repo = SearchHistoryRepository(db)
     popular = search_repo.get_popular(channel_meta, limit=limit)
@@ -149,11 +155,11 @@ def get_popular_searches(
 def delete_search_history(
     history_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ):
     """Delete a specific search history entry."""
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     search_repo = SearchHistoryRepository(db)
     history = search_repo.get_by_id(history_id)
@@ -175,11 +181,11 @@ def delete_search_history(
 )
 def clear_search_history(
     channel_id: Annotated[str, Query(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ):
     """Clear all search history for a channel."""
-    store, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     search_repo = SearchHistoryRepository(db)
     search_repo.clear_channel_history(channel_meta)

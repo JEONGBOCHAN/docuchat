@@ -19,7 +19,8 @@ from src.models.chat import (
     CreateSessionRequest,
     GroundingSource,
 )
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import (
@@ -34,6 +35,11 @@ from src.services.search_repository import SearchHistoryRepository
 from src.infrastructure.di import create_process_query_use_case
 
 router = APIRouter(prefix="/channels", tags=["chat"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
 
 
 # =============================================================================
@@ -255,7 +261,7 @@ def send_message(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
 ) -> ChatResponse:
@@ -266,8 +272,8 @@ def send_message(
     Responses are cached for 1 hour when no session is used.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -280,7 +286,7 @@ def send_message(
         # Create if not exists (for channels created before DB integration)
         channel_meta = channel_repo.create(
             gemini_store_id=channel_id,
-            name=store.get("display_name", "unknown"),
+            name=channel.display_name or "unknown",
         )
     else:
         # Update last accessed time
@@ -403,7 +409,7 @@ def send_message_stream(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> StreamingResponse:
     """Send a question and get a streaming AI-generated answer.
@@ -416,8 +422,8 @@ def send_message_stream(
     - error: Error information if something went wrong
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -429,7 +435,7 @@ def send_message_stream(
     if not channel_meta:
         channel_meta = channel_repo.create(
             gemini_store_id=channel_id,
-            name=store.get("display_name", "unknown"),
+            name=channel.display_name or "unknown",
         )
     else:
         channel_repo.touch(channel_id)
@@ -540,14 +546,14 @@ def send_message_stream(
 def get_chat_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
 ) -> ChatHistory:
     """Get the chat history for a channel."""
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -595,13 +601,13 @@ def get_chat_history(
 def clear_chat_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ):
     """Clear the chat history for a channel."""
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -633,7 +639,7 @@ def create_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     body: CreateSessionRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ChatSession:
     """Create a new chat session for multi-turn conversation.
@@ -642,8 +648,8 @@ def create_session(
     to maintain conversation context.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -655,7 +661,7 @@ def create_session(
     if not channel_meta:
         channel_meta = channel_repo.create(
             gemini_store_id=channel_id,
-            name=store.get("display_name", "unknown"),
+            name=channel.display_name or "unknown",
         )
 
     # Create new session
@@ -684,7 +690,6 @@ def get_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ChatSession:
     """Get information about a chat session."""

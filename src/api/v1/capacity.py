@@ -7,12 +7,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from src.models.capacity import CapacityUsageResponse
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port
 from src.services.capacity_service import CapacityService
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/capacity", tags=["capacity"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
 
 
 @router.get(
@@ -24,7 +30,7 @@ router = APIRouter(prefix="/capacity", tags=["capacity"])
 def get_capacity_usage(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID to check capacity")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacityUsageResponse:
     """Get the current capacity usage for a channel.
@@ -32,8 +38,8 @@ def get_capacity_usage(
     Returns file count, size usage, and whether additional uploads are allowed.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",

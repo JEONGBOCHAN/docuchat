@@ -12,21 +12,35 @@ from src.models.preview import (
     DocumentPreviewResponse,
     SourceLocationResponse,
 )
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.application.ports.document import DocumentPort
+from src.infrastructure.di.container import create_channel_port, create_document_port
 from src.services.preview_service import PreviewService, get_preview_service, DEFAULT_PAGE_SIZE
 
 router = APIRouter(prefix="/channels", tags=["preview"])
 
 
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
+def get_document_port() -> DocumentPort:
+    """Get document port instance."""
+    return create_document_port()
+
+
 def _get_document_info(
-    gemini: GeminiService,
+    channel_port: ChannelPort,
+    document_port: DocumentPort,
     channel_id: str,
     document_id: str,
 ) -> tuple[str, str]:
     """Get document info and validate existence.
 
     Args:
-        gemini: Gemini service
+        channel_port: Channel port
+        document_port: Document port
         channel_id: Channel (store) ID
         document_id: Document file ID
 
@@ -37,18 +51,18 @@ def _get_document_info(
         HTTPException: If channel or document not found
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
 
     # Find the document
-    files = gemini.list_store_files(channel_id)
+    files = document_port.list_documents(channel_id)
     doc = None
     for f in files:
-        if f.get("name") == document_id:
+        if f.name == document_id:
             doc = f
             break
 
@@ -58,7 +72,7 @@ def _get_document_info(
             detail=f"Document not found: {document_id}",
         )
 
-    filename = doc.get("display_name", "Unknown")
+    filename = doc.display_name or "Unknown"
     return document_id, filename
 
 
@@ -75,7 +89,8 @@ def get_document_preview(
     page: Annotated[int, Query(description="Page number (1-based)", ge=1)] = 1,
     page_size: Annotated[int, Query(description="Characters per page", ge=100, le=10000)] = DEFAULT_PAGE_SIZE,
     search_term: Annotated[str | None, Query(description="Optional search term to highlight")] = None,
-    gemini: GeminiService = Depends(get_gemini_service),
+    channel_port: ChannelPort = Depends(get_channel_port),
+    document_port: DocumentPort = Depends(get_document_port),
     db: Session = Depends(get_db),
 ) -> DocumentPreviewResponse:
     """Get document preview with pagination and optional text highlighting.
@@ -86,7 +101,7 @@ def get_document_preview(
     The first request may take longer as the content is extracted and cached.
     Subsequent requests will be faster as they use the cached content.
     """
-    doc_id, filename = _get_document_info(gemini, channel_id, document_id)
+    doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
         preview_service = get_preview_service(db)
@@ -118,7 +133,8 @@ def get_document_page(
     page_num: int,
     page_size: Annotated[int, Query(description="Characters per page", ge=100, le=10000)] = DEFAULT_PAGE_SIZE,
     search_term: Annotated[str | None, Query(description="Optional search term to highlight")] = None,
-    gemini: GeminiService = Depends(get_gemini_service),
+    channel_port: ChannelPort = Depends(get_channel_port),
+    document_port: DocumentPort = Depends(get_document_port),
     db: Session = Depends(get_db),
 ) -> DocumentPreviewResponse:
     """Get a specific page of the document.
@@ -131,7 +147,7 @@ def get_document_page(
             detail="Page number must be at least 1",
         )
 
-    doc_id, filename = _get_document_info(gemini, channel_id, document_id)
+    doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
         preview_service = get_preview_service(db)
@@ -162,7 +178,8 @@ def find_source_in_document(
     document_id: str,
     source_text: Annotated[str, Query(description="Source text to find in the document")],
     page_size: Annotated[int, Query(description="Characters per page for page calculation", ge=100, le=10000)] = DEFAULT_PAGE_SIZE,
-    gemini: GeminiService = Depends(get_gemini_service),
+    channel_port: ChannelPort = Depends(get_channel_port),
+    document_port: DocumentPort = Depends(get_document_port),
     db: Session = Depends(get_db),
 ) -> SourceLocationResponse:
     """Find the location of a source citation in a document.
@@ -173,7 +190,7 @@ def find_source_in_document(
     Returns the page number and position where the text is found, along with
     surrounding context and highlights.
     """
-    doc_id, filename = _get_document_info(gemini, channel_id, document_id)
+    doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
         preview_service = get_preview_service(db)
@@ -201,7 +218,8 @@ def clear_document_preview_cache(
     request: Request,
     channel_id: str,
     document_id: str,
-    gemini: GeminiService = Depends(get_gemini_service),
+    channel_port: ChannelPort = Depends(get_channel_port),
+    document_port: DocumentPort = Depends(get_document_port),
     db: Session = Depends(get_db),
 ):
     """Clear the cached preview for a document.
@@ -210,7 +228,7 @@ def clear_document_preview_cache(
     re-extract the text on the next preview request.
     """
     # Validate channel and document exist
-    _get_document_info(gemini, channel_id, document_id)
+    _get_document_info(channel_port, document_port, channel_id, document_id)
 
     preview_service = get_preview_service(db)
     preview_service.invalidate_cache(document_id)

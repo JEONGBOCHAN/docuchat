@@ -8,7 +8,8 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from src.models.export import ExportFormat
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
@@ -17,12 +18,17 @@ from src.services.export_service import ExportService
 router = APIRouter(prefix="/export", tags=["export"])
 
 
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
 def _get_channel_or_404(
-    channel_id: str, gemini: GeminiService, db: Session
+    channel_id: str, channel_port: ChannelPort, db: Session
 ) -> tuple:
     """Get channel or raise 404."""
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -33,10 +39,10 @@ def _get_channel_or_404(
     if not channel_meta:
         channel_meta = channel_repo.create(
             gemini_store_id=channel_id,
-            name=store.get("display_name", "unknown"),
+            name=channel.display_name or "unknown",
         )
 
-    return store, channel_meta
+    return channel, channel_meta
 
 
 @router.get(
@@ -53,7 +59,7 @@ def export_note(
         ExportFormat,
         Query(description="Export format: markdown, pdf, or json"),
     ] = ExportFormat.MARKDOWN,
-    gemini: GeminiService = Depends(get_gemini_service),
+    channel_port: ChannelPort = Depends(get_channel_port),
     db: Session = Depends(get_db),
 ) -> Response:
     """Export a specific note.
@@ -62,7 +68,7 @@ def export_note(
     - **pdf**: PDF document
     - **json**: Structured JSON format
     """
-    _, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    _, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     export_service = ExportService(db)
     try:
@@ -102,7 +108,7 @@ def export_chat(
         ExportFormat,
         Query(description="Export format: markdown or json (pdf not supported)"),
     ] = ExportFormat.MARKDOWN,
-    gemini: GeminiService = Depends(get_gemini_service),
+    channel_port: ChannelPort = Depends(get_channel_port),
     db: Session = Depends(get_db),
 ) -> Response:
     """Export chat history of a channel.
@@ -112,7 +118,7 @@ def export_chat(
 
     Note: PDF format is not supported for chat export.
     """
-    _, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    _, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     # PDF not supported for chat, fallback to markdown
     if format == ExportFormat.PDF:
@@ -141,7 +147,7 @@ def export_channel(
         ExportFormat,
         Query(description="Export format: markdown, json, or pdf (pdf exports as zip)"),
     ] = ExportFormat.JSON,
-    gemini: GeminiService = Depends(get_gemini_service),
+    channel_port: ChannelPort = Depends(get_channel_port),
     db: Session = Depends(get_db),
 ) -> Response:
     """Export entire channel with all notes and chat history.
@@ -150,7 +156,7 @@ def export_channel(
     - **json**: Structured JSON format for data backup
     - **pdf**: ZIP archive containing all files
     """
-    _, channel_meta = _get_channel_or_404(channel_id, gemini, db)
+    _, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
 
     export_service = ExportService(db)
     content, content_type, filename = export_service.export_channel(channel_meta, format)

@@ -16,23 +16,29 @@ from src.models.favorite import (
     TargetType,
 )
 from src.services.favorite_repository import FavoriteRepository
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.infrastructure.di.container import create_channel_port
 from src.services.channel_repository import ChannelRepository
 from src.services.note_repository import NoteRepository
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 
 
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
 def _validate_target(
     target_type: TargetType,
     target_id: str,
-    gemini: GeminiService,
+    channel_port: ChannelPort,
     db: Session,
 ) -> None:
     """Validate that the target exists."""
     if target_type == TargetType.CHANNEL:
-        store = gemini.get_store(target_id)
-        if not store:
+        channel = channel_port.get_channel(target_id)
+        if not channel:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Channel not found: {target_id}",
@@ -72,12 +78,12 @@ def _validate_target(
 def add_favorite(
     request: Request,
     data: FavoriteCreate,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> FavoriteResponse:
     """Add a channel, document, or note to favorites."""
     # Validate target exists
-    _validate_target(data.target_type, data.target_id, gemini, db)
+    _validate_target(data.target_type, data.target_id, channel_port, db)
 
     # Add to favorites
     fav_repo = FavoriteRepository(db)
@@ -196,11 +202,11 @@ def reorder_favorites(
 def favorite_channel(
     request: Request,
     channel_id: str,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> FavoriteResponse:
     """Add a channel to favorites."""
-    _validate_target(TargetType.CHANNEL, channel_id, gemini, db)
+    _validate_target(TargetType.CHANNEL, channel_id, channel_port, db)
 
     fav_repo = FavoriteRepository(db)
     favorite = fav_repo.add(TargetType.CHANNEL, channel_id)
@@ -247,11 +253,11 @@ def unfavorite_channel(
 def favorite_note(
     request: Request,
     note_id: int,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
 ) -> FavoriteResponse:
     """Add a note to favorites."""
-    _validate_target(TargetType.NOTE, str(note_id), gemini, db)
+    _validate_target(TargetType.NOTE, str(note_id), channel_port, db)
 
     fav_repo = FavoriteRepository(db)
     favorite = fav_repo.add(TargetType.NOTE, str(note_id))
