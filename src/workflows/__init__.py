@@ -2,7 +2,7 @@
 """
 Workflows module for Docuchat.
 
-Provides LangGraph-based agentic workflows.
+Provides LangChain-based agentic workflows with middleware support.
 """
 
 from src.workflows.rag import (
@@ -10,6 +10,7 @@ from src.workflows.rag import (
     run_rag_agent,
     AgentState,
     RAG_AGENT_SYSTEM_PROMPT,
+    RAGAgentConfig,
 )
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "run_rag_agent",
     "AgentState",
     "RAG_AGENT_SYSTEM_PROMPT",
+    "RAGAgentConfig",
 ]
