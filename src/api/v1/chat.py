@@ -29,7 +29,6 @@ from src.services.channel_repository import (
 )
 from src.services.cache_service import CacheService, get_cache_service
 from src.services.search_repository import SearchHistoryRepository
-from src.mcp_server.state import get_global_state_store
 
 # Clean Architecture imports
 from src.infrastructure.di import create_process_query_use_case
@@ -132,6 +131,99 @@ def _run_agent_chat(
         "session_id": result.session_id,
         "error": result.error,
     }
+
+
+def _run_agent_chat_stream(
+    channel_id: str,
+    query: str,
+    conversation_history: list[dict[str, str]] | None = None,
+    max_iterations: int = 3,
+) -> Generator[dict, None, dict]:
+    """Run the agent with streaming, yielding events for SSE.
+
+    Uses Clean Architecture ProcessQueryUseCase.execute_stream() which:
+    - Abstracts LangGraph streaming via AgentRunnerPort
+    - Emits events via AgentEventSinkPort
+    - Bridges to legacy dashboard via StateStoreAdapter
+
+    Args:
+        channel_id: The channel ID to search in
+        query: User's question
+        conversation_history: Previous conversation for context
+        max_iterations: Maximum agent iterations (default 3)
+
+    Yields:
+        Event dicts for SSE: {"chunk": text}, {"sources": [...]}, etc.
+
+    Returns:
+        Final result dict with 'response', 'sources', 'iterations', etc.
+    """
+    use_case = create_process_query_use_case(
+        use_legacy_dashboard=True,
+        include_web_search=False,
+    )
+
+    stream_gen = use_case.execute_stream(
+        query=query,
+        channel_id=channel_id,
+        conversation_history=conversation_history,
+        max_iterations=max_iterations,
+    )
+
+    accumulated_content = ""
+    sources = []
+    result = None
+
+    try:
+        while True:
+            event = next(stream_gen)
+            event_type = event.get("event")
+
+            if event_type == "content":
+                # Yield content chunks for streaming text
+                content = event.get("content", "")
+                if content:
+                    accumulated_content += content
+                    yield {"type": "content", "chunk": content}
+
+            elif event_type == "agent_completed":
+                # Agent completed - will extract final result after loop
+                pass
+
+            elif event_type == "error":
+                # Yield error event
+                yield {"type": "error", "error": event.get("error", "Unknown error")}
+
+    except StopIteration as e:
+        # Generator returned final QueryResult
+        result = e.value
+
+    # Build final result dict
+    if result:
+        sources = result.sources or []
+        # Yield sources if any
+        if sources:
+            yield {"type": "sources", "sources": sources}
+
+        # Yield done signal
+        yield {"type": "done"}
+
+        return {
+            "response": result.response,
+            "sources": sources,
+            "iterations": result.iterations,
+            "session_id": result.session_id,
+            "error": result.error,
+        }
+    else:
+        yield {"type": "error", "error": "No result from agent"}
+        return {
+            "response": accumulated_content or "No response generated.",
+            "sources": [],
+            "iterations": 0,
+            "session_id": None,
+            "error": "No result from agent",
+        }
 
 
 def _format_sse_event(data: dict | str) -> str:
@@ -368,134 +460,74 @@ def send_message_stream(
     conversation_history = _get_conversation_history(chat_repo, session)
 
     def generate_stream() -> Generator[str, None, None]:
-        """Generate SSE events from Gemini streaming response."""
-        import time
+        """Generate SSE events using Clean Architecture ProcessQueryUseCase.
+
+        Dashboard state updates are handled automatically by the UseCase
+        via StateStoreAdapter (AgentEventSinkPort implementation).
+        """
         full_response = ""
         all_sources = []
-        first_chunk_received = False
-        sources_received = False
-
-        # Pipeline nodes to simulate
-        pipeline_nodes = ["retrieve", "rerank", "cite_map", "draft", "reflect", "revise", "verify"]
-
-        # Helper to update node status
-        def update_node(state_store, node: str, status: str):
-            event_type = "tool_start" if status == "running" else "tool_complete"
-            state_store.update({
-                "event": event_type,
-                "node": node,
-                "timestamp": datetime.now().isoformat(),
-                "data": {},
-            })
-
-        # Update dashboard state: start
-        state_store = get_global_state_store()
-        state_store.update({
-            "event": "agent_start",
-            "timestamp": datetime.now().isoformat(),
-            "data": {"query": body.query},
-        })
-
-        # Start retrieve
-        update_node(state_store, "retrieve", "running")
 
         # Send session ID first if available
         if session_id_response:
             yield _format_sse_event({"session_id": session_id_response})
 
-        for event in gemini.search_and_answer_stream(
-            channel_id,
-            body.query,
+        # Use Clean Architecture streaming
+        stream_gen = _run_agent_chat_stream(
+            channel_id=channel_id,
+            query=body.query,
             conversation_history=conversation_history,
-        ):
-            event_type = event.get("type")
+        )
 
-            if event_type == "content":
-                text = event.get("text", "")
-                full_response += text
+        final_result = None
+        try:
+            while True:
+                event = next(stream_gen)
+                event_type = event.get("type")
 
-                # On first content chunk, simulate pipeline progress
-                if not first_chunk_received:
-                    first_chunk_received = True
-                    # Complete retrieve, rerank, cite_map and start draft
-                    update_node(state_store, "retrieve", "complete")
-                    update_node(state_store, "rerank", "running")
-                    update_node(state_store, "rerank", "complete")
-                    update_node(state_store, "cite_map", "running")
-                    update_node(state_store, "cite_map", "complete")
-                    update_node(state_store, "draft", "running")
+                if event_type == "content":
+                    chunk = event.get("chunk", "")
+                    full_response += chunk
+                    # Send in format frontend expects: {"chunk": "..."}
+                    yield _format_sse_event({"chunk": chunk})
 
-                # Send in format frontend expects: {"chunk": "..."}
-                yield _format_sse_event({"chunk": text})
+                elif event_type == "sources":
+                    all_sources = event.get("sources", [])
+                    # Send sources in format frontend expects: {"sources": [...]}
+                    yield _format_sse_event({"sources": all_sources})
 
-            elif event_type == "sources":
-                all_sources = event.get("sources", [])
+                elif event_type == "done":
+                    # Store in DB before signaling done
+                    search_repo = SearchHistoryRepository(db)
+                    search_repo.add_or_update(channel_meta, body.query)
 
-                # When sources arrive, move to reflect stage
-                if not sources_received:
-                    sources_received = True
-                    update_node(state_store, "draft", "complete")
-                    update_node(state_store, "reflect", "running")
-                    update_node(state_store, "reflect", "complete")
-                    update_node(state_store, "revise", "running")
+                    # Add user message
+                    chat_repo.add_message(
+                        channel=channel_meta,
+                        role="user",
+                        content=body.query,
+                        sources=None,
+                        session=session,
+                    )
 
-                # Send sources in format frontend expects: {"sources": [...]}
-                yield _format_sse_event({"sources": all_sources})
+                    # Add assistant message
+                    chat_repo.add_message(
+                        channel=channel_meta,
+                        role="assistant",
+                        content=full_response,
+                        sources=all_sources,
+                        session=session,
+                    )
 
-            elif event_type == "done":
-                # Complete remaining pipeline stages
-                if not sources_received:
-                    # If sources never came, complete draft first
-                    update_node(state_store, "draft", "complete")
-                    update_node(state_store, "reflect", "running")
-                    update_node(state_store, "reflect", "complete")
-                    update_node(state_store, "revise", "running")
+                    # Send done signal in format frontend expects: [DONE]
+                    yield _format_sse_event("[DONE]")
 
-                update_node(state_store, "revise", "complete")
-                update_node(state_store, "verify", "running")
-                update_node(state_store, "verify", "complete")
+                elif event_type == "error":
+                    yield _format_sse_event({"error": event.get("error", "Unknown error")})
 
-                # Mark agent complete
-                state_store.update({
-                    "event": "agent_complete",
-                    "timestamp": datetime.now().isoformat(),
-                    "data": {},
-                })
-
-                # Store in DB before signaling done
-                # Save to search history
-                search_repo = SearchHistoryRepository(db)
-                search_repo.add_or_update(channel_meta, body.query)
-
-                # Add user message
-                chat_repo.add_message(
-                    channel=channel_meta,
-                    role="user",
-                    content=body.query,
-                    sources=None,
-                    session=session,
-                )
-
-                # Add assistant message
-                chat_repo.add_message(
-                    channel=channel_meta,
-                    role="assistant",
-                    content=full_response,
-                    sources=all_sources,
-                    session=session,
-                )
-
-                # Send done signal in format frontend expects: [DONE]
-                yield _format_sse_event("[DONE]")
-
-            elif event_type == "error":
-                # Update dashboard state: error
-                state_store.update({
-                    "event": "agent_error",
-                    "timestamp": datetime.now().isoformat(),
-                    "error": event.get("error", "Unknown error"),
-                })
-                yield _format_sse_event({"error": event.get("error", "Unknown error")})
+        except StopIteration as e:
+            # Generator returned final result
+            final_result = e.value
 
     return StreamingResponse(
         generate_stream(),

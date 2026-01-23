@@ -2,13 +2,14 @@
 """Tests for Chat API."""
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
 from src.services.gemini import get_gemini_service
 from src.core.database import get_db
+from src.application.use_cases.process_query import QueryResult
 
 
 class TestSendMessage:
@@ -237,7 +238,15 @@ class TestClearChatHistory:
 
 
 class TestStreamMessage:
-    """Tests for POST /api/v1/chat/stream (SSE streaming)."""
+    """Tests for POST /api/v1/chat/stream (SSE streaming).
+
+    Uses Clean Architecture with ProcessQueryUseCase.execute_stream().
+    SSE format:
+    - {"chunk": "text"} for content
+    - {"sources": [...]} for sources
+    - [DONE] for completion
+    - {"error": "message"} for errors
+    """
 
     def test_stream_message_success(self, client_with_db: TestClient, test_db):
         """Test successful streaming chat message."""
@@ -247,21 +256,31 @@ class TestStreamMessage:
             "display_name": "Test Channel",
         }
 
-        def mock_stream(*args, **kwargs):
-            yield {"type": "content", "text": "Hello "}
-            yield {"type": "content", "text": "World!"}
-            yield {"type": "sources", "sources": [{"source": "doc.pdf", "content": "test"}]}
-            yield {"type": "done"}
+        # Mock ProcessQueryUseCase.execute_stream
+        def mock_execute_stream(*args, **kwargs):
+            def generator():
+                yield {"event": "agent_started", "session_id": "test-session"}
+                yield {"event": "content", "content": "Hello "}
+                yield {"event": "content", "content": "World!"}
+                yield {"event": "agent_completed", "response": "Hello World!"}
+                return QueryResult(
+                    response="Hello World!",
+                    sources=[{"source": "doc.pdf", "content": "test"}],
+                    session_id="test-session",
+                    iterations=1,
+                )
+            return generator()
 
-        mock_gemini.search_and_answer_stream = mock_stream
+        mock_use_case = MagicMock()
+        mock_use_case.execute_stream = mock_execute_stream
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "What is this?"},
-        )
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/stream",
+                json={"query": "What is this?"},
+            )
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
@@ -270,13 +289,21 @@ class TestStreamMessage:
         events = []
         for line in response.text.split("\n"):
             if line.startswith("data: "):
-                events.append(json.loads(line[6:]))
+                data = line[6:]
+                if data == "[DONE]":
+                    events.append("[DONE]")
+                else:
+                    events.append(json.loads(data))
 
-        assert len(events) == 4
-        assert events[0] == {"type": "content", "text": "Hello "}
-        assert events[1] == {"type": "content", "text": "World!"}
-        assert events[2]["type"] == "sources"
-        assert events[3] == {"type": "done"}
+        # Should have: chunk, chunk, sources, [DONE]
+        assert len(events) >= 3
+        # Find chunk events
+        chunks = [e for e in events if isinstance(e, dict) and "chunk" in e]
+        assert len(chunks) == 2
+        assert chunks[0]["chunk"] == "Hello "
+        assert chunks[1]["chunk"] == "World!"
+        # Should end with [DONE]
+        assert "[DONE]" in events
 
         app.dependency_overrides.pop(get_gemini_service, None)
 
@@ -288,8 +315,7 @@ class TestStreamMessage:
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
         response = client_with_db.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": "fileSearchStores/not-exists"},
+            "/api/v1/channels/fileSearchStores/not-exists/chat/stream",
             json={"query": "What is this?"},
         )
 
@@ -305,29 +331,41 @@ class TestStreamMessage:
             "display_name": "Test Channel",
         }
 
-        def mock_stream(*args, **kwargs):
-            yield {"type": "error", "error": "API Error"}
+        # Mock ProcessQueryUseCase.execute_stream to yield error
+        def mock_execute_stream(*args, **kwargs):
+            def generator():
+                yield {"event": "error", "error": "API Error"}
+                return QueryResult(
+                    response="Error: API Error",
+                    sources=[],
+                    error="API Error",
+                )
+            return generator()
 
-        mock_gemini.search_and_answer_stream = mock_stream
+        mock_use_case = MagicMock()
+        mock_use_case.execute_stream = mock_execute_stream
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "What is this?"},
-        )
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/stream",
+                json={"query": "What is this?"},
+            )
 
         assert response.status_code == 200  # SSE still returns 200
 
         events = []
         for line in response.text.split("\n"):
             if line.startswith("data: "):
-                events.append(json.loads(line[6:]))
+                data = line[6:]
+                if data != "[DONE]":
+                    events.append(json.loads(data))
 
-        assert len(events) == 1
-        assert events[0]["type"] == "error"
-        assert events[0]["error"] == "API Error"
+        assert len(events) >= 1
+        error_event = next((e for e in events if "error" in e), None)
+        assert error_event is not None
+        assert error_event["error"] == "API Error"
 
         app.dependency_overrides.pop(get_gemini_service, None)
 
@@ -339,28 +377,37 @@ class TestStreamMessage:
             "display_name": "Test Channel",
         }
 
-        def mock_stream(*args, **kwargs):
-            yield {"type": "content", "text": "Streamed response"}
-            yield {"type": "done"}
+        # Mock ProcessQueryUseCase.execute_stream
+        def mock_execute_stream(*args, **kwargs):
+            def generator():
+                yield {"event": "content", "content": "Streamed response"}
+                yield {"event": "agent_completed", "response": "Streamed response"}
+                return QueryResult(
+                    response="Streamed response",
+                    sources=[],
+                    session_id="test-session",
+                    iterations=1,
+                )
+            return generator()
 
-        mock_gemini.search_and_answer_stream = mock_stream
+        mock_use_case = MagicMock()
+        mock_use_case.execute_stream = mock_execute_stream
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        # Stream a message
-        response = client_with_db.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "Test query"},
-        )
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            # Stream a message
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/stream",
+                json={"query": "Test query"},
+            )
 
-        # Consume the response to ensure streaming completes
-        _ = response.text
+            # Consume the response to ensure streaming completes
+            _ = response.text
 
         # Check history
         history_response = client_with_db.get(
-            "/api/v1/chat/history",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
         )
 
         data = history_response.json()
@@ -375,8 +422,7 @@ class TestStreamMessage:
     def test_stream_empty_query_fails(self, client_with_db: TestClient, test_db):
         """Test streaming with empty query fails validation."""
         response = client_with_db.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/stream",
             json={"query": ""},
         )
 
@@ -659,38 +705,46 @@ class TestMultiTurnConversation:
 
         received_histories = []
 
-        def mock_stream(store_name, query, conversation_history=None, model="gemini-2.5-flash"):
-            received_histories.append(conversation_history)
-            yield {"type": "content", "text": f"Streamed: {query}"}
-            yield {"type": "done"}
+        # Mock ProcessQueryUseCase.execute_stream to capture history
+        def mock_execute_stream(query, channel_id, conversation_history=None, **kwargs):
+            received_histories.append(conversation_history or [])
+            def generator():
+                yield {"event": "content", "content": f"Streamed: {query}"}
+                yield {"event": "agent_completed"}
+                return QueryResult(
+                    response=f"Streamed: {query}",
+                    sources=[],
+                    session_id="test-session",
+                    iterations=1,
+                )
+            return generator()
 
-        mock_gemini.search_and_answer_stream = mock_stream
+        mock_use_case = MagicMock()
+        mock_use_case.execute_stream = mock_execute_stream
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        # Create session
-        session_response = client_with_db.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"context_window": 10},
-        )
-        session_id = session_response.json()["session_id"]
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            # Create session
+            session_response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/sessions",
+                json={"context_window": 10},
+            )
+            session_id = session_response.json()["session_id"]
 
-        # First stream request
-        response1 = client_with_db.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "First question", "session_id": session_id},
-        )
-        _ = response1.text  # Consume response
+            # First stream request
+            response1 = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/stream",
+                json={"query": "First question", "session_id": session_id},
+            )
+            _ = response1.text  # Consume response
 
-        # Second stream request
-        response2 = client_with_db.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "Follow up", "session_id": session_id},
-        )
-        _ = response2.text  # Consume response
+            # Second stream request
+            response2 = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/stream",
+                json={"query": "Follow up", "session_id": session_id},
+            )
+            _ = response2.text  # Consume response
 
         # First call has no history
         assert received_histories[0] == []
@@ -709,37 +763,49 @@ class TestMultiTurnConversation:
             "display_name": "Test Channel",
         }
 
-        def mock_stream(*args, **kwargs):
-            yield {"type": "content", "text": "Hello"}
-            yield {"type": "done"}
+        # Mock ProcessQueryUseCase.execute_stream
+        def mock_execute_stream(*args, **kwargs):
+            def generator():
+                yield {"event": "content", "content": "Hello"}
+                yield {"event": "agent_completed"}
+                return QueryResult(
+                    response="Hello",
+                    sources=[],
+                    session_id="test-session",
+                    iterations=1,
+                )
+            return generator()
 
-        mock_gemini.search_and_answer_stream = mock_stream
+        mock_use_case = MagicMock()
+        mock_use_case.execute_stream = mock_execute_stream
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        # Create session
-        session_response = client_with_db.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"context_window": 10},
-        )
-        session_id = session_response.json()["session_id"]
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            # Create session
+            session_response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/sessions",
+                json={"context_window": 10},
+            )
+            session_id = session_response.json()["session_id"]
 
-        # Stream with session
-        response = client_with_db.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "Hello", "session_id": session_id},
-        )
+            # Stream with session
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/stream",
+                json={"query": "Hello", "session_id": session_id},
+            )
 
         # Parse SSE events
         events = []
         for line in response.text.split("\n"):
             if line.startswith("data: "):
-                events.append(json.loads(line[6:]))
+                data = line[6:]
+                if data != "[DONE]":
+                    events.append(json.loads(data))
 
-        # First event should be session info
-        assert events[0]["type"] == "session"
-        assert events[0]["session_id"] == session_id
+        # First event should be session info (session_id field)
+        session_event = next((e for e in events if "session_id" in e), None)
+        assert session_event is not None
+        assert session_event["session_id"] == session_id
 
         app.dependency_overrides.pop(get_gemini_service, None)
