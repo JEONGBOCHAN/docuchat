@@ -18,7 +18,7 @@ This replaces rule-based routing with LLM-based decision making.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Generator
 
 from src.application.ports import (
     AgentRunnerPort,
@@ -197,6 +197,118 @@ class ProcessQueryUseCase:
                     error=str(e),
                     error_type=type(e).__name__,
                 ))
+
+            return QueryResult(
+                response=f"Error processing query: {str(e)}",
+                session_id=session_id,
+                error=str(e),
+            )
+
+    def execute_stream(
+        self,
+        query: str,
+        channel_id: str,
+        conversation_history: list[dict[str, str]] | None = None,
+        max_iterations: int = 5,
+        session_id: str | None = None,
+    ) -> Generator[dict, None, QueryResult]:
+        """Execute query processing with streaming events.
+
+        This method streams events as the agent processes the query,
+        allowing real-time updates to be sent to clients via SSE.
+
+        Args:
+            query: The user's question
+            channel_id: The channel context for document search
+            conversation_history: Previous conversation for context
+            max_iterations: Maximum agent iterations
+            session_id: Optional session ID (generated if not provided)
+
+        Yields:
+            Event dictionaries (agent_started, tool_started, content, etc.)
+
+        Returns:
+            QueryResult with response, sources, and metadata
+        """
+        # Generate session ID if needed
+        if not session_id:
+            session_id = generate_session_id()
+
+        try:
+            # Determine available tools
+            available_tools = []
+            if self.document_search:
+                available_tools.append("search_documents")
+            if self.web_search:
+                available_tools.append("web_search")
+
+            # Configure agent
+            config = AgentConfig(
+                max_iterations=max_iterations,
+                tools=available_tools,
+            )
+
+            # Build context (include session_id for runner)
+            context = {
+                "channel_id": channel_id,
+                "conversation_history": conversation_history or [],
+                "session_id": session_id,
+            }
+
+            # Run agent with streaming - yield all events
+            agent_result = None
+            stream_generator = self.agent_runner.run_stream(
+                query=query,
+                config=config,
+                context=context,
+            )
+
+            # Iterate through all events and yield them
+            try:
+                while True:
+                    event = next(stream_generator)
+                    yield event
+            except StopIteration as e:
+                # Generator returned the final AgentResult
+                agent_result = e.value
+
+            # Handle case where no result was returned
+            if agent_result is None:
+                agent_result = type(
+                    "AgentResult",
+                    (),
+                    {
+                        "response": "No response generated.",
+                        "sources": [],
+                        "tool_calls": [],
+                        "iterations": 0,
+                        "metadata": {},
+                    },
+                )()
+
+            # Build result
+            result = QueryResult(
+                response=agent_result.response,
+                sources=agent_result.sources,
+                session_id=session_id,
+                iterations=agent_result.iterations,
+                tools_used=[tc.get("tool", "") for tc in agent_result.tool_calls],
+                metadata=agent_result.metadata,
+            )
+
+            return result
+
+        except Exception as e:
+            # Emit error event
+            if self.event_sink:
+                self.event_sink.emit(AgentErrorEvent(
+                    session_id=session_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                ))
+
+            # Yield error event for streaming clients
+            yield {"event": "error", "error": str(e)}
 
             return QueryResult(
                 response=f"Error processing query: {str(e)}",
