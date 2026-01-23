@@ -60,7 +60,7 @@ from src.infrastructure.external.gemini.quiz import GeminiQuizAdapter
 from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
 from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
-from src.infrastructure.external.tavily.web_search import TavilyWebSearchAdapter
+from src.infrastructure.external.mcp.web_search import McpWebSearchAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
 
@@ -148,9 +148,9 @@ def create_web_search() -> WebSearchPort:
     """Create a web search adapter.
 
     Returns:
-        WebSearchPort implementation (TavilyWebSearchAdapter).
+        WebSearchPort implementation (McpWebSearchAdapter).
     """
-    return TavilyWebSearchAdapter()
+    return McpWebSearchAdapter()
 
 
 def create_citation_search() -> CitationSearchPort:

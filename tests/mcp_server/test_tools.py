@@ -423,7 +423,7 @@ class TestWebSearchTools:
         mock_adapter = Mock()
         mock_adapter.search.return_value = mock_results
 
-        with patch("src.infrastructure.external.tavily.TavilyWebSearchAdapter", return_value=mock_adapter):
+        with patch("src.infrastructure.external.mcp.McpWebSearchAdapter", return_value=mock_adapter):
             result = await run_web_search("test query")
 
         assert result["success"] is True
@@ -434,7 +434,7 @@ class TestWebSearchTools:
     async def test_web_search_error(self):
         """Test web search error handling."""
         with patch(
-            "src.infrastructure.external.tavily.TavilyWebSearchAdapter",
+            "src.infrastructure.external.mcp.McpWebSearchAdapter",
             side_effect=Exception("API Error"),
         ):
             result = await run_web_search("test query")

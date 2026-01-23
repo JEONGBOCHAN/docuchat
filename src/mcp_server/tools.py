@@ -393,9 +393,9 @@ async def run_web_search(
         Dictionary with search results.
     """
     try:
-        from src.infrastructure.external.tavily import TavilyWebSearchAdapter
+        from src.infrastructure.external.mcp import McpWebSearchAdapter
 
-        adapter = TavilyWebSearchAdapter()
+        adapter = McpWebSearchAdapter()
         results = adapter.search(query, max_results=max_results)
 
         return {
