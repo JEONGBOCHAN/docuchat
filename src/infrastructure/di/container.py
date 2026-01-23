@@ -19,12 +19,18 @@ from src.application.ports import (
     AgentEventSinkPort,
     DocumentSearchPort,
     WebSearchPort,
+    FAQGenerationPort,
 )
+from src.application.ports.citation_search import CitationSearchPort
 from src.application.use_cases.process_query import ProcessQueryUseCase
+from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
+from src.application.use_cases.generate_faq import GenerateFAQUseCase
 
 # Infrastructure implementations
 from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
 from src.infrastructure.external.gemini.document_search import GeminiDocumentSearchAdapter
+from src.infrastructure.external.gemini.citation import GeminiCitationAdapter
+from src.infrastructure.external.gemini.faq import GeminiFAQAdapter
 from src.infrastructure.external.tavily.web_search import TavilyWebSearchAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
@@ -118,6 +124,15 @@ def create_web_search() -> WebSearchPort:
     return TavilyWebSearchAdapter()
 
 
+def create_citation_search() -> CitationSearchPort:
+    """Create a citation search adapter.
+
+    Returns:
+        CitationSearchPort implementation (GeminiCitationAdapter).
+    """
+    return GeminiCitationAdapter()
+
+
 # ============================================================
 # Use Case Factory
 # ============================================================
@@ -190,3 +205,45 @@ def reset_use_case_cache() -> None:
     Call this if you need to reconfigure dependencies.
     """
     get_default_use_case.cache_clear()
+
+
+def create_search_with_citations_use_case() -> SearchWithCitationsUseCase:
+    """Create a SearchWithCitationsUseCase with dependencies.
+
+    Returns:
+        Fully configured SearchWithCitationsUseCase.
+
+    Example:
+        use_case = create_search_with_citations_use_case()
+        result = use_case.execute(
+            store_name="channel-123",
+            query="What is the main topic?",
+        )
+    """
+    citation_port = create_citation_search()
+    return SearchWithCitationsUseCase(citation_port=citation_port)
+
+
+def create_faq_generation() -> FAQGenerationPort:
+    """Create FAQ generation adapter.
+
+    Returns:
+        FAQGenerationPort implementation (GeminiFAQAdapter).
+    """
+    return GeminiFAQAdapter()
+
+
+def create_generate_faq_use_case() -> GenerateFAQUseCase:
+    """Create GenerateFAQUseCase with dependencies.
+
+    Returns:
+        Fully configured GenerateFAQUseCase.
+
+    Example:
+        use_case = create_generate_faq_use_case()
+        result = use_case.execute(
+            channel_id="channel-123",
+            count=5,
+        )
+    """
+    return GenerateFAQUseCase(faq_port=create_faq_generation())

@@ -20,6 +20,9 @@ from src.services.gemini import GeminiService, get_gemini_service
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
+from src.infrastructure.di.container import create_search_with_citations_use_case
+from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
+from src.application.ports.citation_search import CitationDTO
 
 router = APIRouter(prefix="/citations", tags=["citations"])
 
@@ -27,6 +30,20 @@ router = APIRouter(prefix="/citations", tags=["citations"])
 def _format_sse_event(data: dict) -> str:
     """Format data as SSE event."""
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _convert_citation_dto_to_model(dto: CitationDTO) -> Citation:
+    """Convert CitationDTO to Citation model."""
+    return Citation(
+        index=dto.index,
+        source=dto.source,
+        content=dto.content,
+        location=CitationLocation(
+            page=dto.page,
+            start_index=dto.start_index,
+            end_index=dto.end_index,
+        ),
+    )
 
 
 def _convert_to_citation(source: dict, idx: int) -> Citation:
@@ -43,6 +60,11 @@ def _convert_to_citation(source: dict, idx: int) -> Citation:
     )
 
 
+def get_citations_use_case() -> SearchWithCitationsUseCase:
+    """Dependency provider for SearchWithCitationsUseCase."""
+    return create_search_with_citations_use_case()
+
+
 @router.post(
     "",
     response_model=CitedResponse,
@@ -55,6 +77,7 @@ def query_with_citations(
     body: CitationRequest,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
+    use_case: Annotated[SearchWithCitationsUseCase, Depends(get_citations_use_case)],
 ) -> CitedResponse:
     """Send a question and get an AI-generated answer with inline citations.
 
@@ -63,7 +86,7 @@ def query_with_citations(
     - response_plain: Text without citation markers
     - citations: Detailed list of citations with source info and navigation data
     """
-    # Validate channel exists
+    # Validate channel exists (still use GeminiService for store validation)
     store = gemini.get_store(channel_id)
     if not store:
         raise HTTPException(
@@ -75,25 +98,25 @@ def query_with_citations(
     channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
-    # Search with citations
-    result = gemini.search_with_citations(channel_id, body.query)
+    # Execute use case for citation search
+    result = use_case.execute(channel_id, body.query)
 
-    if "error" in result and result["error"]:
+    if result.error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate response: {result['error']}",
+            detail=f"Failed to generate response: {result.error}",
         )
 
     # Convert citations to models
     citations = [
-        _convert_to_citation(src, idx)
-        for idx, src in enumerate(result.get("citations", []), start=1)
+        _convert_citation_dto_to_model(dto)
+        for dto in result.citations
     ]
 
     return CitedResponse(
         query=body.query,
-        response=result.get("response", ""),
-        response_plain=result.get("response_plain", ""),
+        response=result.response,
+        response_plain=result.response_plain,
         citations=citations,
         created_at=datetime.now(UTC),
     )
@@ -110,6 +133,7 @@ def query_with_citations_stream(
     body: CitationRequest,
     gemini: Annotated[GeminiService, Depends(get_gemini_service)],
     db: Annotated[Session, Depends(get_db)],
+    use_case: Annotated[SearchWithCitationsUseCase, Depends(get_citations_use_case)],
 ) -> StreamingResponse:
     """Send a question and get a streaming response with inline citations.
 
@@ -119,7 +143,7 @@ def query_with_citations_stream(
     - done: Signals completion
     - error: Error information if something went wrong
     """
-    # Validate channel exists
+    # Validate channel exists (still use GeminiService for store validation)
     store = gemini.get_store(channel_id)
     if not store:
         raise HTTPException(
@@ -132,8 +156,8 @@ def query_with_citations_stream(
     channel_repo.touch(channel_id)
 
     def generate_stream() -> Generator[str, None, None]:
-        """Generate SSE events from Gemini streaming response."""
-        for event in gemini.search_with_citations_stream(channel_id, body.query):
+        """Generate SSE events from UseCase streaming response."""
+        for event in use_case.execute_stream(channel_id, body.query):
             event_type = event.get("type")
 
             if event_type == "content":

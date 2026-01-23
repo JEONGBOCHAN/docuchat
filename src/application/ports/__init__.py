@@ -13,6 +13,8 @@ Available Ports:
 - WebSearchPort: Web search (Tavily, Brave, etc.)
 - LLMPort: LLM text generation
 - AgentRunnerPort: Agent execution framework abstraction
+- FAQGenerationPort: FAQ generation from documents
+- CitationSearchPort: Document search with inline citations
 """
 
 from src.application.ports.observability import AgentEventSinkPort
@@ -24,6 +26,12 @@ from src.application.ports.agent_runner import (
     AgentTool,
     AgentResult,
     AgentConfig,
+)
+from src.application.ports.faq_generation import FAQGenerationPort, FAQItemDTO
+from src.application.ports.citation_search import (
+    CitationSearchPort,
+    CitationDTO,
+    CitationResultDTO,
 )
 
 __all__ = [
@@ -44,4 +52,11 @@ __all__ = [
     "AgentTool",
     "AgentResult",
     "AgentConfig",
+    # FAQ Generation
+    "FAQGenerationPort",
+    "FAQItemDTO",
+    # Citation Search
+    "CitationSearchPort",
+    "CitationDTO",
+    "CitationResultDTO",
 ]

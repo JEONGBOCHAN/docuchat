@@ -2,13 +2,29 @@
 """Tests for Citations API."""
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
 from src.services.gemini import get_gemini_service
 from src.core.database import get_db
+from src.api.v1.citations import get_citations_use_case
+from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase, CitationSearchResult
+from src.application.ports.citation_search import CitationDTO
+
+
+def _create_mock_use_case(result: CitationSearchResult = None, stream_events: list = None):
+    """Create a mock UseCase with given result and stream events."""
+    mock_use_case = Mock(spec=SearchWithCitationsUseCase)
+
+    if result:
+        mock_use_case.execute.return_value = result
+
+    if stream_events:
+        mock_use_case.execute_stream.return_value = iter(stream_events)
+
+    return mock_use_case
 
 
 class TestQueryWithCitations:
@@ -21,30 +37,35 @@ class TestQueryWithCitations:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.search_with_citations.return_value = {
-            "response": "The answer is based on documents. [1] More info here. [2]",
-            "response_plain": "The answer is based on documents. More info here.",
-            "citations": [
-                {
-                    "index": 1,
-                    "source": "document1.pdf",
-                    "content": "Relevant content from doc 1",
-                    "page": 5,
-                    "start_index": 100,
-                    "end_index": 200,
-                },
-                {
-                    "index": 2,
-                    "source": "document2.pdf",
-                    "content": "Content from doc 2",
-                    "page": 3,
-                    "start_index": None,
-                    "end_index": None,
-                },
-            ],
-        }
+
+        mock_use_case = _create_mock_use_case(
+            result=CitationSearchResult(
+                response="The answer is based on documents. [1] More info here. [2]",
+                response_plain="The answer is based on documents. More info here.",
+                citations=[
+                    CitationDTO(
+                        index=1,
+                        source="document1.pdf",
+                        content="Relevant content from doc 1",
+                        page=5,
+                        start_index=100,
+                        end_index=200,
+                    ),
+                    CitationDTO(
+                        index=2,
+                        source="document2.pdf",
+                        content="Content from doc 2",
+                        page=3,
+                        start_index=None,
+                        end_index=None,
+                    ),
+                ],
+                error=None,
+            )
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -64,6 +85,7 @@ class TestQueryWithCitations:
         assert data["citations"][0]["location"]["page"] == 5
 
         app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_citations_use_case, None)
 
     def test_query_with_citations_channel_not_found(
         self, client_with_db: TestClient, test_db
@@ -101,14 +123,18 @@ class TestQueryWithCitations:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.search_with_citations.return_value = {
-            "response": "",
-            "response_plain": "",
-            "citations": [],
-            "error": "API Error occurred",
-        }
+
+        mock_use_case = _create_mock_use_case(
+            result=CitationSearchResult(
+                response="",
+                response_plain="",
+                citations=[],
+                error="API Error occurred",
+            )
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -119,6 +145,7 @@ class TestQueryWithCitations:
         assert response.status_code == 500
 
         app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_citations_use_case, None)
 
     def test_query_with_no_citations(self, client_with_db: TestClient, test_db):
         """Test query that returns no citations."""
@@ -127,13 +154,18 @@ class TestQueryWithCitations:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.search_with_citations.return_value = {
-            "response": "General answer without specific sources.",
-            "response_plain": "General answer without specific sources.",
-            "citations": [],
-        }
+
+        mock_use_case = _create_mock_use_case(
+            result=CitationSearchResult(
+                response="General answer without specific sources.",
+                response_plain="General answer without specific sources.",
+                citations=[],
+                error=None,
+            )
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -146,6 +178,7 @@ class TestQueryWithCitations:
         assert data["citations"] == []
 
         app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_citations_use_case, None)
 
 
 class TestQueryWithCitationsStream:
@@ -159,10 +192,10 @@ class TestQueryWithCitationsStream:
             "display_name": "Test Channel",
         }
 
-        def mock_stream(*args, **kwargs):
-            yield {"type": "content", "text": "Hello "}
-            yield {"type": "content", "text": "World!"}
-            yield {
+        stream_events = [
+            {"type": "content", "text": "Hello "},
+            {"type": "content", "text": "World!"},
+            {
                 "type": "citations",
                 "response_with_citations": "Hello World! [1]",
                 "citations": [
@@ -173,12 +206,14 @@ class TestQueryWithCitationsStream:
                         "page": 1,
                     }
                 ],
-            }
-            yield {"type": "done"}
+            },
+            {"type": "done"},
+        ]
 
-        mock_gemini.search_with_citations_stream = mock_stream
+        mock_use_case = _create_mock_use_case(stream_events=stream_events)
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations/stream",
@@ -204,6 +239,7 @@ class TestQueryWithCitationsStream:
         assert events[3] == {"type": "done"}
 
         app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_citations_use_case, None)
 
     def test_stream_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test streaming with non-existent channel."""
@@ -230,12 +266,11 @@ class TestQueryWithCitationsStream:
             "display_name": "Test Channel",
         }
 
-        def mock_stream(*args, **kwargs):
-            yield {"type": "error", "error": "API Error"}
-
-        mock_gemini.search_with_citations_stream = mock_stream
+        stream_events = [{"type": "error", "error": "API Error"}]
+        mock_use_case = _create_mock_use_case(stream_events=stream_events)
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations/stream",
@@ -254,6 +289,7 @@ class TestQueryWithCitationsStream:
         assert events[0]["type"] == "error"
 
         app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_citations_use_case, None)
 
 
 class TestGetCitationDetail:
@@ -317,16 +353,21 @@ class TestInlineCitationInsertion:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.search_with_citations.return_value = {
-            "response": "First sentence. [1] Second sentence. [2]",
-            "response_plain": "First sentence. Second sentence.",
-            "citations": [
-                {"index": 1, "source": "doc1.pdf", "content": "First sentence content"},
-                {"index": 2, "source": "doc2.pdf", "content": "Second sentence content"},
-            ],
-        }
+
+        mock_use_case = _create_mock_use_case(
+            result=CitationSearchResult(
+                response="First sentence. [1] Second sentence. [2]",
+                response_plain="First sentence. Second sentence.",
+                citations=[
+                    CitationDTO(index=1, source="doc1.pdf", content="First sentence content"),
+                    CitationDTO(index=2, source="doc2.pdf", content="Second sentence content"),
+                ],
+                error=None,
+            )
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -344,3 +385,4 @@ class TestInlineCitationInsertion:
         assert "[2]" not in data["response_plain"]
 
         app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_citations_use_case, None)
