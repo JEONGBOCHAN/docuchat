@@ -26,6 +26,10 @@ from src.models.study import (
 )
 from src.services.channel_repository import ChannelRepository
 from src.services.gemini import GeminiService, get_gemini_service
+from src.infrastructure.di.container import (
+    create_generate_study_guide_use_case,
+    create_generate_quiz_use_case,
+)
 
 router = APIRouter(prefix="/channels", tags=["study"])
 settings = get_settings()
@@ -81,47 +85,48 @@ async def generate_study_guide(
     channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
-    # Generate study guide
-    result = gemini.generate_study_guide(
-        store_name=channel_id,
+    # Generate study guide using Clean Architecture use case
+    use_case = create_generate_study_guide_use_case()
+    result = use_case.execute(
+        channel_id=channel_id,
         include_concepts=body.include_concepts,
         include_summary=body.include_summary,
         max_sections=body.max_sections,
         difficulty=body.difficulty.value,
     )
 
-    if "error" in result:
+    if result.error:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate study guide: {result['error']}",
+            detail=f"Failed to generate study guide: {result.error}",
         )
 
     # Convert to response model
     sections = [
         StudySection(
-            title=s.get("title", ""),
-            content=s.get("content", ""),
-            key_points=s.get("key_points", []),
+            title=s.title,
+            content=s.content,
+            key_points=s.key_points,
         )
-        for s in result.get("sections", [])
+        for s in result.sections
     ]
 
     key_concepts = [
         KeyConcept(
-            term=c.get("term", ""),
-            definition=c.get("definition", ""),
-            importance=c.get("importance"),
+            term=c.term,
+            definition=c.definition,
+            importance=c.importance,
         )
-        for c in result.get("key_concepts", [])
+        for c in result.key_concepts
     ]
 
     return StudyGuideResponse(
         channel_id=channel_id,
-        title=result.get("title", "Study Guide"),
-        overview=result.get("overview", ""),
+        title=result.title,
+        overview=result.overview,
         sections=sections,
         key_concepts=key_concepts,
-        study_tips=result.get("study_tips", []),
+        study_tips=result.study_tips,
         generated_at=datetime.now(UTC),
     )
 
@@ -175,65 +180,64 @@ async def generate_quiz(
     channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
-    # Generate quiz
-    result = gemini.generate_quiz(
-        store_name=channel_id,
+    # Generate quiz using Clean Architecture use case
+    use_case = create_generate_quiz_use_case()
+    result = use_case.execute(
+        channel_id=channel_id,
         count=body.count,
         quiz_type=body.quiz_type.value,
         difficulty=body.difficulty.value,
         include_explanations=body.include_explanations,
     )
 
-    if "error" in result:
+    if result.error:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate quiz: {result['error']}",
+            detail=f"Failed to generate quiz: {result.error}",
         )
 
     # Convert to response model
     questions = []
-    for q in result.get("questions", []):
+    for q in result.questions:
         # Parse question type
-        q_type_str = q.get("question_type", "multiple_choice")
         try:
-            q_type = QuizType(q_type_str)
+            q_type = QuizType(q.question_type)
         except ValueError:
             q_type = QuizType.MULTIPLE_CHOICE
 
         # Parse difficulty
-        diff_str = q.get("difficulty", "medium")
         try:
-            difficulty = DifficultyLevel(diff_str)
+            difficulty = DifficultyLevel(q.difficulty)
         except ValueError:
             difficulty = DifficultyLevel.MEDIUM
 
         # Parse choices
         choices = None
-        if q.get("choices"):
+        if q.choices:
             choices = [
                 QuizChoice(
-                    label=c.get("label", ""),
-                    text=c.get("text", ""),
-                    is_correct=c.get("is_correct", False),
+                    label=c.label,
+                    text=c.text,
+                    is_correct=c.is_correct,
                 )
-                for c in q.get("choices", [])
+                for c in q.choices
             ]
 
         questions.append(
             QuizQuestion(
-                question=q.get("question", ""),
+                question=q.question,
                 question_type=q_type,
                 choices=choices,
-                correct_answer=q.get("correct_answer", ""),
-                explanation=q.get("explanation", ""),
+                correct_answer=q.correct_answer,
+                explanation=q.explanation or "",
                 difficulty=difficulty,
             )
         )
 
     return QuizResponse(
         channel_id=channel_id,
-        title=result.get("title", "Quiz"),
-        description=result.get("description", ""),
+        title=result.title,
+        description=result.description,
         questions=questions,
         total_questions=len(questions),
         quiz_type=body.quiz_type,

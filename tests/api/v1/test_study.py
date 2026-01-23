@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 """Tests for study guide and quiz API endpoints."""
 
+from unittest.mock import MagicMock, patch
 import pytest
-from unittest.mock import MagicMock
-from datetime import datetime, UTC
-
 from fastapi.testclient import TestClient
 
 from src.main import app
@@ -15,6 +13,13 @@ from src.models.study import (
     QuizGenerateRequest,
 )
 from src.services.gemini import get_gemini_service
+from src.application.use_cases.learning import StudyGuideResult, QuizResult
+from src.application.ports.learning import (
+    StudySectionDTO,
+    KeyConceptDTO,
+    QuizQuestionDTO,
+    QuizChoiceDTO,
+)
 
 
 class TestGenerateStudyGuide:
@@ -30,31 +35,35 @@ class TestGenerateStudyGuide:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
         ]
-        mock_gemini.generate_study_guide.return_value = {
-            "title": "Test Study Guide",
-            "overview": "This guide covers...",
-            "sections": [
-                {
-                    "title": "Introduction",
-                    "content": "Introduction content...",
-                    "key_points": ["Point 1", "Point 2"],
-                }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = StudyGuideResult(
+            title="Test Study Guide",
+            overview="This guide covers...",
+            sections=[
+                StudySectionDTO(
+                    title="Introduction",
+                    content="Introduction content...",
+                    key_points=["Point 1", "Point 2"],
+                )
             ],
-            "key_concepts": [
-                {
-                    "term": "Concept 1",
-                    "definition": "Definition of concept 1",
-                    "importance": "Important because...",
-                }
+            key_concepts=[
+                KeyConceptDTO(
+                    term="Concept 1",
+                    definition="Definition of concept 1",
+                    importance="Important because...",
+                )
             ],
-            "study_tips": ["Tip 1", "Tip 2"],
-        }
+            study_tips=["Tip 1", "Tip 2"],
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-study-guide"
-        )
+        with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-study-guide"
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -112,34 +121,72 @@ class TestGenerateStudyGuide:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
         ]
-        mock_gemini.generate_study_guide.return_value = {
-            "title": "Advanced Study Guide",
-            "overview": "Advanced material...",
-            "sections": [],
-            "key_concepts": [],
-            "study_tips": [],
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = StudyGuideResult(
+            title="Advanced Study Guide",
+            overview="Advanced material...",
+            sections=[],
+            key_concepts=[],
+            study_tips=[],
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-study-guide",
-            json={
-                "include_concepts": False,
-                "include_summary": True,
-                "max_sections": 10,
-                "difficulty": "hard",
-            },
-        )
+        with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-study-guide",
+                json={
+                    "include_concepts": False,
+                    "include_summary": True,
+                    "max_sections": 10,
+                    "difficulty": "hard",
+                },
+            )
 
         assert response.status_code == 200
-        mock_gemini.generate_study_guide.assert_called_once_with(
-            store_name="fileSearchStores/test-store",
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store",
             include_concepts=False,
             include_summary=True,
             max_sections=10,
             difficulty="hard",
         )
+
+        app.dependency_overrides.pop(get_gemini_service, None)
+
+    def test_generate_study_guide_api_error(self, client_with_db: TestClient, test_db):
+        """Test study guide generation handles API errors."""
+        mock_gemini = MagicMock()
+        mock_gemini.get_store.return_value = {
+            "name": "fileSearchStores/test-store",
+            "display_name": "Test Store",
+        }
+        mock_gemini.list_store_files.return_value = [
+            {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
+        ]
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = StudyGuideResult(
+            title="",
+            overview="",
+            sections=[],
+            key_concepts=[],
+            study_tips=[],
+            channel_id="fileSearchStores/test-store",
+            error="API Error",
+        )
+
+        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+
+        with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-study-guide"
+            )
+
+        assert response.status_code == 500
+        assert "Failed to generate study guide" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_gemini_service, None)
 
@@ -157,39 +204,43 @@ class TestGenerateQuiz:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
         ]
-        mock_gemini.generate_quiz.return_value = {
-            "title": "Test Quiz",
-            "description": "Test your knowledge",
-            "questions": [
-                {
-                    "question": "What is X?",
-                    "question_type": "multiple_choice",
-                    "choices": [
-                        {"label": "A", "text": "Answer A", "is_correct": True},
-                        {"label": "B", "text": "Answer B", "is_correct": False},
-                        {"label": "C", "text": "Answer C", "is_correct": False},
-                        {"label": "D", "text": "Answer D", "is_correct": False},
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QuizResult(
+            title="Test Quiz",
+            description="Test your knowledge",
+            questions=[
+                QuizQuestionDTO(
+                    question="What is X?",
+                    question_type="multiple_choice",
+                    correct_answer="A. Answer A",
+                    choices=[
+                        QuizChoiceDTO(label="A", text="Answer A", is_correct=True),
+                        QuizChoiceDTO(label="B", text="Answer B", is_correct=False),
+                        QuizChoiceDTO(label="C", text="Answer C", is_correct=False),
+                        QuizChoiceDTO(label="D", text="Answer D", is_correct=False),
                     ],
-                    "correct_answer": "A. Answer A",
-                    "explanation": "Because X is...",
-                    "difficulty": "medium",
-                },
-                {
-                    "question": "Y is true.",
-                    "question_type": "true_false",
-                    "choices": None,
-                    "correct_answer": "True",
-                    "explanation": "Y is indeed true because...",
-                    "difficulty": "easy",
-                },
+                    explanation="Because X is...",
+                    difficulty="medium",
+                ),
+                QuizQuestionDTO(
+                    question="Y is true.",
+                    question_type="true_false",
+                    correct_answer="True",
+                    choices=None,
+                    explanation="Y is indeed true because...",
+                    difficulty="easy",
+                ),
             ],
-        }
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-quiz"
-        )
+        with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-quiz"
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -246,32 +297,68 @@ class TestGenerateQuiz:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
         ]
-        mock_gemini.generate_quiz.return_value = {
-            "title": "Multiple Choice Quiz",
-            "description": "Easy quiz",
-            "questions": [],
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QuizResult(
+            title="Multiple Choice Quiz",
+            description="Easy quiz",
+            questions=[],
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-quiz",
-            json={
-                "count": 10,
-                "quiz_type": "multiple_choice",
-                "difficulty": "easy",
-                "include_explanations": False,
-            },
-        )
+        with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-quiz",
+                json={
+                    "count": 10,
+                    "quiz_type": "multiple_choice",
+                    "difficulty": "easy",
+                    "include_explanations": False,
+                },
+            )
 
         assert response.status_code == 200
-        mock_gemini.generate_quiz.assert_called_once_with(
-            store_name="fileSearchStores/test-store",
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store",
             count=10,
             quiz_type="multiple_choice",
             difficulty="easy",
             include_explanations=False,
         )
+
+        app.dependency_overrides.pop(get_gemini_service, None)
+
+    def test_generate_quiz_api_error(self, client_with_db: TestClient, test_db):
+        """Test quiz generation handles API errors."""
+        mock_gemini = MagicMock()
+        mock_gemini.get_store.return_value = {
+            "name": "fileSearchStores/test-store",
+            "display_name": "Test Store",
+        }
+        mock_gemini.list_store_files.return_value = [
+            {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
+        ]
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QuizResult(
+            title="",
+            description="",
+            questions=[],
+            channel_id="fileSearchStores/test-store",
+            error="API Error",
+        )
+
+        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+
+        with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-quiz"
+            )
+
+        assert response.status_code == 500
+        assert "Failed to generate quiz" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_gemini_service, None)
 
