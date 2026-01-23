@@ -20,12 +20,24 @@ from src.models.document import (
     UploadStatus,
     UrlUploadRequest,
 )
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.application.ports.document import DocumentPort
+from src.infrastructure.di.container import create_channel_port, create_document_port
 from src.services.crawler import CrawlerService, get_crawler_service
 from src.services.capacity_service import CapacityService, CapacityExceededError
 from src.services.cache_service import CacheService, get_cache_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
+def get_document_port() -> DocumentPort:
+    """Get document port instance."""
+    return create_document_port()
 
 
 def validate_file(
@@ -67,7 +79,8 @@ async def upload_document(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
     file: Annotated[UploadFile, File(description="Document file to upload")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     settings: Annotated[Settings, Depends(get_settings)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
@@ -77,8 +90,8 @@ async def upload_document(
     The file will be processed asynchronously. Use the returned ID to check status.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -109,7 +122,7 @@ async def upload_document(
         actual_size = len(content)
 
         # Upload to Gemini with original filename as display_name
-        operation = gemini.upload_file(channel_id, tmp_path, display_name=original_filename)
+        result = document_port.upload_document(channel_id, tmp_path, display_name=original_filename)
 
         # Update capacity tracking after successful upload
         capacity_service.update_after_upload(channel_id, actual_size)
@@ -119,11 +132,11 @@ async def upload_document(
         cache.invalidate_chat_cache(channel_id)
 
         return DocumentUploadResponse(
-            id=operation["name"],
+            id=result.operation_name,
             filename=file.filename or "document",
-            status=UploadStatus.PROCESSING if not operation["done"] else UploadStatus.COMPLETED,
-            message="Upload initiated" if not operation["done"] else "Upload completed",
-            done=operation["done"],
+            status=UploadStatus.PROCESSING if not result.done else UploadStatus.COMPLETED,
+            message="Upload initiated" if not result.done else "Upload completed",
+            done=result.done,
         )
 
     except CapacityExceededError as e:
@@ -161,7 +174,8 @@ def upload_from_url(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
     body: UrlUploadRequest,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     crawler: Annotated[CrawlerService, Depends(get_crawler_service)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
@@ -171,8 +185,8 @@ def upload_from_url(
     The URL content will be fetched, converted to markdown, and uploaded to the channel.
     """
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -199,7 +213,7 @@ def upload_from_url(
 
         # Upload to Gemini with URL title as display_name
         url_filename = f"{result.title}.md"
-        operation = gemini.upload_file(channel_id, tmp_path, display_name=url_filename)
+        upload_result = document_port.upload_document(channel_id, tmp_path, display_name=url_filename)
 
         # Update capacity tracking
         capacity_service.update_after_upload(channel_id, file_size)
@@ -209,11 +223,11 @@ def upload_from_url(
         cache.invalidate_chat_cache(channel_id)
 
         return DocumentUploadResponse(
-            id=operation["name"],
+            id=upload_result.operation_name,
             filename=url_filename,
-            status=UploadStatus.PROCESSING if not operation["done"] else UploadStatus.COMPLETED,
-            message="URL content uploaded" if not operation["done"] else "Upload completed",
-            done=operation["done"],
+            status=UploadStatus.PROCESSING if not upload_result.done else UploadStatus.COMPLETED,
+            message="URL content uploaded" if not upload_result.done else "Upload completed",
+            done=upload_result.done,
         )
 
     except HTTPException:
@@ -246,13 +260,14 @@ def upload_from_url(
 def list_documents(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
 ) -> DocumentList:
     """List all documents in a channel."""
     # Validate channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -265,14 +280,14 @@ def list_documents(
             documents = [DocumentResponse(**doc) for doc in cached_docs]
             return DocumentList(documents=documents, total=len(documents))
 
-        files = gemini.list_store_files(channel_id)
+        files = document_port.list_documents(channel_id)
         documents = [
             DocumentResponse(
-                id=f["name"],
-                filename=f.get("display_name", ""),
-                file_size=int(f.get("size_bytes", 0)),
+                id=f.name,
+                filename=f.display_name,
+                file_size=f.size_bytes,
                 content_type="application/octet-stream",  # API doesn't return this
-                status=UploadStatus.COMPLETED if f.get("state") == "ACTIVE" else UploadStatus.PROCESSING,
+                status=UploadStatus.COMPLETED if f.state == "ACTIVE" else UploadStatus.PROCESSING,
                 channel_id=channel_id,
                 created_at=datetime.now(UTC),
             )
@@ -302,18 +317,17 @@ def list_documents(
 def get_document_status(
     request: Request,
     document_id: str,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
 ) -> dict:
     """Get the status of a document upload operation."""
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"Checking status for document_id: {document_id}")
-    status_info = gemini.get_operation_status(document_id)
-    logger.info(f"Status result: {status_info}")
+    status_result = document_port.get_operation_status(document_id)
+    logger.info(f"Status result: done={status_result.done}")
     return {
         "id": document_id,
-        "done": status_info.get("done", False),
-        "error": status_info.get("error"),
+        "done": status_result.done,
     }
 
 
@@ -326,7 +340,7 @@ def get_document_status(
 def delete_document(
     request: Request,
     document_id: str,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
     channel_id: Annotated[str | None, Query(description="Channel ID to invalidate cache")] = None,
 ):
@@ -347,10 +361,10 @@ def delete_document(
     # Use the correct method based on document_id format
     if document_id.startswith("fileSearchStores/"):
         # File Search Store document
-        success = gemini.delete_store_document(document_id)
+        success = document_port.delete_document(document_id)
     else:
         # Legacy Files API
-        success = gemini.delete_file(document_id)
+        success = document_port.delete_file(document_id)
 
     if not success:
         raise HTTPException(
