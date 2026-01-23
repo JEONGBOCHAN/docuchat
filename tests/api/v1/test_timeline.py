@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """Tests for Timeline and Briefing API."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
 from src.services.gemini import get_gemini_service
+from src.application.use_cases.timeline_briefing import TimelineResult, BriefingResult
+from src.application.ports.timeline import TimelineEventDTO, BriefingSectionDTO
 
 
 class TestGenerateTimeline:
@@ -19,29 +21,33 @@ class TestGenerateTimeline:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_timeline.return_value = {
-            "events": [
-                {
-                    "date": "2024-01-15",
-                    "title": "Project Launch",
-                    "description": "The project was officially launched",
-                    "source": "launch.pdf",
-                },
-                {
-                    "date": "2024-02-01",
-                    "title": "First Milestone",
-                    "description": "Completed phase 1",
-                    "source": None,
-                },
-            ]
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = TimelineResult(
+            events=[
+                TimelineEventDTO(
+                    date="2024-01-15",
+                    title="Project Launch",
+                    description="The project was officially launched",
+                    source="launch.pdf",
+                ),
+                TimelineEventDTO(
+                    date="2024-02-01",
+                    title="First Milestone",
+                    description="Completed phase 1",
+                    source=None,
+                ),
+            ],
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
-            json={"max_events": 10},
-        )
+        with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
+                json={"max_events": 10},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -62,14 +68,20 @@ class TestGenerateTimeline:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_timeline.return_value = {"events": []}
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = TimelineResult(
+            events=[],
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
-            json={},
-        )
+        with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
+                json={},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -101,17 +113,21 @@ class TestGenerateTimeline:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_timeline.return_value = {
-            "events": [],
-            "error": "API Error",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = TimelineResult(
+            events=[],
+            channel_id="fileSearchStores/test-store",
+            error="API Error",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
-            json={},
-        )
+        with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
+                json={},
+            )
 
         assert response.status_code == 500
         assert "Failed to generate timeline" in response.json()["detail"]
@@ -125,18 +141,24 @@ class TestGenerateTimeline:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_timeline.return_value = {"events": []}
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = TimelineResult(
+            events=[],
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
-            json={"max_events": 50},
-        )
+        with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
+                json={"max_events": 50},
+            )
 
         assert response.status_code == 200
-        mock_gemini.generate_timeline.assert_called_once_with(
-            store_name="fileSearchStores/test-store",
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store",
             max_events=50,
         )
 
@@ -153,26 +175,30 @@ class TestGenerateBriefing:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_briefing.return_value = {
-            "title": "Project Status Briefing",
-            "executive_summary": "This briefing summarizes the current project status.",
-            "sections": [
-                {"title": "Current Status", "content": "The project is on track."},
-                {"title": "Next Steps", "content": "Continue with phase 2."},
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = BriefingResult(
+            title="Project Status Briefing",
+            executive_summary="This briefing summarizes the current project status.",
+            sections=[
+                BriefingSectionDTO(title="Current Status", content="The project is on track."),
+                BriefingSectionDTO(title="Next Steps", content="Continue with phase 2."),
             ],
-            "key_points": [
+            key_points=[
                 "Project on schedule",
                 "Budget at 75%",
                 "No major risks",
             ],
-        }
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
-            json={"style": "executive", "max_sections": 5},
-        )
+        with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
+                json={"style": "executive", "max_sections": 5},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -193,23 +219,27 @@ class TestGenerateBriefing:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_briefing.return_value = {
-            "title": "Detailed Analysis",
-            "executive_summary": "Comprehensive review...",
-            "sections": [],
-            "key_points": [],
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = BriefingResult(
+            title="Detailed Analysis",
+            executive_summary="Comprehensive review...",
+            sections=[],
+            key_points=[],
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
-            json={"style": "detailed"},
-        )
+        with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
+                json={"style": "detailed"},
+            )
 
         assert response.status_code == 200
-        mock_gemini.generate_briefing.assert_called_once_with(
-            store_name="fileSearchStores/test-store",
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store",
             style="detailed",
             max_sections=5,
         )
@@ -259,20 +289,24 @@ class TestGenerateBriefing:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_briefing.return_value = {
-            "title": "",
-            "executive_summary": "",
-            "sections": [],
-            "key_points": [],
-            "error": "API Error",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = BriefingResult(
+            title="",
+            executive_summary="",
+            sections=[],
+            key_points=[],
+            channel_id="fileSearchStores/test-store",
+            error="API Error",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
-            json={},
-        )
+        with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
+                json={},
+            )
 
         assert response.status_code == 500
         assert "Failed to generate briefing" in response.json()["detail"]
@@ -286,23 +320,27 @@ class TestGenerateBriefing:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_briefing.return_value = {
-            "title": "Default Briefing",
-            "executive_summary": "Summary",
-            "sections": [],
-            "key_points": [],
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = BriefingResult(
+            title="Default Briefing",
+            executive_summary="Summary",
+            sections=[],
+            key_points=[],
+            channel_id="fileSearchStores/test-store",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
-            json={},
-        )
+        with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
+                json={},
+            )
 
         assert response.status_code == 200
-        mock_gemini.generate_briefing.assert_called_once_with(
-            store_name="fileSearchStores/test-store",
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store",
             style="executive",
             max_sections=5,
         )

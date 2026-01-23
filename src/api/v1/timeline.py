@@ -19,6 +19,10 @@ from src.services.gemini import GeminiService, get_gemini_service
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
+from src.infrastructure.di.container import (
+    create_generate_timeline_use_case,
+    create_generate_briefing_use_case,
+)
 
 router = APIRouter(prefix="/channels", tags=["timeline"])
 
@@ -53,27 +57,28 @@ def generate_timeline(
     repo = ChannelRepository(db)
     repo.touch(channel_id)
 
-    # Generate timeline
-    result = gemini.generate_timeline(
-        store_name=channel_id,
+    # Generate timeline using Clean Architecture use case
+    use_case = create_generate_timeline_use_case()
+    result = use_case.execute(
+        channel_id=channel_id,
         max_events=body.max_events,
     )
 
-    if "error" in result and result["error"]:
+    if result.error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate timeline: {result['error']}",
+            detail=f"Failed to generate timeline: {result.error}",
         )
 
     # Convert to response model
     events = [
         TimelineEvent(
-            date=event.get("date", "Unknown"),
-            title=event.get("title", ""),
-            description=event.get("description", ""),
-            source=event.get("source"),
+            date=event.date,
+            title=event.title,
+            description=event.description,
+            source=event.source,
         )
-        for event in result.get("events", [])
+        for event in result.events
     ]
 
     return TimelineResponse(
@@ -121,33 +126,34 @@ def generate_briefing(
     repo = ChannelRepository(db)
     repo.touch(channel_id)
 
-    # Generate briefing
-    result = gemini.generate_briefing(
-        store_name=channel_id,
+    # Generate briefing using Clean Architecture use case
+    use_case = create_generate_briefing_use_case()
+    result = use_case.execute(
+        channel_id=channel_id,
         style=body.style,
         max_sections=body.max_sections,
     )
 
-    if "error" in result and result["error"]:
+    if result.error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate briefing: {result['error']}",
+            detail=f"Failed to generate briefing: {result.error}",
         )
 
     # Convert to response model
     sections = [
         BriefingSection(
-            title=section.get("title", ""),
-            content=section.get("content", ""),
+            title=section.title,
+            content=section.content,
         )
-        for section in result.get("sections", [])
+        for section in result.sections
     ]
 
     return BriefingResponse(
         channel_id=channel_id,
-        title=result.get("title", "Briefing"),
-        executive_summary=result.get("executive_summary", ""),
+        title=result.title,
+        executive_summary=result.executive_summary,
         sections=sections,
-        key_points=result.get("key_points", []),
+        key_points=result.key_points,
         generated_at=datetime.now(UTC),
     )
