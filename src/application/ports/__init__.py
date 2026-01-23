@@ -22,6 +22,7 @@ Available Ports:
 - QuizPort: Quiz generation
 - PodcastScriptPort: Podcast script generation
 - ChannelPort: Channel (File Search Store) CRUD operations
+- DocumentPort: Document operations within channels
 """
 
 from src.application.ports.observability import AgentEventSinkPort
@@ -64,6 +65,7 @@ from src.application.ports.podcast import (
     DialogueLineDTO,
 )
 from src.application.ports.channel import ChannelPort, ChannelDTO
+from src.application.ports.document import DocumentPort, DocumentDTO, UploadResultDTO
 
 __all__ = [
     # Observability
@@ -117,4 +119,8 @@ __all__ = [
     # Channel
     "ChannelPort",
     "ChannelDTO",
+    # Document
+    "DocumentPort",
+    "DocumentDTO",
+    "UploadResultDTO",
 ]

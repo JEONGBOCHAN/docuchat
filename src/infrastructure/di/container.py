@@ -27,6 +27,7 @@ from src.application.ports import (
     QuizPort,
     PodcastScriptPort,
     ChannelPort,
+    DocumentPort,
 )
 from src.application.ports.citation_search import CitationSearchPort
 from src.application.use_cases.process_query import ProcessQueryUseCase
@@ -58,6 +59,7 @@ from src.infrastructure.external.gemini.study_guide import GeminiStudyGuideAdapt
 from src.infrastructure.external.gemini.quiz import GeminiQuizAdapter
 from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
 from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
+from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
 from src.infrastructure.external.tavily.web_search import TavilyWebSearchAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
@@ -472,3 +474,16 @@ def create_channel_port() -> ChannelPort:
         ChannelPort implementation (GeminiChannelAdapter).
     """
     return GeminiChannelAdapter()
+
+
+# ============================================================
+# Document Factory Functions
+# ============================================================
+
+def create_document_port() -> DocumentPort:
+    """Create document adapter.
+
+    Returns:
+        DocumentPort implementation (GeminiDocumentAdapter).
+    """
+    return GeminiDocumentAdapter()
