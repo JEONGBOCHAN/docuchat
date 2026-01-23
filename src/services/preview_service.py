@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
+from src.infrastructure.external.gemini.document_search import GeminiDocumentSearchAdapter
 from src.models.db_models import DocumentPreviewCacheDB
 from src.models.preview import (
     DocumentPreviewResponse,
@@ -254,9 +255,11 @@ Instructions:
 
 Return the extracted text content now:"""
 
-        result = self._gemini.search_and_answer(
-            store_name=channel_id,
+        # Use document search adapter for grounded generation
+        adapter = GeminiDocumentSearchAdapter(self._gemini)
+        result = adapter.search_with_answer(
             query=prompt,
+            channel_id=channel_id,
             model="gemini-2.5-flash",
         )
 

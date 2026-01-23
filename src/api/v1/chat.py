@@ -327,22 +327,13 @@ def send_message(
             created_at=datetime.now(UTC),
         )
     else:
-        # Use agent or direct search based on request
-        if body.use_agent:
-            # Use LangGraph agentic loop (ReAct pattern)
-            result = _run_agent_chat(
-                channel_id=channel_id,
-                query=body.query,
-                conversation_history=conversation_history,
-                max_iterations=3,
-            )
-        else:
-            # Direct search and answer (legacy mode)
-            result = gemini.search_and_answer(
-                channel_id,
-                body.query,
-                conversation_history=conversation_history,
-            )
+        # Use LangGraph agent for RAG
+        result = _run_agent_chat(
+            channel_id=channel_id,
+            query=body.query,
+            conversation_history=conversation_history,
+            max_iterations=3,
+        )
 
         if "error" in result and result["error"]:
             raise HTTPException(

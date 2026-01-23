@@ -6,6 +6,8 @@ Implements DocumentSearchPort using Google Gemini Semantic Retrieval API.
 This adapter wraps the existing GeminiService to conform to the port interface.
 """
 
+from google.genai import types
+
 from src.application.ports.document_search import DocumentSearchPort, SearchResult
 from src.services.gemini import GeminiService
 
@@ -77,11 +79,51 @@ class GeminiDocumentSearchAdapter(DocumentSearchPort):
             print(f"Gemini search error: {e}")
             return []
 
+    def _build_conversation_contents(
+        self,
+        query: str,
+        conversation_history: list[dict[str, str]] | None = None,
+    ) -> list[types.Content] | str:
+        """Build conversation contents for multi-turn.
+
+        Args:
+            query: Current user query
+            conversation_history: Previous messages with 'role' and 'content'
+
+        Returns:
+            List of Content objects or just the query string
+        """
+        if not conversation_history:
+            return query
+
+        contents = []
+
+        # Add conversation history
+        for msg in conversation_history:
+            role = "user" if msg.get("role") == "user" else "model"
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part(text=msg.get("content", ""))]
+                )
+            )
+
+        # Add current query
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part(text=query)]
+            )
+        )
+
+        return contents
+
     def search_with_answer(
         self,
         query: str,
         channel_id: str,
         conversation_history: list[dict] | None = None,
+        model: str = "gemini-3-flash-preview",
     ) -> dict:
         """Search and generate an answer using Gemini.
 
@@ -92,26 +134,60 @@ class GeminiDocumentSearchAdapter(DocumentSearchPort):
             query: The user's question
             channel_id: The channel to search in
             conversation_history: Previous conversation for context
+            model: The model to use for generation
 
         Returns:
             Dictionary with 'response', 'sources', and optional 'error'
         """
         try:
-            result = self._service.search_and_answer(
-                channel_id,
-                query,
-                conversation_history=conversation_history,
+            # Build contents with conversation history for multi-turn
+            contents = self._build_conversation_contents(query, conversation_history)
+
+            # Use Gemini client directly for grounded generation
+            client = self._service.client
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    tools=[
+                        types.Tool(
+                            file_search=types.FileSearch(
+                                file_search_store_names=[channel_id]
+                            )
+                        )
+                    ]
+                ),
             )
 
+            # Extract grounding sources from response
+            sources = []
+            if hasattr(response, "candidates") and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, "grounding_metadata"):
+                    metadata = candidate.grounding_metadata
+                    if hasattr(metadata, "grounding_chunks"):
+                        for chunk in metadata.grounding_chunks:
+                            # Extract source from retrieved_context
+                            ctx = getattr(chunk, "retrieved_context", None)
+                            source_name = "unknown"
+                            content = ""
+                            if ctx:
+                                source_name = getattr(ctx, "title", None) or getattr(ctx, "uri", None) or "unknown"
+                                content = getattr(ctx, "text", "") or ""
+                            sources.append({
+                                "source": source_name,
+                                "content": content,
+                            })
+
             return {
-                "response": result.get("response", ""),
-                "sources": result.get("sources", []),
-                "error": result.get("error"),
+                "response": response.text if response.text else "",
+                "sources": sources,
+                "error": None,
             }
 
         except Exception as e:
             return {
-                "response": f"Error: {str(e)}",
+                "response": "",
                 "sources": [],
                 "error": str(e),
             }
