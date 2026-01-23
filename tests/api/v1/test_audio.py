@@ -293,6 +293,8 @@ class TestPreviewScript:
 
     def test_preview_script_success(self, client_with_db: TestClient, test_db):
         """Test successful script preview."""
+        from src.application.ports.podcast import PodcastScriptDTO, DialogueLineDTO
+
         channel = ChannelMetadata(
             gemini_store_id="fileSearchStores/test-store",
             name="Test Channel",
@@ -305,23 +307,29 @@ class TestPreviewScript:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_podcast_script.return_value = {
-            "title": "Test Podcast",
-            "introduction": "Welcome to our podcast!",
-            "dialogue": [
-                {"speaker": "Host A", "text": "Today we discuss..."},
-                {"speaker": "Host B", "text": "Great topic!"},
-            ],
-            "conclusion": "Thanks for listening!",
-            "estimated_duration_seconds": 300,
-        }
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/audio/preview-script",
-            json={"duration_minutes": 5},
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = PodcastScriptDTO(
+            title="Test Podcast",
+            introduction="Welcome to our podcast!",
+            dialogue=[
+                DialogueLineDTO(speaker="Host A", text="Today we discuss..."),
+                DialogueLineDTO(speaker="Host B", text="Great topic!"),
+            ],
+            conclusion="Thanks for listening!",
+            estimated_duration_seconds=300,
         )
+
+        with patch(
+            "src.api.v1.audio.create_generate_podcast_script_use_case",
+            return_value=mock_use_case,
+        ):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/audio/preview-script",
+                json={"duration_minutes": 5},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -362,16 +370,20 @@ class TestPreviewScript:
             "name": "fileSearchStores/test-store",
             "display_name": "Test Channel",
         }
-        mock_gemini.generate_podcast_script.return_value = {
-            "error": "API Error",
-        }
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/audio/preview-script",
-            json={},
-        )
+        mock_use_case = MagicMock()
+        mock_use_case.execute.side_effect = Exception("API Error")
+
+        with patch(
+            "src.api.v1.audio.create_generate_podcast_script_use_case",
+            return_value=mock_use_case,
+        ):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/audio/preview-script",
+                json={},
+            )
 
         assert response.status_code == 500
         assert "Failed to generate script" in response.json()["detail"]

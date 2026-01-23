@@ -25,6 +25,8 @@ from src.services.audio_repository import AudioRepository, to_response
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
+from src.infrastructure.di.container import create_generate_podcast_script_use_case
+from src.application.use_cases.podcast import GeneratePodcastScriptRequest
 
 router = APIRouter(prefix="/channels", tags=["audio"])
 
@@ -54,31 +56,33 @@ async def generate_audio_task(
     try:
         repo = AudioRepository(db)
         tts = get_tts_service()
-        gemini = get_gemini_service()
 
         # Update status to generating script
         repo.update_status(audio_id, AudioStatus.GENERATING_SCRIPT)
 
-        # Generate podcast script
-        script_result = gemini.generate_podcast_script(
+        # Generate podcast script using UseCase
+        use_case = create_generate_podcast_script_use_case()
+        request = GeneratePodcastScriptRequest(
             store_name=store_name,
             duration_minutes=duration_minutes,
             style=style,
             language=language,
         )
 
-        if "error" in script_result and script_result["error"]:
+        try:
+            script_dto = use_case.execute(request)
+        except Exception as e:
             repo.update_status(
                 audio_id,
                 AudioStatus.FAILED,
-                error_message=script_result["error"],
+                error_message=str(e),
             )
             return
 
-        # Parse script result
+        # Convert DTO to model
         dialogue = []
-        for line in script_result.get("dialogue", []):
-            speaker = line.get("speaker", "Host A")
+        for line in script_dto.dialogue:
+            speaker = line.speaker
             if "Host A" in speaker or "진행자" in speaker:
                 voice = host_a_voice
             else:
@@ -87,17 +91,17 @@ async def generate_audio_task(
             dialogue.append(
                 DialogueLine(
                     speaker=speaker,
-                    text=line.get("text", ""),
+                    text=line.text,
                     voice=voice,
                 )
             )
 
         script = PodcastScript(
-            title=script_result.get("title", "Audio Overview"),
-            introduction=script_result.get("introduction", ""),
+            title=script_dto.title,
+            introduction=script_dto.introduction,
             dialogue=dialogue,
-            conclusion=script_result.get("conclusion", ""),
-            estimated_duration_seconds=script_result.get("estimated_duration_seconds", duration_minutes * 60),
+            conclusion=script_dto.conclusion,
+            estimated_duration_seconds=script_dto.estimated_duration_seconds,
         )
 
         # Update with script
@@ -386,24 +390,27 @@ def preview_script(
     repo = ChannelRepository(db)
     repo.touch(channel_id)
 
-    # Generate script
-    script_result = gemini.generate_podcast_script(
+    # Generate script using UseCase
+    use_case = create_generate_podcast_script_use_case()
+    script_request = GeneratePodcastScriptRequest(
         store_name=channel_id,
         duration_minutes=body.duration_minutes,
         style=body.style,
         language=body.language,
     )
 
-    if "error" in script_result and script_result["error"]:
+    try:
+        script_dto = use_case.execute(script_request)
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate script: {script_result['error']}",
+            detail=f"Failed to generate script: {str(e)}",
         )
 
-    # Parse dialogue
+    # Convert DTO to model
     dialogue = []
-    for line in script_result.get("dialogue", []):
-        speaker = line.get("speaker", "Host A")
+    for line in script_dto.dialogue:
+        speaker = line.speaker
         if "Host A" in speaker or "진행자" in speaker:
             voice = body.host_a_voice
         else:
@@ -412,17 +419,17 @@ def preview_script(
         dialogue.append(
             DialogueLine(
                 speaker=speaker,
-                text=line.get("text", ""),
+                text=line.text,
                 voice=voice,
             )
         )
 
     script = PodcastScript(
-        title=script_result.get("title", "Audio Overview"),
-        introduction=script_result.get("introduction", ""),
+        title=script_dto.title,
+        introduction=script_dto.introduction,
         dialogue=dialogue,
-        conclusion=script_result.get("conclusion", ""),
-        estimated_duration_seconds=script_result.get("estimated_duration_seconds", body.duration_minutes * 60),
+        conclusion=script_dto.conclusion,
+        estimated_duration_seconds=script_dto.estimated_duration_seconds,
     )
 
     return ScriptOnlyResponse(
