@@ -10,6 +10,7 @@ from src.models.faq import FAQItem, FAQGenerateRequest, FAQGenerateResponse
 from src.services.gemini import GeminiService, get_gemini_service
 from src.core.database import get_db
 from src.services.channel_repository import ChannelRepository
+from src.infrastructure.di.container import create_generate_faq_use_case
 
 router = APIRouter(prefix="/channels", tags=["faq"])
 
@@ -30,7 +31,7 @@ def generate_faq(
     Analyzes the documents in the channel and generates FAQ items
     with questions that users might naturally ask and their answers.
     """
-    # Validate channel exists
+    # Validate channel exists (still using gemini service for validation)
     store = gemini.get_store(channel_id)
     if not store:
         raise HTTPException(
@@ -50,22 +51,23 @@ def generate_faq(
     channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
-    # Generate FAQ
-    result = gemini.generate_faq(channel_id, count=request.count)
+    # Generate FAQ using Clean Architecture UseCase
+    use_case = create_generate_faq_use_case()
+    result = use_case.execute(channel_id=channel_id, count=request.count)
 
-    if "error" in result and result["error"]:
+    if result.error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate FAQ: {result['error']}",
+            detail=f"Failed to generate FAQ: {result.error}",
         )
 
-    # Convert to FAQItem models
+    # Convert FAQItemDTO to FAQItem models
     items = [
         FAQItem(
-            question=item.get("question", ""),
-            answer=item.get("answer", ""),
+            question=item.question,
+            answer=item.answer,
         )
-        for item in result.get("items", [])
+        for item in result.items
     ]
 
     return FAQGenerateResponse(

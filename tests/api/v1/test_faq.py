@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """Tests for FAQ API."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch, Mock
 
 from fastapi.testclient import TestClient
 
 from src.main import app
 from src.services.gemini import get_gemini_service
+from src.application.use_cases.generate_faq import GenerateFAQUseCase, FAQResult
+from src.application.ports.faq_generation import FAQItemDTO
 
 
 class TestGenerateFAQ:
@@ -22,19 +24,25 @@ class TestGenerateFAQ:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.generate_faq.return_value = {
-            "items": [
-                {"question": "What is the main topic?", "answer": "The main topic is..."},
-                {"question": "How does it work?", "answer": "It works by..."},
+
+        # Mock the use case
+        mock_use_case = Mock(spec=GenerateFAQUseCase)
+        mock_use_case.execute.return_value = FAQResult(
+            items=[
+                FAQItemDTO(question="What is the main topic?", answer="The main topic is..."),
+                FAQItemDTO(question="How does it work?", answer="It works by..."),
             ],
-        }
+            channel_id="fileSearchStores/test-store",
+            error=None,
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-faq",
-            json={"count": 2},
-        )
+        with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-faq",
+                json={"count": 2},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -94,21 +102,27 @@ class TestGenerateFAQ:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.generate_faq.return_value = {
-            "items": [{"question": f"Q{i}", "answer": f"A{i}"} for i in range(5)],
-        }
+
+        # Mock the use case
+        mock_use_case = Mock(spec=GenerateFAQUseCase)
+        mock_use_case.execute.return_value = FAQResult(
+            items=[FAQItemDTO(question=f"Q{i}", answer=f"A{i}") for i in range(5)],
+            channel_id="fileSearchStores/test-store",
+            error=None,
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-faq",
-            json={},
-        )
+        with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-faq",
+                json={},
+            )
 
         assert response.status_code == 200
-        # Default count is 5
-        mock_gemini.generate_faq.assert_called_once_with(
-            "fileSearchStores/test-store", count=5
+        # Verify default count is 5
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store", count=5
         )
 
         app.dependency_overrides.pop(get_gemini_service, None)
@@ -137,17 +151,22 @@ class TestGenerateFAQ:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.generate_faq.return_value = {
-            "items": [],
-            "error": "API rate limit exceeded",
-        }
+
+        # Mock the use case to return an error
+        mock_use_case = Mock(spec=GenerateFAQUseCase)
+        mock_use_case.execute.return_value = FAQResult(
+            items=[],
+            channel_id="fileSearchStores/test-store",
+            error="API rate limit exceeded",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/generate-faq",
-            json={"count": 5},
-        )
+        with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/generate-faq",
+                json={"count": 5},
+            )
 
         assert response.status_code == 500
         assert "Failed to generate FAQ" in response.json()["detail"]
