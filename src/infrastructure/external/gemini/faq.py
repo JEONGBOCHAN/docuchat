@@ -3,57 +3,103 @@
 Gemini FAQ Adapter.
 
 Implements FAQGenerationPort using Google Gemini API.
-This adapter wraps the existing GeminiService to conform to the port interface.
 """
 
+import json
+from typing import Any
+
+from google import genai
+from google.genai import types
+
 from src.application.ports.faq_generation import FAQGenerationPort, FAQItemDTO
-from src.services.gemini import GeminiService
+from src.core.config import get_settings
 
 
 class GeminiFAQAdapter(FAQGenerationPort):
     """FAQGenerationPort implementation using Google Gemini.
 
-    This adapter wraps the existing GeminiService and exposes it through
-    the clean architecture port interface. This allows the application
-    layer to use FAQ generation without coupling to Gemini specifics.
+    This adapter directly interacts with Gemini API to generate FAQ items
+    from document stores.
 
     Example:
-        gemini_service = GeminiService()
-        adapter = GeminiFAQAdapter(gemini_service)
-
+        adapter = GeminiFAQAdapter()
         items = adapter.generate_faq("channel-123", count=5)
     """
 
-    def __init__(self, gemini_service: GeminiService | None = None):
-        """Initialize adapter with GeminiService.
+    def __init__(self, client: genai.Client | None = None):
+        """Initialize adapter with Gemini client.
 
         Args:
-            gemini_service: Optional GeminiService instance.
-                           Creates one if not provided.
+            client: Optional Gemini client instance.
+                   Creates one if not provided.
         """
-        self._service = gemini_service or GeminiService()
+        if client:
+            self._client = client
+        else:
+            settings = get_settings()
+            self._client = genai.Client(api_key=settings.google_api_key)
 
     def generate_faq(
         self,
         store_name: str,
         count: int = 5,
+        model: str = "gemini-3-flash-preview",
     ) -> list[FAQItemDTO]:
         """Generate FAQ items using Gemini.
 
         Args:
             store_name: The document store to analyze
             count: Number of FAQ items to generate (1-20)
+            model: The model to use for generation
 
         Returns:
             List of FAQItemDTO objects
         """
+        prompt = f"""Based on the documents in this knowledge base, generate exactly {count} frequently asked questions (FAQ) that users might ask about the content.
+
+For each question:
+1. Create a clear, specific question that someone might naturally ask
+2. Provide a comprehensive answer based on the document content
+
+Format your response as a JSON array with objects containing "question" and "answer" fields.
+Example format:
+[
+  {{"question": "What is X?", "answer": "X is..."}},
+  {{"question": "How does Y work?", "answer": "Y works by..."}}
+]
+
+Generate exactly {count} FAQ items. Return ONLY the JSON array, no other text."""
+
         try:
-            # Use GeminiService's generate_faq method
-            result = self._service.generate_faq(store_name, count=count)
+            response = self._client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[
+                        types.Tool(
+                            file_search=types.FileSearch(
+                                file_search_store_names=[store_name]
+                            )
+                        )
+                    ],
+                ),
+            )
+
+            # Parse the JSON response
+            try:
+                text = response.text or ""
+                start = text.find("[")
+                end = text.rfind("]") + 1
+                if start != -1 and end > start:
+                    parsed_items = json.loads(text[start:end])
+                else:
+                    parsed_items = []
+            except json.JSONDecodeError:
+                parsed_items = []
 
             # Convert dict results to FAQItemDTO dataclasses
             items = []
-            for item in result.get("items", []):
+            for item in parsed_items:
                 items.append(
                     FAQItemDTO(
                         question=item.get("question", ""),
@@ -64,6 +110,5 @@ class GeminiFAQAdapter(FAQGenerationPort):
             return items
 
         except Exception as e:
-            # Log error and return empty list
             print(f"Gemini FAQ generation error: {e}")
             return []

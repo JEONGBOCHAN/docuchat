@@ -3,45 +3,162 @@
 Gemini Citation Search Adapter.
 
 Implements CitationSearchPort using Google Gemini Semantic Retrieval API.
-This adapter wraps the existing GeminiService to conform to the port interface.
 """
 
+import re
 from typing import Generator, Any
+
+from google import genai
+from google.genai import types
 
 from src.application.ports.citation_search import (
     CitationSearchPort,
     CitationDTO,
     CitationResultDTO,
 )
-from src.services.gemini import GeminiService
+from src.core.config import get_settings
 
 
 class GeminiCitationAdapter(CitationSearchPort):
     """CitationSearchPort implementation using Google Gemini.
 
-    This adapter wraps the existing GeminiService search_with_citations
-    and search_with_citations_stream methods and exposes them through
-    the clean architecture port interface.
+    This adapter directly interacts with Gemini API to search documents
+    with inline citations.
 
     Example:
         adapter = GeminiCitationAdapter()
         result = adapter.search_with_citations("store-123", "What is AI?")
     """
 
-    def __init__(self, gemini_service: GeminiService | None = None):
-        """Initialize adapter with GeminiService.
+    def __init__(self, client: genai.Client | None = None):
+        """Initialize adapter with Gemini client.
 
         Args:
-            gemini_service: Optional GeminiService instance.
-                           Creates one if not provided.
+            client: Optional Gemini client instance.
+                   Creates one if not provided.
         """
-        self._service = gemini_service or GeminiService()
+        if client:
+            self._client = client
+        else:
+            settings = get_settings()
+            self._client = genai.Client(api_key=settings.google_api_key)
+
+    def _extract_detailed_sources(
+        self,
+        grounding_metadata: Any,
+    ) -> list[dict[str, Any]]:
+        """Extract detailed source information from grounding metadata.
+
+        Args:
+            grounding_metadata: Grounding metadata from Gemini response
+
+        Returns:
+            List of detailed source information with location data
+        """
+        sources = []
+
+        if not hasattr(grounding_metadata, "grounding_chunks"):
+            return sources
+
+        for idx, chunk in enumerate(grounding_metadata.grounding_chunks, start=1):
+            ctx = getattr(chunk, "retrieved_context", None)
+            source_name = "unknown"
+            content = ""
+            if ctx:
+                source_name = getattr(ctx, "title", None) or getattr(ctx, "uri", None) or "unknown"
+                content = getattr(ctx, "text", "") or ""
+            source_info = {
+                "index": idx,
+                "source": source_name,
+                "content": content,
+                "page": None,
+                "start_index": None,
+                "end_index": None,
+            }
+
+            if hasattr(chunk, "page"):
+                source_info["page"] = chunk.page
+            if hasattr(chunk, "start_index"):
+                source_info["start_index"] = chunk.start_index
+            if hasattr(chunk, "end_index"):
+                source_info["end_index"] = chunk.end_index
+
+            if hasattr(chunk, "retrieved_context"):
+                ctx = chunk.retrieved_context
+                if hasattr(ctx, "uri"):
+                    source_info["source"] = ctx.uri
+                if hasattr(ctx, "title"):
+                    source_info["title"] = ctx.title
+
+            sources.append(source_info)
+
+        return sources
+
+    def _insert_inline_citations(
+        self,
+        response_text: str,
+        sources: list[dict[str, Any]],
+    ) -> str:
+        """Insert inline citation markers into response text.
+
+        Args:
+            response_text: The original response text
+            sources: List of source information with content
+
+        Returns:
+            Response text with inline citation markers
+        """
+        if not sources:
+            return response_text
+
+        cited_text = response_text
+        citations_added = set()
+
+        for source in sources:
+            idx = source.get("index", 0)
+            content = source.get("content", "")
+
+            if not content or idx in citations_added:
+                continue
+
+            words = content.split()
+            if len(words) >= 3:
+                phrase_len = min(5, len(words))
+                search_phrase = " ".join(words[:phrase_len]).lower()
+
+                response_lower = cited_text.lower()
+                pos = response_lower.find(search_phrase)
+
+                if pos != -1:
+                    sentence_end = pos
+                    for end_char in [".", "!", "?", "\n"]:
+                        end_pos = cited_text.find(end_char, pos)
+                        if end_pos != -1:
+                            sentence_end = max(sentence_end, end_pos)
+                            break
+                    else:
+                        sentence_end = min(pos + len(search_phrase) + 50, len(cited_text))
+
+                    citation_marker = f" [{idx}]"
+                    if citation_marker not in cited_text[pos:sentence_end + 10]:
+                        cited_text = (
+                            cited_text[:sentence_end + 1]
+                            + citation_marker
+                            + cited_text[sentence_end + 1:]
+                        )
+                        citations_added.add(idx)
+
+        if not citations_added and sources:
+            all_citations = " ".join([f"[{s.get('index', i+1)}]" for i, s in enumerate(sources)])
+            cited_text = cited_text.rstrip() + " " + all_citations
+
+        return cited_text
 
     def _convert_to_citation_dto(self, source: dict, index: int) -> CitationDTO:
         """Convert raw source dict to CitationDTO.
 
         Args:
-            source: Raw source dictionary from GeminiService
+            source: Raw source dictionary
             index: Citation index (1-based)
 
         Returns:
@@ -60,55 +177,119 @@ class GeminiCitationAdapter(CitationSearchPort):
         self,
         store_name: str,
         query: str,
+        model: str = "gemini-3-flash-preview",
     ) -> CitationResultDTO:
         """Search documents and generate answer with citations.
 
         Args:
             store_name: The document store to search
             query: The user's question
+            model: The model to use for generation
 
         Returns:
             CitationResultDTO with response and citations
         """
-        result = self._service.search_with_citations(store_name, query)
+        try:
+            response = self._client.models.generate_content(
+                model=model,
+                contents=query,
+                config=types.GenerateContentConfig(
+                    tools=[
+                        types.Tool(
+                            file_search=types.FileSearch(
+                                file_search_store_names=[store_name]
+                            )
+                        )
+                    ]
+                ),
+            )
 
-        # Convert citations to DTOs
-        citations = [
-            self._convert_to_citation_dto(src, idx)
-            for idx, src in enumerate(result.get("citations", []), start=1)
-        ]
+            response_text = response.text if response.text else ""
+            sources = []
 
-        return CitationResultDTO(
-            response=result.get("response", ""),
-            response_plain=result.get("response_plain", ""),
-            citations=citations,
-            error=result.get("error"),
-        )
+            if hasattr(response, "candidates") and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, "grounding_metadata"):
+                    sources = self._extract_detailed_sources(
+                        candidate.grounding_metadata
+                    )
+
+            cited_response = self._insert_inline_citations(response_text, sources)
+
+            citations = [
+                self._convert_to_citation_dto(src, idx)
+                for idx, src in enumerate(sources, start=1)
+            ]
+
+            return CitationResultDTO(
+                response=cited_response,
+                response_plain=response_text,
+                citations=citations,
+                error=None,
+            )
+
+        except Exception as e:
+            return CitationResultDTO(
+                response="",
+                response_plain="",
+                citations=[],
+                error=str(e),
+            )
 
     def search_with_citations_stream(
         self,
         store_name: str,
         query: str,
+        model: str = "gemini-3-flash-preview",
     ) -> Generator[dict[str, Any], None, None]:
         """Search documents with streaming response.
 
         Args:
             store_name: The document store to search
             query: The user's question
+            model: The model to use for generation
 
         Yields:
             Event dicts with 'type' (content, citations, done, error)
         """
-        for event in self._service.search_with_citations_stream(store_name, query):
-            event_type = event.get("type")
+        try:
+            response_stream = self._client.models.generate_content_stream(
+                model=model,
+                contents=query,
+                config=types.GenerateContentConfig(
+                    tools=[
+                        types.Tool(
+                            file_search=types.FileSearch(
+                                file_search_store_names=[store_name]
+                            )
+                        )
+                    ]
+                ),
+            )
 
-            if event_type == "content":
-                # Pass through content events
-                yield event
+            full_response = ""
+            sources = []
 
-            elif event_type == "citations":
-                # Convert citations to DTO format for consistency
-                raw_citations = event.get("citations", [])
+            for chunk in response_stream:
+                if chunk.text:
+                    full_response += chunk.text
+                    yield {
+                        "type": "content",
+                        "text": chunk.text,
+                    }
+
+                if hasattr(chunk, "candidates") and chunk.candidates:
+                    candidate = chunk.candidates[0]
+                    if hasattr(candidate, "grounding_metadata"):
+                        new_sources = self._extract_detailed_sources(
+                            candidate.grounding_metadata
+                        )
+                        for src in new_sources:
+                            if src not in sources:
+                                sources.append(src)
+
+            if sources:
+                cited_response = self._insert_inline_citations(full_response, sources)
                 citations = [
                     {
                         "index": src.get("index", idx),
@@ -118,16 +299,18 @@ class GeminiCitationAdapter(CitationSearchPort):
                         "start_index": src.get("start_index"),
                         "end_index": src.get("end_index"),
                     }
-                    for idx, src in enumerate(raw_citations, start=1)
+                    for idx, src in enumerate(sources, start=1)
                 ]
                 yield {
                     "type": "citations",
-                    "response_with_citations": event.get("response_with_citations", ""),
+                    "response_with_citations": cited_response,
                     "citations": citations,
                 }
 
-            elif event_type == "done":
-                yield event
+            yield {"type": "done"}
 
-            elif event_type == "error":
-                yield event
+        except Exception as e:
+            yield {
+                "type": "error",
+                "error": str(e),
+            }
