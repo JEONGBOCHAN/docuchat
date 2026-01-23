@@ -17,21 +17,20 @@
 
 ## 현재 미션
 
-> **원래 요청**: "MCP Apps 대시보드 구현. LangGraph 1.0 업그레이드 + 미들웨어 선행. 로컬 컨테이너 테스트 후 Azure 배포. 에이전트 V2 구조는 이번 스코프 아님."
+> **원래 요청**: "프론트엔드(Next.js)에 MCP 클라이언트 기능 추가. Streamable HTTP 기반 MCP 프로토콜로 서버와 통신."
 
 **핵심 의도**:
-- MCP Apps 대시보드로 에이전트 실행 상태 실시간 시각화
-- 선행 작업: LangGraph 1.0 업그레이드, 미들웨어 추가
-- 로컬 컨테이너 테스트 → Azure 배포
+- Next.js 프론트엔드가 **진짜 MCP 클라이언트** 역할 수행
+- 기존 HTTP 폴링이 아닌 **Streamable HTTP transport**로 MCP 서버와 통신
+- MCP 서버의 `ui://dashboard/agent-status` 리소스를 프론트엔드에서 렌더링
+- 채팅과 대시보드가 같은 화면에서 동작
 
-**개발 순서**:
-1. LangGraph 1.0 업그레이드
-2. 미들웨어 추가 (상태 발행)
-3. MCP Apps (대시보드 UI)
-4. 로컬 컨테이너 테스트
-5. Azure 배포
-
-**스코프 아닌 것**: 에이전트 V2 구조 (Retrieve → Rerank → ... → Revise)
+**배경**:
+- MCP Apps 서버는 구현 완료 (CHA-74~78)
+- 하지만 MCP Apps UI를 렌더링할 클라이언트가 없음
+- Claude Desktop은 MCP Apps UI 렌더링 미지원 (자체 에이전트 사용)
+- **Streamable HTTP는 MCP 최신 표준** (2025.05부터 SSE 대신 권장)
+- 브라우저에서 직접 MCP 서버에 연결 가능
 
 **이슈 타입**: Feature
 
@@ -39,6 +38,7 @@
 
 ## 이슈 현황
 
+### 완료된 이슈 (MCP Apps 대시보드)
 | ID | 제목 | 상태 | 담당 | 라벨 | 우선순위 |
 |----|------|------|------|------|----------|
 | CHA-74 | Migrate from LangGraph StateGraph to LangChain create_agent pattern | ✅ Done | - | Feature | High |
@@ -47,39 +47,55 @@
 | CHA-77 | Local container integration testing for MCP Apps | ✅ Done | - | Feature | Medium |
 | CHA-78 | Azure deployment for MCP Apps dashboard | ✅ Done | - | Feature | Medium |
 
+### 완료된 이슈 (Streamable HTTP MCP 클라이언트) - 오케스트레이션 사이클 완료
+| ID | 제목 | 상태 | 담당 | 라벨 | 우선순위 |
+|----|------|------|------|------|----------|
+| CHA-79 | Add Streamable HTTP transport endpoint to MCP server | ✅ Done | 개발팀장 | Feature | High |
+| CHA-80 | Add MCP client library to frontend | ✅ Done | 개발팀장 | Feature | High |
+| CHA-81 | Create MCPProvider React context for state management | ✅ Done | 개발팀장 | Feature | High |
+| CHA-82 | Implement AgentDashboard component with MCP UI resource rendering | ✅ Done | 개발팀장 | Feature | Medium |
+| CHA-83 | Integrate AgentDashboard into channel chat page | ✅ Done | 개발팀장 | Feature | Medium |
+
 **상태 범례**: ⏳ Backlog | 🔄 In Progress | ✅ Done | ❌ Failed | 🚫 Blocked
 
 ---
 
 ## 의존성 그래프
 
-**상태**: ✅ 승인됨
+**상태**: ✅ 오케스트레이션 사이클 완료
 
 ```
-[MCP Apps Dashboard - 순차 의존성]
-CHA-74 (LangChain 1.0 migration)
-    │
+[Streamable HTTP MCP 클라이언트 - 순차 의존성]
+
+CHA-79 (백엔드 Streamable HTTP 엔드포인트)
+    │   └─ src/api/v1/mcp.py (신규), router.py
     ▼
-CHA-75 (State publishing middleware)
-    │
+CHA-80 (프론트엔드 MCP 클라이언트)
+    │   └─ frontend/src/lib/mcp/*.ts (신규)
     ▼
-CHA-76 (MCP Apps server + dashboard UI)
-    │
+CHA-81 (MCPProvider React Context)
+    │   └─ frontend/src/contexts/MCPContext.tsx (신규)
     ▼
-CHA-77 (Local container testing)
-    │
+CHA-82 (AgentDashboard 컴포넌트)
+    │   └─ frontend/src/components/dashboard/*.tsx (신규)
     ▼
-CHA-78 (Azure deployment)
+CHA-83 (채널 페이지 통합)
+        └─ frontend/src/app/channels/[id]/page.tsx
 ```
 
-**실행 계획**:
-| 단계 | 이슈 | 실행 방식 | 설명 |
-|------|------|----------|------|
-| 1 | CHA-74 | 단독 | LangChain 1.0 create_agent 마이그레이션 |
-| 2 | CHA-75 | 단독 | 상태 발행 미들웨어 구현 |
-| 3 | CHA-76 | 단독 | MCP Apps 서버 + 대시보드 UI |
-| 4 | CHA-77 | 단독 | 로컬 컨테이너 통합 테스트 |
-| 5 | CHA-78 | 단독 | Azure 배포 |
+**실행 계획**: 순차 실행 (5단계, 각 단독 실행)
+
+| 단계 | 이슈 | 예상 소요 |
+|------|------|----------|
+| 1 | CHA-79 | ~5분 |
+| 2 | CHA-80 | ~5분 |
+| 3 | CHA-81 | ~5분 |
+| 4 | CHA-82 | ~5분 |
+| 5 | CHA-83 | ~5분 |
+
+**병렬 실행 불가 사유**: 파일 충돌은 없으나, import 의존성으로 순차 실행 필수
+
+**스케줄 문서**: `docs/schedules/schedule_CHA-79-83.md`
 
 > ※ 대화는 `docs/messages/`에서 진행 → 승인 후 여기에 반영
 
@@ -99,6 +115,9 @@ CHA-78 (Azure deployment)
 
 | 시간 | 결정자 | 내용 |
 |------|--------|------|
+| 2026-01-23 | 오케스트레이터 | CHA-79~83 2차 검수 승인 - Streamable HTTP MCP 클라이언트 오케스트레이션 사이클 완료 |
+| 2026-01-23 | 개발팀장 | CHA-79~83 개발 완료 - 57개 프론트엔드 테스트 통과, 1차 검수 완료, 2차 검수 대기 |
+| 2026-01-23 | 오케스트레이터 | Streamable HTTP MCP 클라이언트 이슈 등록 (CHA-79~83) - 2차 검수 승인 |
 | 2026-01-23 | 오케스트레이터 | 2차 검수 승인 - MCP Apps 대시보드 오케스트레이션 사이클 완료 (CHA-74~78 모두 Done) |
 | 2026-01-23 | 개발팀장 | CHA-77, CHA-78 완료 - 로컬 컨테이너 테스트 설정 및 Azure 배포 CI/CD 업데이트 |
 | 2025-12-24 | 오케스트레이터 | CHA-74 완료 - 다크모드 구현, Playwright 검증, Azure 배포 (GitHub Actions #64) |
@@ -116,7 +135,7 @@ CHA-78 (Azure deployment)
 
 | 역할 | 작업 | 시작 시간 |
 |------|------|----------|
-| (없음) | - | - |
+| 오케스트레이터 | MCP 클라이언트 기능 추가 오케스트레이션 | 2026-01-23 |
 
 ---
 
@@ -124,6 +143,18 @@ CHA-78 (Azure deployment)
 
 | 파일 | 이슈 | 변경 유형 |
 |------|------|----------|
+| src/api/v1/mcp.py | CHA-79 | 신규 (MCP Streamable HTTP endpoint) |
+| src/api/v1/router.py | CHA-79 | 수정 (MCP router 등록) |
+| tests/api/v1/test_mcp.py | CHA-79 | 신규 (20 tests) |
+| frontend/src/lib/mcp/*.ts | CHA-80 | 신규 (MCP client library) |
+| frontend/src/__tests__/mcp-client.test.ts | CHA-80 | 신규 (17 tests) |
+| frontend/src/contexts/MCPContext.tsx | CHA-81 | 신규 (React Context) |
+| frontend/src/__tests__/mcp-context.test.tsx | CHA-81 | 신규 (18 tests) |
+| frontend/src/components/Providers.tsx | CHA-81 | 수정 (MCPProvider 추가) |
+| frontend/src/components/dashboard/*.tsx | CHA-82 | 신규 (AgentDashboard) |
+| frontend/src/__tests__/agent-dashboard.test.tsx | CHA-82 | 신규 (13 tests) |
+| frontend/src/app/channels/[id]/page.tsx | CHA-83 | 수정 (대시보드 통합) |
+| docs/results/result_CHA-79-83.txt | CHA-79~83 | 신규 |
 | docker-compose.yml | CHA-77 | 수정 (MCP 서버 서비스 추가) |
 | .github/workflows/deploy.yml | CHA-78 | 수정 (MCP 테스트 단계 추가) |
 | docs/results/result_CHA-77.txt | CHA-77 | 신규 |
@@ -135,10 +166,14 @@ CHA-78 (Azure deployment)
 ## 테스트 상태
 
 ```
-마지막 실행: 2026-01-23 (CHA-77, CHA-78)
-MCP 서버 유닛 테스트: 69 passed
-MCP 통합 테스트: 30 passed
-총 MCP 관련 테스트: 99 passed
+마지막 실행: 2026-01-23 (CHA-79~83)
+Frontend MCP 테스트: 57 passed
+  - mcp-client.test.ts: 17 passed
+  - mcp-context.test.tsx: 18 passed
+  - agent-dashboard.test.tsx: 13 passed
+  - dark-mode.test.tsx: 9 passed
+Backend MCP 테스트: 20 passed (test_mcp.py)
+TypeScript 컴파일: No errors
 ```
 
 ---
@@ -147,6 +182,10 @@ MCP 통합 테스트: 30 passed
 
 | 시간 | 내용 |
 |------|------|
+| 2026-01-23 | 오케스트레이터: CHA-79~83 2차 검수 승인, 오케스트레이션 사이클 완료 |
+| 2026-01-23 | 개발팀장: CHA-79~83 개발 완료, 57개 프론트엔드 테스트 통과, 1차 검수 완료, 2차 검수 대기 |
+| 2026-01-23 | 개발팀장: CHA-79~83 의존성 분석 완료, 스케줄 문서 작성, 오케스트레이터 승인 대기 |
+| 2026-01-23 | Streamable HTTP MCP 클라이언트 이슈 등록 (CHA-79~83) - 개발팀장 분석 완료 |
 | 2026-01-23 | CHA-77, CHA-78 완료 - Docker Compose MCP 서비스 추가, CI/CD MCP 테스트 단계 추가 |
 | 2026-01-23 | CHA-76 완료 - MCP Apps 서버 + 대시보드 UI 구현, 69개 테스트 통과 |
 | 2026-01-23 | CHA-75 완료 - DashboardMiddleware 구현, 34개 테스트 통과 |
