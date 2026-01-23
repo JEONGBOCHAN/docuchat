@@ -1,0 +1,154 @@
+# ============================================
+# Docuchat - MCP Server Testing Configuration
+# ============================================
+# Local container-based integration testing for MCP Apps server.
+#
+# Usage:
+#   1. Ensure you have a .env file with required variables
+#   2. Run: docker-compose -f docker/docker-compose.mcp.yml up -d
+#   3. Run tests: docker-compose -f docker/docker-compose.mcp.yml run --rm mcp-test
+#
+# ============================================
+
+services:
+  # ==========================================
+  # PostgreSQL Database (for MCP tests)
+  # ==========================================
+  db:
+    image: postgres:16-alpine
+    container_name: docuchat-mcp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-docuchat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-docuchat_password}
+      POSTGRES_DB: ${POSTGRES_DB:-docuchat_mcp_test}
+    ports:
+      - "5433:5432"  # Different port to avoid conflict with main db
+    volumes:
+      - mcp_postgres_data:/var/lib/postgresql/data
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docuchat} -d ${POSTGRES_DB:-docuchat_mcp_test}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ==========================================
+  # MCP Server Service
+  # ==========================================
+  mcp-server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: development
+    container_name: docuchat-mcp-server
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-docuchat}:${POSTGRES_PASSWORD:-docuchat_password}@db:5432/${POSTGRES_DB:-docuchat_mcp_test}
+      # API Keys
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-test_key}
+      # Environment
+      APP_ENV: ${APP_ENV:-test}
+      DEBUG: "true"
+      # Server
+      HOST: 0.0.0.0
+      PORT: 8000
+      # MCP specific
+      MCP_SERVER_MODE: "true"
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+    ports:
+      - "8001:8000"  # Different port to avoid conflict
+    volumes:
+      - ../src:/app/src:ro
+      - ../tests:/app/tests:ro
+      - ../data:/app/data
+    networks:
+      - mcp-network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==========================================
+  # MCP Integration Test Runner
+  # ==========================================
+  mcp-test:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: development
+    container_name: docuchat-mcp-test
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-docuchat}:${POSTGRES_PASSWORD:-docuchat_password}@db:5432/${POSTGRES_DB:-docuchat_mcp_test}
+      # API Keys
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-test_key}
+      # Environment
+      APP_ENV: test
+      # MCP test specific
+      MCP_TEST_MODE: "true"
+      MCP_SERVER_URL: http://mcp-server:8000
+      # Logging
+      LOG_LEVEL: DEBUG
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ../src:/app/src:ro
+      - ../tests:/app/tests:ro
+      - ../pytest.ini:/app/pytest.ini:ro
+    networks:
+      - mcp-network
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    command: pytest tests/integration/test_mcp_integration.py -v --tb=short
+    profiles:
+      - test
+
+  # ==========================================
+  # MCP Server Standalone (for manual testing)
+  # ==========================================
+  mcp-standalone:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: development
+    container_name: docuchat-mcp-standalone
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-test_key}
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: DEBUG
+      MCP_SERVER_MODE: "true"
+    volumes:
+      - ../src:/app/src:ro
+    networks:
+      - mcp-network
+    command: python -m src.mcp_server.server
+    stdin_open: true
+    tty: true
+    profiles:
+      - standalone
+
+# ==========================================
+# Networks
+# ==========================================
+networks:
+  mcp-network:
+    driver: bridge
+    name: docuchat-mcp-network
+
+# ==========================================
+# Volumes
+# ==========================================
+volumes:
+  mcp_postgres_data:
+    name: docuchat-mcp-postgres-data

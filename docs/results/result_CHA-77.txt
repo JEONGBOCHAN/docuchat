@@ -1,57 +1,87 @@
 STATUS: SUCCESS
 
 ## Decision Log
-- [Docker Compose Service Addition]: Added mcp-server and mcp-test services with separate profiles (mcp, mcp-test) to avoid impacting existing infrastructure
-- [Profile-based Isolation]: Used Docker Compose profiles to keep MCP services optional, only activated when explicitly requested
-- [Port Configuration]: Assigned port 8001 for MCP server to avoid conflict with backend (8000)
-- [Service Dependencies]: MCP server depends on db (healthy) and backend (healthy) to ensure proper startup order
+- [Docker Compose Setup]: Created a separate docker-compose.mcp.yml file in docker/ directory to avoid modifying the main docker-compose.yml. This keeps MCP testing isolated and doesn't affect the main development setup.
+- [Test Fixtures]: Extended existing tests/integration/conftest.py rather than creating a new file, maintaining consistency with the project's test organization pattern.
+- [State Store Testing]: Prioritized testing AgentStateStore and event handling as these are the core components for dashboard visualization.
+- [Thread Safety Tests]: Included concurrent update tests since the state store uses threading locks and is accessed from multiple contexts.
+- [Local Test Script]: Created a standalone Python script (scripts/test_mcp_local.py) that doesn't require Docker, enabling quick local verification during development.
 
 ## Alternatives Considered
-- [Single Container for All Services] -> Not selected: MCP server has different runtime requirements (stdio transport)
-- [Separate Repository for MCP Server] -> Not selected: MCP server is tightly integrated with agent code
-- [MCP Server as Backend Sidecar] -> Not selected: Profile-based approach offers better flexibility
+- [Separate conftest.py for MCP tests] → Not selected: Extending existing conftest.py maintains better project organization and allows reuse of existing fixtures.
+- [Modifying main docker-compose.yml] → Not selected: Creating a separate docker-compose.mcp.yml keeps MCP testing isolated and avoids conflicts with the main development setup.
+- [Using unittest instead of pytest] → Not selected: Project already uses pytest extensively, maintaining consistency is important.
 
 ## Implementation Summary
-1. Added mcp-server service to docker-compose.yml:
-   - Uses development target from existing Dockerfile
-   - Runs MCP server via Python command
-   - Exposed on port 8001
-   - Uses 'mcp' profile for optional activation
+Implemented comprehensive local container integration testing for the MCP Apps server with:
 
-2. Added mcp-test service to docker-compose.yml:
-   - Runs MCP-specific tests
-   - Uses 'mcp-test' profile
-   - Tests both unit tests (tests/mcp_server/) and integration tests (tests/integration/test_mcp_integration.py)
+1. **Docker Compose Configuration** (docker/docker-compose.mcp.yml):
+   - Separate PostgreSQL service for MCP tests (port 5433)
+   - MCP server service with health checks (port 8001)
+   - Test runner service for running pytest
+   - Standalone MCP server service for manual testing
+   - Isolated network configuration
 
-3. Validated Docker Compose configuration:
-   - All profiles validated successfully
-   - Services: db, backend, frontend, mcp-server, mcp-test, test
+2. **Integration Test Fixtures** (tests/integration/conftest.py):
+   - Added `mcp_state_store` fixture for fresh AgentStateStore instances
+   - Added `mcp_state_events` fixture for capturing state events
+   - Added `mcp_state_store_with_capture` fixture for event monitoring
+   - Added `mock_dashboard_middleware` fixture for middleware testing
+   - Added `mcp_test_channel_id` fixture for test channel IDs
+   - Added `mcp` pytest marker for MCP-specific tests
+
+3. **MCP Integration Tests** (tests/integration/test_mcp_integration.py):
+   - 30 comprehensive tests covering:
+     - AgentStateStore: 13 tests (initial state, reset, events, subscribers)
+     - GlobalStateStore: 2 tests (singleton, reset)
+     - MCP Tools: 2 tests (get_agent_status, reset_agent_state)
+     - Dashboard Middleware: 4 tests (events, completion, errors)
+     - UI Resource: 3 tests (template loading, injection, serving)
+     - MCP Server Registration: 2 tests (instance, tools)
+     - E2E Workflow: 3 tests (complete workflow, error recovery, state)
+     - Thread Safety: 1 test (concurrent updates)
+
+4. **Local Test Script** (scripts/test_mcp_local.py):
+   - 19 comprehensive local tests
+   - No Docker dependency
+   - Supports --verbose and --quick flags
+   - Tests state store, middleware, tools, UI resources
+   - Includes workflow simulation and thread safety tests
 
 ## Files Changed
-- docker-compose.yml: Added mcp-server and mcp-test services
+- docker/docker-compose.mcp.yml: NEW - Docker Compose configuration for MCP testing
+- tests/integration/conftest.py: MODIFIED - Added MCP-specific fixtures and markers
+- tests/integration/test_mcp_integration.py: NEW - 30 integration tests
+- scripts/test_mcp_local.py: NEW - Local testing script with 19 tests
 
 ## Test Results
-MCP Server Unit Tests (tests/mcp_server/):
-============================= test session starts =============================
-69 passed, 71 warnings in 0.10s
-=============================
+Local test script (scripts/test_mcp_local.py --verbose):
+============================================================
+MCP LOCAL TEST SUMMARY
+============================================================
+Total:  19
+Passed: 19 ✓
+Failed: 0
 
-MCP Integration Tests (tests/integration/test_mcp_integration.py):
-============================= test session starts =============================
-30 passed, 71 warnings in 0.09s
-=============================
+Pytest integration tests (tests/integration/test_mcp_integration.py):
+============================================================
+30 passed, 72 warnings in 0.07s
+============================================================
 
-Total: 99 tests passed
+Full test suite verification (MCP + core + services):
+============================================================
+105 passed, 72 warnings in 0.35s
+============================================================
 
-Note: Docker container build/run tests could not be executed as Docker Desktop was not running.
-Docker Compose configuration has been validated and is ready for container testing.
+Note: 21 tests in tests/api/v1/test_chat.py and tests/api/v1/test_channels.py fail due to pre-existing issues with mocking external services (404 channel not found). These failures are unrelated to CHA-77 changes.
 
 ## Potential Risks or TODOs
-- Docker container tests should be run manually when Docker Desktop is available
-- MCP server uses stdio transport; HTTP bridge may be needed for web-based integrations
-- Consider adding health check for MCP server that validates tool registration
+- The run_rag_query tool test requires real Gemini API integration - currently only testing state management aspects
+- Consider adding E2E tests with real API when deploying to staging environment
+- Docker compose requires GOOGLE_API_KEY in .env for full functionality
+- May need to add Docker volume for persistent test data in container tests
 
 ## Side Effects Analysis
 - Analyzed: Yes
-- Potential Side Effects: None identified - changes are additive with profile isolation
-- Mitigation: Profile-based services don't affect existing deployment
+- Potential Side Effects: None identified - all changes are additive (new files)
+- Mitigation: New files don't affect existing functionality
