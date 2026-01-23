@@ -3,22 +3,25 @@
 Search tools for RAG agent.
 
 Provides tools for searching documents and completing tasks.
+Uses Clean Architecture ports for document search.
 """
 
-from typing import Any, Callable
+from typing import Callable
 
 from langchain_core.tools import tool
+
+from src.application.ports.document_search import DocumentSearchPort
 
 
 def create_search_documents_tool(
     channel_id: str,
-    gemini_service: Any,
+    document_search: DocumentSearchPort,
 ) -> Callable[[str], str]:
     """Create a search_documents tool bound to a specific channel.
 
     Args:
         channel_id: The channel (FileSearchStore) ID to search in.
-        gemini_service: GeminiService instance for document search.
+        document_search: DocumentSearchPort for searching documents.
 
     Returns:
         A tool function that searches documents in the specified channel.
@@ -36,20 +39,17 @@ def create_search_documents_tool(
         Returns:
             Search results with relevant document excerpts and sources.
         """
-        search_result = gemini_service.search_documents(
-            store_name=channel_id,
+        results = document_search.search(
             query=query,
+            channel_id=channel_id,
         )
 
-        sources = search_result.get("sources", [])
-        if sources:
+        if results:
             formatted_parts = []
-            for i, source in enumerate(sources, 1):
-                source_name = source.get("source", "unknown")
-                content = source.get("content", "")
-                formatted_parts.append(f"[Source {i}: {source_name}]\n{content}")
+            for i, result in enumerate(results, 1):
+                formatted_parts.append(f"[Source {i}: {result.source}]\n{result.content}")
 
-            return f"Found {len(sources)} relevant sections:\n\n" + "\n\n---\n\n".join(formatted_parts)
+            return f"Found {len(results)} relevant sections:\n\n" + "\n\n---\n\n".join(formatted_parts)
         else:
             return "No relevant documents found for this query."
 

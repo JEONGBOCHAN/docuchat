@@ -227,22 +227,26 @@ class TestChannelTools:
     @pytest.mark.asyncio
     async def test_validate_channel_success(self):
         """Test validating an existing channel."""
-        mock_gemini = Mock()
-        mock_gemini.get_store.return_value = {"display_name": "Test Channel"}
+        mock_channel = Mock()
+        mock_channel.display_name = "Test Channel"
 
-        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+        mock_channel_port = Mock()
+        mock_channel_port.get_channel.return_value = mock_channel
+
+        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
             result = await validate_channel("test-channel")
 
         assert result["valid"] is True
         assert result["channel_id"] == "test-channel"
+        assert result["display_name"] == "Test Channel"
 
     @pytest.mark.asyncio
     async def test_validate_channel_not_found(self):
         """Test validating a non-existent channel."""
-        mock_gemini = Mock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = Mock()
+        mock_channel_port.get_channel.return_value = None
 
-        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
             result = await validate_channel("nonexistent")
 
         assert result["valid"] is False
@@ -251,13 +255,18 @@ class TestChannelTools:
     @pytest.mark.asyncio
     async def test_list_channels_success(self):
         """Test listing channels."""
-        mock_gemini = Mock()
-        mock_gemini.list_stores.return_value = [
-            {"name": "stores/store1", "display_name": "Channel 1"},
-            {"name": "stores/store2", "display_name": "Channel 2"},
-        ]
+        mock_channel1 = Mock()
+        mock_channel1.name = "stores/store1"
+        mock_channel1.display_name = "Channel 1"
 
-        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+        mock_channel2 = Mock()
+        mock_channel2.name = "stores/store2"
+        mock_channel2.display_name = "Channel 2"
+
+        mock_channel_port = Mock()
+        mock_channel_port.list_channels.return_value = [mock_channel1, mock_channel2]
+
+        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
             result = await list_channels()
 
         assert result["total"] == 2
@@ -275,10 +284,13 @@ class TestSessionTools:
     @pytest.mark.asyncio
     async def test_create_session_success(self):
         """Test creating a new session."""
-        mock_gemini = Mock()
-        mock_gemini.get_store.return_value = {"display_name": "Test Channel"}
+        mock_channel = Mock()
+        mock_channel.display_name = "Test Channel"
 
-        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+        mock_channel_port = Mock()
+        mock_channel_port.get_channel.return_value = mock_channel
+
+        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
             result = await create_session("test-channel")
 
         assert result["success"] is True
@@ -288,10 +300,10 @@ class TestSessionTools:
     @pytest.mark.asyncio
     async def test_create_session_invalid_channel(self):
         """Test creating session with invalid channel."""
-        mock_gemini = Mock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = Mock()
+        mock_channel_port.get_channel.return_value = None
 
-        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
             result = await create_session("invalid-channel")
 
         assert result["success"] is False

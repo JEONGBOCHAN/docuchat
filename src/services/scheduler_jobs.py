@@ -11,7 +11,7 @@ from datetime import datetime, UTC
 from src.core.database import SessionLocal
 from src.services.channel_repository import ChannelRepository
 from src.services.lifecycle_policy import LifecyclePolicy, ChannelState
-from src.services.gemini import GeminiService
+from src.infrastructure.di import create_channel_port, create_document_port
 from src.services.trash_repository import TrashRepository
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ def cleanup_inactive_channels(dry_run: bool = True):
     try:
         repo = ChannelRepository(db)
         policy = LifecyclePolicy()
-        gemini = GeminiService()
+        channel_port = create_channel_port()
 
         # Get all channels and filter inactive ones
         all_channels = repo.get_all()
@@ -107,8 +107,8 @@ def cleanup_inactive_channels(dry_run: bool = True):
                 deleted += 1
             else:
                 try:
-                    # Delete from Gemini
-                    success = gemini.delete_store(channel_id)
+                    # Delete from Gemini via ChannelPort
+                    success = channel_port.delete_channel(channel_id)
                     if success:
                         # Delete from local DB
                         repo.delete(channel_id)
@@ -141,16 +141,16 @@ def update_channel_statistics():
     db = SessionLocal()
     try:
         repo = ChannelRepository(db)
-        gemini = GeminiService()
+        document_port = create_document_port()
 
         channels = repo.get_all()
         updated = 0
 
         for channel in channels:
             try:
-                files = gemini.list_store_files(channel.gemini_store_id)
-                file_count = len(files)
-                total_size = sum(f.get("size_bytes", 0) for f in files)
+                documents = document_port.list_documents(channel.gemini_store_id)
+                file_count = len(documents)
+                total_size = sum(getattr(doc, "size_bytes", 0) or 0 for doc in documents)
 
                 repo.update_stats(
                     gemini_store_id=channel.gemini_store_id,
@@ -191,7 +191,7 @@ def cleanup_expired_trash(retention_days: int = 30):
     db = SessionLocal()
     try:
         trash_repo = TrashRepository(db)
-        gemini = GeminiService()
+        channel_port = create_channel_port()
 
         # Get trashed channels that will be deleted for Gemini cleanup
         from src.models.db_models import ChannelMetadata
@@ -209,7 +209,7 @@ def cleanup_expired_trash(retention_days: int = 30):
 
         for channel in expired_channels:
             try:
-                success = gemini.delete_store(channel.gemini_store_id, force=True)
+                success = channel_port.delete_channel(channel.gemini_store_id)
                 if success:
                     # Success: 200 (deleted) or 404 (not found/already deleted)
                     successfully_deleted_channel_ids.append(channel.id)

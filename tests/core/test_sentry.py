@@ -44,14 +44,22 @@ class TestSentrySetup:
 
     def test_setup_sentry_import_error(self):
         """Test graceful handling when sentry-sdk is not installed."""
+        import builtins
+
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "sentry_sdk" or name.startswith("sentry_sdk."):
+                raise ImportError(f"No module named '{name}'")
+            return original_import(name, *args, **kwargs)
+
         with patch("src.core.sentry.get_settings") as mock_settings:
             mock_settings.return_value.sentry_dsn = "https://key@sentry.io/123"
 
-            with patch.dict("sys.modules", {"sentry_sdk": None}):
-                with patch("builtins.__import__", side_effect=ImportError):
-                    result = setup_sentry()
-                    # Should not raise, just return False
-                    assert result is False
+            with patch("builtins.__import__", side_effect=mock_import):
+                result = setup_sentry()
+                # Should not raise, just return False
+                assert result is False
 
 
 class TestBeforeSend:

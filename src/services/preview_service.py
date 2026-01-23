@@ -6,7 +6,7 @@ from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
-from src.infrastructure.external.gemini.document_search import GeminiDocumentSearchAdapter
+from src.application.ports.document_search import DocumentSearchPort
 from src.models.db_models import DocumentPreviewCacheDB
 from src.models.preview import (
     DocumentPreviewResponse,
@@ -14,7 +14,6 @@ from src.models.preview import (
     SourceLocation,
     SourceLocationResponse,
 )
-from src.services.gemini import GeminiService
 
 
 # Default page size in characters
@@ -24,15 +23,15 @@ DEFAULT_PAGE_SIZE = 2000
 class PreviewService:
     """Service for document preview functionality."""
 
-    def __init__(self, db: Session, gemini: GeminiService):
+    def __init__(self, db: Session, document_search: DocumentSearchPort):
         """Initialize preview service.
 
         Args:
             db: Database session
-            gemini: Gemini service instance
+            document_search: DocumentSearchPort instance
         """
         self._db = db
-        self._gemini = gemini
+        self._document_search = document_search
 
     def get_preview(
         self,
@@ -255,9 +254,8 @@ Instructions:
 
 Return the extracted text content now:"""
 
-        # Use document search adapter for grounded generation
-        adapter = GeminiDocumentSearchAdapter(self._gemini)
-        result = adapter.search_with_answer(
+        # Use document search port for grounded generation
+        result = self._document_search.search_with_answer(
             query=prompt,
             channel_id=channel_id,
             model="gemini-2.5-flash",
@@ -304,9 +302,9 @@ Return the extracted text content now:"""
 
 @lru_cache
 def get_preview_service_factory():
-    """Factory for creating preview service instances."""
-    from src.services.gemini import get_gemini_service
-    return get_gemini_service()
+    """Factory for creating document search instance."""
+    from src.infrastructure.di import create_document_search
+    return create_document_search()
 
 
 def get_preview_service(db: Session) -> PreviewService:
@@ -318,5 +316,5 @@ def get_preview_service(db: Session) -> PreviewService:
     Returns:
         PreviewService instance
     """
-    gemini = get_preview_service_factory()
-    return PreviewService(db, gemini)
+    document_search = get_preview_service_factory()
+    return PreviewService(db, document_search)

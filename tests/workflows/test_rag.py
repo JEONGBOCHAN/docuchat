@@ -59,19 +59,20 @@ class TestCreateRagAgent:
     """Tests for create_rag_agent function."""
 
     @patch("src.agents.rag_agent.get_settings")
-    @patch("src.agents.rag_agent.GeminiService")
+    @patch("src.infrastructure.di.create_document_search")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
     @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_with_config(
         self,
         mock_create_react_agent,
         mock_chat_model,
-        mock_gemini_service,
+        mock_create_document_search,
         mock_get_settings,
     ):
         """Test creating agent with RAGAgentConfig."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
         mock_create_react_agent.return_value = Mock()
+        mock_create_document_search.return_value = Mock()
 
         config = RAGAgentConfig(channel_id="test-channel")
         agent = create_rag_agent(config=config)
@@ -80,19 +81,20 @@ class TestCreateRagAgent:
         mock_create_react_agent.assert_called_once()
 
     @patch("src.agents.rag_agent.get_settings")
-    @patch("src.agents.rag_agent.GeminiService")
+    @patch("src.infrastructure.di.create_document_search")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
     @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_with_channel_id(
         self,
         mock_create_react_agent,
         mock_chat_model,
-        mock_gemini_service,
+        mock_create_document_search,
         mock_get_settings,
     ):
         """Test creating agent with channel_id parameter (backward compat)."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
         mock_create_react_agent.return_value = Mock()
+        mock_create_document_search.return_value = Mock()
 
         agent = create_rag_agent(channel_id="test-channel")
 

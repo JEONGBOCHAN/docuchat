@@ -23,10 +23,10 @@ class TestCleanupExpiredTrash:
     - Notes (no Gemini resources) should be deleted by time-based expiration
     """
 
-    @patch("src.services.scheduler_jobs.GeminiService")
+    @patch("src.services.scheduler_jobs.create_channel_port")
     @patch("src.services.scheduler_jobs.SessionLocal")
     def test_only_deletes_db_on_gemini_success(
-        self, mock_session_local, mock_gemini_class
+        self, mock_session_local, mock_create_channel_port
     ):
         """Test that DB deletion only happens when Gemini deletion succeeds.
 
@@ -56,17 +56,17 @@ class TestCleanupExpiredTrash:
             channel1, channel2, channel3
         ]
 
-        # Setup mock Gemini service
-        mock_gemini = MagicMock()
-        mock_gemini_class.return_value = mock_gemini
+        # Setup mock ChannelPort
+        mock_channel_port = MagicMock()
+        mock_create_channel_port.return_value = mock_channel_port
 
         # Simulate: channel1 and channel3 succeed, channel2 fails
-        def mock_delete_store(store_id, force=True):
+        def mock_delete_channel(store_id):
             if store_id == "fileSearchStores/failed-channel":
                 return False  # Gemini deletion failed
             return True  # Success
 
-        mock_gemini.delete_store.side_effect = mock_delete_store
+        mock_channel_port.delete_channel.side_effect = mock_delete_channel
 
         # Setup mock TrashRepository
         with patch("src.services.scheduler_jobs.TrashRepository") as mock_trash_repo_class:
@@ -92,10 +92,10 @@ class TestCleanupExpiredTrash:
             assert result["gemini_failed"] == 1
             assert result["deleted_channels"] == 2
 
-    @patch("src.services.scheduler_jobs.GeminiService")
+    @patch("src.services.scheduler_jobs.create_channel_port")
     @patch("src.services.scheduler_jobs.SessionLocal")
     def test_gemini_exception_does_not_delete_db(
-        self, mock_session_local, mock_gemini_class
+        self, mock_session_local, mock_create_channel_port
     ):
         """Test that exceptions during Gemini deletion prevent DB deletion."""
         from src.services.scheduler_jobs import cleanup_expired_trash
@@ -110,10 +110,10 @@ class TestCleanupExpiredTrash:
 
         mock_db.query.return_value.filter.return_value.all.return_value = [channel]
 
-        # Setup Gemini to throw exception
-        mock_gemini = MagicMock()
-        mock_gemini_class.return_value = mock_gemini
-        mock_gemini.delete_store.side_effect = Exception("Network error")
+        # Setup ChannelPort to throw exception
+        mock_channel_port = MagicMock()
+        mock_create_channel_port.return_value = mock_channel_port
+        mock_channel_port.delete_channel.side_effect = Exception("Network error")
 
         with patch("src.services.scheduler_jobs.TrashRepository") as mock_trash_repo_class:
             mock_trash_repo = MagicMock()
@@ -129,10 +129,10 @@ class TestCleanupExpiredTrash:
             assert result["gemini_failed"] == 1
             assert result["deleted_channels"] == 0
 
-    @patch("src.services.scheduler_jobs.GeminiService")
+    @patch("src.services.scheduler_jobs.create_channel_port")
     @patch("src.services.scheduler_jobs.SessionLocal")
     def test_notes_deleted_independently(
-        self, mock_session_local, mock_gemini_class
+        self, mock_session_local, mock_create_channel_port
     ):
         """Test that notes are deleted by time-based expiration (no Gemini resources)."""
         from src.services.scheduler_jobs import cleanup_expired_trash
@@ -143,8 +143,8 @@ class TestCleanupExpiredTrash:
         # No expired channels
         mock_db.query.return_value.filter.return_value.all.return_value = []
 
-        mock_gemini = MagicMock()
-        mock_gemini_class.return_value = mock_gemini
+        mock_channel_port = MagicMock()
+        mock_create_channel_port.return_value = mock_channel_port
 
         with patch("src.services.scheduler_jobs.TrashRepository") as mock_trash_repo_class:
             mock_trash_repo = MagicMock()
@@ -158,10 +158,10 @@ class TestCleanupExpiredTrash:
             mock_trash_repo.cleanup_expired_notes.assert_called_once_with(30)
             assert result["deleted_notes"] == 5
 
-    @patch("src.services.scheduler_jobs.GeminiService")
+    @patch("src.services.scheduler_jobs.create_channel_port")
     @patch("src.services.scheduler_jobs.SessionLocal")
     def test_empty_expired_channels(
-        self, mock_session_local, mock_gemini_class
+        self, mock_session_local, mock_create_channel_port
     ):
         """Test cleanup when there are no expired channels."""
         from src.services.scheduler_jobs import cleanup_expired_trash
@@ -170,8 +170,8 @@ class TestCleanupExpiredTrash:
         mock_session_local.return_value = mock_db
         mock_db.query.return_value.filter.return_value.all.return_value = []
 
-        mock_gemini = MagicMock()
-        mock_gemini_class.return_value = mock_gemini
+        mock_channel_port = MagicMock()
+        mock_create_channel_port.return_value = mock_channel_port
 
         with patch("src.services.scheduler_jobs.TrashRepository") as mock_trash_repo_class:
             mock_trash_repo = MagicMock()
@@ -421,10 +421,10 @@ class TestIntegrationOrphanResourcePrevention:
     These tests verify the complete flow of the bug fix.
     """
 
-    @patch("src.services.scheduler_jobs.GeminiService")
+    @patch("src.services.scheduler_jobs.create_channel_port")
     @patch("src.services.scheduler_jobs.SessionLocal")
     def test_mixed_success_failure_scenario(
-        self, mock_session_local, mock_gemini_class
+        self, mock_session_local, mock_create_channel_port
     ):
         """Test realistic scenario with mixed Gemini deletion results.
 
@@ -449,8 +449,8 @@ class TestIntegrationOrphanResourcePrevention:
 
         mock_db.query.return_value.filter.return_value.all.return_value = channels
 
-        mock_gemini = MagicMock()
-        mock_gemini_class.return_value = mock_gemini
+        mock_channel_port = MagicMock()
+        mock_create_channel_port.return_value = mock_channel_port
 
         # Define behavior:
         # channel-1: success (200)
@@ -459,7 +459,7 @@ class TestIntegrationOrphanResourcePrevention:
         # channel-4: success (200)
         # channel-5: exception
         call_count = [0]
-        def mock_delete_store(store_id, force=True):
+        def mock_delete_channel(store_id):
             call_count[0] += 1
             if store_id == "fileSearchStores/channel-3":
                 return False  # 500 error
@@ -467,7 +467,7 @@ class TestIntegrationOrphanResourcePrevention:
                 raise Exception("Connection timeout")
             return True  # 200 or 404
 
-        mock_gemini.delete_store.side_effect = mock_delete_store
+        mock_channel_port.delete_channel.side_effect = mock_delete_channel
 
         with patch("src.services.scheduler_jobs.TrashRepository") as mock_trash_repo_class:
             mock_trash_repo = MagicMock()

@@ -18,7 +18,6 @@ from src.agents.tools.search_tools import (
     create_finish_tool,
 )
 from src.core.config import get_settings
-from src.services.gemini import GeminiService
 
 # Clean Architecture imports
 from src.application.ports.observability import AgentEventSinkPort
@@ -94,8 +93,11 @@ def create_rag_agent(config: RAGAgentConfig) -> Any:
     Returns:
         A compiled LangGraph agent.
     """
+    # Lazy import to avoid circular dependency
+    from src.infrastructure.di import create_document_search
+
     settings = get_settings()
-    gemini_service = GeminiService()
+    document_search = create_document_search()
 
     # Create the LLM
     llm = ChatGoogleGenerativeAI(
@@ -107,7 +109,7 @@ def create_rag_agent(config: RAGAgentConfig) -> Any:
     # Create tools bound to the specific channel
     search_tool = create_search_documents_tool(
         channel_id=config.channel_id,
-        gemini_service=gemini_service,
+        document_search=document_search,
     )
     finish_tool = create_finish_tool()
 

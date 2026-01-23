@@ -79,17 +79,17 @@ async def validate_channel(channel_id: str) -> dict[str, Any]:
     Returns:
         Dictionary with validation result.
     """
-    from src.services.gemini import GeminiService
+    from src.infrastructure.di import create_channel_port
 
     try:
-        gemini = GeminiService()
-        store = gemini.get_store(channel_id)
+        channel_port = create_channel_port()
+        channel = channel_port.get_channel(channel_id)
 
-        if store:
+        if channel:
             return {
                 "valid": True,
                 "channel_id": channel_id,
-                "display_name": store.get("display_name", "unknown"),
+                "display_name": channel.display_name,
             }
         else:
             return {
@@ -111,17 +111,17 @@ async def list_channels() -> dict[str, Any]:
     Returns:
         Dictionary with list of channels.
     """
-    from src.services.gemini import GeminiService
+    from src.infrastructure.di import create_channel_port
 
     try:
-        gemini = GeminiService()
-        stores = gemini.list_stores()
+        channel_port = create_channel_port()
+        channel_list = channel_port.list_channels()
 
         channels = []
-        for store in stores:
+        for channel in channel_list:
             channels.append({
-                "channel_id": store.get("name", "").split("/")[-1],
-                "display_name": store.get("display_name", "unknown"),
+                "channel_id": channel.name.split("/")[-1] if channel.name else "",
+                "display_name": channel.display_name,
             })
 
         return {

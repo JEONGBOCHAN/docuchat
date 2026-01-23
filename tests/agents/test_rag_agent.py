@@ -54,17 +54,17 @@ class TestSearchTools:
 
     def test_create_search_documents_tool(self):
         """Test search_documents tool creation."""
-        mock_gemini = Mock()
-        mock_gemini.search_documents.return_value = {
-            "sources": [
-                {"source": "doc1.pdf", "content": "Test content 1"},
-                {"source": "doc2.pdf", "content": "Test content 2"},
-            ]
-        }
+        from src.application.ports.document_search import SearchResult
+
+        mock_document_search = Mock()
+        mock_document_search.search.return_value = [
+            SearchResult(source="doc1.pdf", content="Test content 1"),
+            SearchResult(source="doc2.pdf", content="Test content 2"),
+        ]
 
         tool = create_search_documents_tool(
             channel_id="test-channel",
-            gemini_service=mock_gemini,
+            document_search=mock_document_search,
         )
 
         # Verify tool attributes
@@ -74,9 +74,9 @@ class TestSearchTools:
         # Test tool execution
         result = tool.invoke("test query")
 
-        mock_gemini.search_documents.assert_called_once_with(
-            store_name="test-channel",
+        mock_document_search.search.assert_called_once_with(
             query="test query",
+            channel_id="test-channel",
         )
         assert "Found 2 relevant sections" in result
         assert "doc1.pdf" in result
@@ -84,12 +84,12 @@ class TestSearchTools:
 
     def test_search_documents_no_results(self):
         """Test search_documents tool with no results."""
-        mock_gemini = Mock()
-        mock_gemini.search_documents.return_value = {"sources": []}
+        mock_document_search = Mock()
+        mock_document_search.search.return_value = []
 
         tool = create_search_documents_tool(
             channel_id="test-channel",
-            gemini_service=mock_gemini,
+            document_search=mock_document_search,
         )
 
         result = tool.invoke("nonexistent query")
@@ -113,19 +113,20 @@ class TestCreateRAGAgent:
     """Tests for create_rag_agent function."""
 
     @patch("src.agents.rag_agent.get_settings")
-    @patch("src.agents.rag_agent.GeminiService")
+    @patch("src.infrastructure.di.create_document_search")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
     @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_basic(
         self,
         mock_create_react_agent,
         mock_chat_model,
-        mock_gemini_service,
+        mock_create_document_search,
         mock_get_settings,
     ):
         """Test basic agent creation."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
         mock_create_react_agent.return_value = Mock()
+        mock_create_document_search.return_value = Mock()
 
         config = RAGAgentConfig(channel_id="test-channel")
         agent = create_rag_agent(config)
@@ -144,19 +145,20 @@ class TestCreateRAGAgent:
         assert call_kwargs["state_modifier"] == RAG_AGENT_SYSTEM_PROMPT
 
     @patch("src.agents.rag_agent.get_settings")
-    @patch("src.agents.rag_agent.GeminiService")
+    @patch("src.infrastructure.di.create_document_search")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
     @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_with_custom_prompt(
         self,
         mock_create_react_agent,
         mock_chat_model,
-        mock_gemini_service,
+        mock_create_document_search,
         mock_get_settings,
     ):
         """Test agent creation with custom system prompt."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
         mock_create_react_agent.return_value = Mock()
+        mock_create_document_search.return_value = Mock()
 
         custom_prompt = "You are a custom assistant."
         config = RAGAgentConfig(
@@ -169,19 +171,20 @@ class TestCreateRAGAgent:
         assert call_kwargs["state_modifier"] == custom_prompt
 
     @patch("src.agents.rag_agent.get_settings")
-    @patch("src.agents.rag_agent.GeminiService")
+    @patch("src.infrastructure.di.create_document_search")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
     @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_with_middleware(
         self,
         mock_create_react_agent,
         mock_chat_model,
-        mock_gemini_service,
+        mock_create_document_search,
         mock_get_settings,
     ):
         """Test agent creation with middleware (middleware stored in config, not passed to create_react_agent)."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
         mock_create_react_agent.return_value = Mock()
+        mock_create_document_search.return_value = Mock()
 
         mock_middleware = [Mock(), Mock()]
         config = RAGAgentConfig(

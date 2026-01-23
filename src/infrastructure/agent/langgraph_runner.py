@@ -35,7 +35,7 @@ from src.agents.tools.search_tools import (
     create_finish_tool,
 )
 from src.core.config import get_settings
-from src.services.gemini import GeminiService
+from src.application.ports.document_search import DocumentSearchPort
 
 
 # Default system prompt for RAG agent
@@ -82,18 +82,22 @@ class LangGraphAgentRunner(AgentRunnerPort):
     def __init__(
         self,
         event_sink: AgentEventSinkPort | None = None,
-        gemini_service: GeminiService | None = None,
+        document_search: DocumentSearchPort | None = None,
         model: str = "gemini-2.5-flash-preview-05-20",
     ):
         """Initialize the LangGraph runner.
 
         Args:
             event_sink: Optional event sink for observability.
-            gemini_service: Optional GeminiService instance.
+            document_search: Optional DocumentSearchPort instance.
             model: The Gemini model to use.
         """
         self._event_sink = event_sink
-        self._gemini_service = gemini_service or GeminiService()
+        if document_search is None:
+            # Lazy import to avoid circular dependency
+            from src.infrastructure.di import create_document_search
+            document_search = create_document_search()
+        self._document_search = document_search
         self._model = model
         self._settings = get_settings()
 
@@ -117,7 +121,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         # Create tools
         search_tool = create_search_documents_tool(
             channel_id=channel_id,
-            gemini_service=self._gemini_service,
+            document_search=self._document_search,
         )
         finish_tool = create_finish_tool()
 
