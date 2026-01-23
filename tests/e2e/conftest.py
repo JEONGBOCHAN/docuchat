@@ -25,7 +25,7 @@ from sqlalchemy.pool import StaticPool
 from src.main import app
 from src.core.database import Base, get_db
 from src.core.rate_limiter import limiter
-from src.services.gemini import GeminiService
+from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 
 
 def pytest_configure(config):
@@ -87,8 +87,8 @@ def e2e_client(e2e_db, check_api_key):
 
 @pytest.fixture(scope="function")
 def gemini_service(check_api_key):
-    """Create a GeminiService for cleanup operations."""
-    return GeminiService()
+    """Create a GeminiChannelAdapter for cleanup operations."""
+    return GeminiChannelAdapter()
 
 
 @pytest.fixture(scope="function")
@@ -101,7 +101,7 @@ def cleanup_channels(gemini_service):
     # Cleanup after test
     for channel_id in channels_to_cleanup:
         try:
-            gemini_service.delete_store(channel_id)
+            gemini_service.delete_channel(channel_id)
             print(f"Cleaned up channel: {channel_id}")
         except Exception as e:
             print(f"Failed to cleanup channel {channel_id}: {e}")

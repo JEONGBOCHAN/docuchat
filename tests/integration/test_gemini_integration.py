@@ -12,7 +12,7 @@ import time
 import tempfile
 import pytest
 
-from src.services.gemini import GeminiService
+# Gemini adapters are provided via gemini_service fixture in conftest.py
 
 
 # Skip all tests if no API key is available

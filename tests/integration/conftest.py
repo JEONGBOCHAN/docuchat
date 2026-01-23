@@ -10,7 +10,8 @@ from typing import Any, Generator
 # Load .env file for integration tests
 load_dotenv()
 
-from src.services.gemini import GeminiService
+from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
+from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
 from src.core.config import get_settings
 
 
@@ -39,11 +40,43 @@ def gemini_api_key():
 
 @pytest.fixture(scope="session")
 def gemini_service(gemini_api_key):
-    """Create a GeminiService instance for integration tests.
+    """Create Gemini adapters for integration tests.
 
-    Uses the real API key from the environment.
+    Returns a SimpleNamespace with channel_adapter and document_adapter
+    for backward compatibility with existing tests.
     """
-    return GeminiService()
+    from types import SimpleNamespace
+
+    channel_adapter = GeminiChannelAdapter()
+    document_adapter = GeminiDocumentAdapter()
+
+    # Create a compatibility wrapper that maps old method names to new adapter methods
+    service = SimpleNamespace(
+        # Channel operations (mapped to GeminiChannelAdapter)
+        create_store=lambda display_name: {
+            "name": channel_adapter.create_channel(display_name).name,
+            "display_name": display_name,
+        },
+        get_store=lambda store_name: (
+            {"name": ch.name, "display_name": ch.display_name}
+            if (ch := channel_adapter.get_channel(store_name)) else None
+        ),
+        list_stores=lambda: [
+            {"name": ch.name, "display_name": ch.display_name}
+            for ch in channel_adapter.list_channels()
+        ],
+        delete_store=lambda store_name, force=True: channel_adapter.delete_channel(store_name, force),
+        # Document operations (mapped to GeminiDocumentAdapter)
+        upload_file=lambda store_name, file_path, display_name=None: {
+            "name": document_adapter.upload_document(store_name, file_path, display_name).operation_name,
+            "done": document_adapter.upload_document(store_name, file_path, display_name).done,
+        },
+        list_store_files=lambda store_name: [
+            {"name": doc.name, "display_name": doc.display_name, "size_bytes": doc.size_bytes, "state": doc.state}
+            for doc in document_adapter.list_documents(store_name)
+        ],
+    )
+    return service
 
 
 @pytest.fixture

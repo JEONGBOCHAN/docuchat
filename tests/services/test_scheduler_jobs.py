@@ -187,83 +187,83 @@ class TestCleanupExpiredTrash:
             assert result["gemini_failed"] == 0
 
 
-class TestGeminiDeleteStore:
-    """Tests for GeminiService.delete_store method.
+class TestGeminiChannelAdapterDeleteChannel:
+    """Tests for GeminiChannelAdapter.delete_channel method.
 
     Verifies that 404 (not found) is treated as success.
     """
 
-    @patch("src.services.gemini.requests.delete")
-    def test_delete_store_success_200(self, mock_delete):
+    @patch("src.infrastructure.external.gemini.channel.requests.delete")
+    def test_delete_channel_success_200(self, mock_delete):
         """Test that HTTP 200 returns True (success)."""
-        from src.services.gemini import GeminiService
+        from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_delete.return_value = mock_response
 
-        with patch("src.services.gemini.get_settings") as mock_settings:
+        with patch("src.infrastructure.external.gemini.channel.get_settings") as mock_settings:
             mock_settings.return_value.google_api_key = "test-api-key"
-            service = GeminiService()
+            adapter = GeminiChannelAdapter()
 
-            result = service.delete_store("fileSearchStores/test-store")
+            result = adapter.delete_channel("fileSearchStores/test-store")
 
             assert result is True
 
-    @patch("src.services.gemini.requests.delete")
-    def test_delete_store_success_404_not_found(self, mock_delete):
+    @patch("src.infrastructure.external.gemini.channel.requests.delete")
+    def test_delete_channel_success_404_not_found(self, mock_delete):
         """Test that HTTP 404 (not found) is treated as success.
 
         This is critical for the orphan resource bug fix.
         If a resource is already deleted, we should treat it as success
         and proceed with local DB deletion.
         """
-        from src.services.gemini import GeminiService
+        from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_delete.return_value = mock_response
 
-        with patch("src.services.gemini.get_settings") as mock_settings:
+        with patch("src.infrastructure.external.gemini.channel.get_settings") as mock_settings:
             mock_settings.return_value.google_api_key = "test-api-key"
-            service = GeminiService()
+            adapter = GeminiChannelAdapter()
 
-            result = service.delete_store("fileSearchStores/already-deleted-store")
+            result = adapter.delete_channel("fileSearchStores/already-deleted-store")
 
             # 404 should be treated as success
             assert result is True
 
-    @patch("src.services.gemini.requests.delete")
-    def test_delete_store_failure_500(self, mock_delete):
+    @patch("src.infrastructure.external.gemini.channel.requests.delete")
+    def test_delete_channel_failure_500(self, mock_delete):
         """Test that HTTP 500 returns False (failure)."""
-        from src.services.gemini import GeminiService
+        from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_delete.return_value = mock_response
 
-        with patch("src.services.gemini.get_settings") as mock_settings:
+        with patch("src.infrastructure.external.gemini.channel.get_settings") as mock_settings:
             mock_settings.return_value.google_api_key = "test-api-key"
-            service = GeminiService()
+            adapter = GeminiChannelAdapter()
 
-            result = service.delete_store("fileSearchStores/error-store")
+            result = adapter.delete_channel("fileSearchStores/error-store")
 
             assert result is False
 
-    @patch("src.services.gemini.requests.delete")
-    def test_delete_store_failure_403(self, mock_delete):
+    @patch("src.infrastructure.external.gemini.channel.requests.delete")
+    def test_delete_channel_failure_403(self, mock_delete):
         """Test that HTTP 403 (forbidden) returns False (failure)."""
-        from src.services.gemini import GeminiService
+        from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 
         mock_response = MagicMock()
         mock_response.status_code = 403
         mock_delete.return_value = mock_response
 
-        with patch("src.services.gemini.get_settings") as mock_settings:
+        with patch("src.infrastructure.external.gemini.channel.get_settings") as mock_settings:
             mock_settings.return_value.google_api_key = "test-api-key"
-            service = GeminiService()
+            adapter = GeminiChannelAdapter()
 
-            result = service.delete_store("fileSearchStores/forbidden-store")
+            result = adapter.delete_channel("fileSearchStores/forbidden-store")
 
             assert result is False
 
