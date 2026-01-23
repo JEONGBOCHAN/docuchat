@@ -12,7 +12,9 @@ from src.models.study import (
     StudyGuideGenerateRequest,
     QuizGenerateRequest,
 )
-from src.services.gemini import get_gemini_service
+from src.api.v1.study import get_channel_port, get_document_port
+from src.application.ports.channel import ChannelDTO
+from src.application.ports.document import DocumentDTO
 from src.application.use_cases.learning import StudyGuideResult, QuizResult
 from src.application.ports.learning import (
     StudySectionDTO,
@@ -27,13 +29,15 @@ class TestGenerateStudyGuide:
 
     def test_generate_study_guide_success(self, client_with_db: TestClient, test_db):
         """Test successful study guide generation."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Store",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Store",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/file1.pdf", display_name="File 1", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -58,7 +62,8 @@ class TestGenerateStudyGuide:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -73,14 +78,15 @@ class TestGenerateStudyGuide:
         assert len(data["key_concepts"]) == 1
         assert len(data["study_tips"]) == 2
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_study_guide_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test study guide generation with non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/non-existent/generate-study-guide"
@@ -89,18 +95,21 @@ class TestGenerateStudyGuide:
         assert response.status_code == 404
         assert "Channel not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_study_guide_no_documents(self, client_with_db: TestClient, test_db):
         """Test study guide generation with empty channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Store",
-        }
-        mock_gemini.list_store_files.return_value = []
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Store",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/generate-study-guide"
@@ -109,17 +118,20 @@ class TestGenerateStudyGuide:
         assert response.status_code == 400
         assert "no documents" in response.json()["detail"].lower()
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_study_guide_with_options(self, client_with_db: TestClient, test_db):
         """Test study guide generation with custom options."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Store",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Store",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/file1.pdf", display_name="File 1", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -132,7 +144,8 @@ class TestGenerateStudyGuide:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -154,17 +167,20 @@ class TestGenerateStudyGuide:
             difficulty="hard",
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_study_guide_api_error(self, client_with_db: TestClient, test_db):
         """Test study guide generation handles API errors."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Store",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Store",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/file1.pdf", display_name="File 1", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -178,7 +194,8 @@ class TestGenerateStudyGuide:
             error="API Error",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -188,7 +205,8 @@ class TestGenerateStudyGuide:
         assert response.status_code == 500
         assert "Failed to generate study guide" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
 
 class TestGenerateQuiz:
@@ -196,13 +214,15 @@ class TestGenerateQuiz:
 
     def test_generate_quiz_success(self, client_with_db: TestClient, test_db):
         """Test successful quiz generation."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Store",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Store",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/file1.pdf", display_name="File 1", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -235,7 +255,8 @@ class TestGenerateQuiz:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -249,14 +270,15 @@ class TestGenerateQuiz:
         assert data["total_questions"] == 2
         assert len(data["questions"]) == 2
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_quiz_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test quiz generation with non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/non-existent/generate-quiz"
@@ -265,18 +287,21 @@ class TestGenerateQuiz:
         assert response.status_code == 404
         assert "Channel not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_quiz_no_documents(self, client_with_db: TestClient, test_db):
         """Test quiz generation with empty channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Store",
-        }
-        mock_gemini.list_store_files.return_value = []
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Store",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/generate-quiz"
@@ -285,17 +310,20 @@ class TestGenerateQuiz:
         assert response.status_code == 400
         assert "no documents" in response.json()["detail"].lower()
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_quiz_with_options(self, client_with_db: TestClient, test_db):
         """Test quiz generation with custom options."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Store",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Store",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/file1.pdf", display_name="File 1", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -306,7 +334,8 @@ class TestGenerateQuiz:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -328,17 +357,20 @@ class TestGenerateQuiz:
             include_explanations=False,
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_quiz_api_error(self, client_with_db: TestClient, test_db):
         """Test quiz generation handles API errors."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Store",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/file1.pdf", "display_name": "File 1", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Store",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/file1.pdf", display_name="File 1", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -350,7 +382,8 @@ class TestGenerateQuiz:
             error="API Error",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -360,7 +393,8 @@ class TestGenerateQuiz:
         assert response.status_code == 500
         assert "Failed to generate quiz" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
 
 class TestStudyModels:

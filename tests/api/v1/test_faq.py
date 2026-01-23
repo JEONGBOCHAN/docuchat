@@ -6,7 +6,9 @@ from unittest.mock import MagicMock, patch, Mock
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.faq import get_channel_port, get_document_port
+from src.application.ports.channel import ChannelDTO
+from src.application.ports.document import DocumentDTO
 from src.application.use_cases.generate_faq import GenerateFAQUseCase, FAQResult
 from src.application.ports.faq_generation import FAQItemDTO
 
@@ -16,13 +18,15 @@ class TestGenerateFAQ:
 
     def test_generate_faq_success(self, client_with_db: TestClient, test_db):
         """Test successful FAQ generation."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file", display_name="test.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         # Mock the use case
@@ -36,7 +40,8 @@ class TestGenerateFAQ:
             error=None,
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -52,14 +57,15 @@ class TestGenerateFAQ:
         assert data["items"][0]["answer"] == "The main topic is..."
         assert "generated_at" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_faq_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test FAQ generation for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/generate-faq",
@@ -69,18 +75,21 @@ class TestGenerateFAQ:
         assert response.status_code == 404
         assert "Channel not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_faq_no_documents(self, client_with_db: TestClient, test_db):
         """Test FAQ generation when channel has no documents."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/empty-store",
-            "display_name": "Empty Channel",
-        }
-        mock_gemini.list_store_files.return_value = []
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/empty-store",
+            display_name="Empty Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/empty-store/generate-faq",
@@ -90,17 +99,20 @@ class TestGenerateFAQ:
         assert response.status_code == 400
         assert "no documents" in response.json()["detail"].lower()
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_faq_default_count(self, client_with_db: TestClient, test_db):
         """Test FAQ generation with default count."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file", display_name="test.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         # Mock the use case
@@ -111,7 +123,8 @@ class TestGenerateFAQ:
             error=None,
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -125,7 +138,8 @@ class TestGenerateFAQ:
             channel_id="fileSearchStores/test-store", count=5
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_faq_invalid_count(self, client_with_db: TestClient, test_db):
         """Test FAQ generation with invalid count."""
@@ -143,13 +157,15 @@ class TestGenerateFAQ:
 
     def test_generate_faq_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors during FAQ generation."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file", display_name="test.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         # Mock the use case to return an error
@@ -160,7 +176,8 @@ class TestGenerateFAQ:
             error="API rate limit exceeded",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -171,4 +188,5 @@ class TestGenerateFAQ:
         assert response.status_code == 500
         assert "Failed to generate FAQ" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)

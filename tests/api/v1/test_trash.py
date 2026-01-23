@@ -8,7 +8,12 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.models.db_models import ChannelMetadata, NoteDB
-from src.services.gemini import get_gemini_service
+from src.api.v1.trash import get_channel_port
+from src.api.v1.channels import get_channel_port as channels_get_channel_port
+from src.api.v1.channels import get_document_port as channels_get_document_port
+from src.api.v1.notes import get_channel_port as notes_get_channel_port
+from src.application.ports.channel import ChannelDTO
+from src.application.ports.document import DocumentDTO
 
 
 class TestListTrash:
@@ -149,10 +154,10 @@ class TestDeleteItemPermanently:
 
     def test_permanent_delete_channel(self, client_with_db: TestClient, test_db):
         """Test permanently deleting a trashed channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.delete_store.return_value = True
+        mock_channel_port = MagicMock()
+        mock_channel_port.delete_channel.return_value = True
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Create a soft-deleted channel
         channel = ChannelMetadata(
@@ -175,12 +180,12 @@ class TestDeleteItemPermanently:
         ).first()
         assert deleted_channel is None
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_permanent_delete_note(self, client_with_db: TestClient, test_db):
         """Test permanently deleting a trashed note."""
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Create a channel
         channel = ChannelMetadata(
@@ -210,17 +215,17 @@ class TestDeleteItemPermanently:
         deleted_note = test_db.query(NoteDB).filter(NoteDB.id == note_id).first()
         assert deleted_note is None
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_permanent_delete_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test permanently deleting non-existent trashed channel."""
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.delete("/api/v1/trash/channel/99999")
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestEmptyTrash:
@@ -228,20 +233,20 @@ class TestEmptyTrash:
 
     def test_empty_trash_requires_confirmation(self, client_with_db: TestClient, test_db):
         """Test that empty trash requires confirmation."""
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.delete("/api/v1/trash")
         assert response.status_code == 400
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_empty_trash_success(self, client_with_db: TestClient, test_db):
         """Test emptying trash successfully."""
-        mock_gemini = MagicMock()
-        mock_gemini.delete_store.return_value = True
+        mock_channel_port = MagicMock()
+        mock_channel_port.delete_channel.return_value = True
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Create soft-deleted channel and note
         channel = ChannelMetadata(
@@ -268,7 +273,7 @@ class TestEmptyTrash:
         assert data["deleted_channels"] >= 1
         assert "message" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestTrashStats:
@@ -328,13 +333,17 @@ class TestSoftDeleteIntegration:
 
     def test_deleted_channel_not_in_list(self, client_with_db: TestClient, test_db):
         """Test that soft-deleted channels are not shown in channel list."""
-        mock_gemini = MagicMock()
-        mock_gemini.list_stores.return_value = [
-            {"name": "fileSearchStores/active", "display_name": "Active"},
-            {"name": "fileSearchStores/deleted", "display_name": "Deleted"},
+        mock_channel_port = MagicMock()
+        mock_channel_port.list_channels.return_value = [
+            ChannelDTO(name="fileSearchStores/active", display_name="Active"),
+            ChannelDTO(name="fileSearchStores/deleted", display_name="Deleted"),
         ]
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[channels_get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[channels_get_document_port] = lambda: mock_document_port
 
         # Create a soft-deleted channel in DB
         deleted_channel = ChannelMetadata(
@@ -353,17 +362,18 @@ class TestSoftDeleteIntegration:
         channel_ids = [c["id"] for c in data["channels"]]
         assert "fileSearchStores/deleted" not in channel_ids
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(channels_get_channel_port, None)
+        app.dependency_overrides.pop(channels_get_document_port, None)
 
     def test_deleted_note_not_in_list(self, client_with_db: TestClient, test_db):
         """Test that soft-deleted notes are not shown in note list."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test",
-            "display_name": "Test",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test",
+            display_name="Test",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[notes_get_channel_port] = lambda: mock_channel_port
 
         # Create channel
         channel = ChannelMetadata(
@@ -401,4 +411,4 @@ class TestSoftDeleteIntegration:
         assert data["total"] == 1
         assert data["notes"][0]["title"] == "Active Note"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(notes_get_channel_port, None)

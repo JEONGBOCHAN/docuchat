@@ -361,8 +361,7 @@ class TestSearchHistoryIntegration:
 
     def test_chat_saves_to_search_history(self, client_with_db: TestClient, test_db):
         """Test that chat queries are saved to search history."""
-        from src.application.use_cases.chat import SendMessageUseCase
-        from src.application.ports.chat import ChatResponseDTO, SourceDTO
+        from src.application.use_cases.process_query import QueryResult
         from unittest.mock import patch
 
         mock_port = MagicMock()
@@ -375,17 +374,17 @@ class TestSearchHistoryIntegration:
         app.dependency_overrides[get_chat_channel_port] = lambda: mock_port
 
         # Mock the use case
-        mock_use_case = MagicMock(spec=SendMessageUseCase)
-        mock_use_case.execute.return_value = ChatResponseDTO(
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QueryResult(
             response="Test response",
             sources=[],
+            iterations=1,
         )
 
-        with patch("src.api.v1.chat.create_send_message_use_case", return_value=mock_use_case):
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
             # Send a chat message
             client_with_db.post(
-                "/api/v1/chat",
-                params={"channel_id": "fileSearchStores/test-store"},
+                "/api/v1/channels/fileSearchStores/test-store/chat",
                 json={"query": "What is the meaning of life?"},
             )
 
@@ -405,8 +404,7 @@ class TestSearchHistoryIntegration:
 
     def test_repeated_query_increments_count(self, client_with_db: TestClient, test_db):
         """Test that repeated queries increment search count."""
-        from src.application.use_cases.chat import SendMessageUseCase
-        from src.application.ports.chat import ChatResponseDTO, SourceDTO
+        from src.application.use_cases.process_query import QueryResult
         from unittest.mock import patch
 
         mock_port = MagicMock()
@@ -419,18 +417,18 @@ class TestSearchHistoryIntegration:
         app.dependency_overrides[get_chat_channel_port] = lambda: mock_port
 
         # Mock the use case
-        mock_use_case = MagicMock(spec=SendMessageUseCase)
-        mock_use_case.execute.return_value = ChatResponseDTO(
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QueryResult(
             response="Test response",
             sources=[],
+            iterations=1,
         )
 
-        with patch("src.api.v1.chat.create_send_message_use_case", return_value=mock_use_case):
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
             # Send the same query multiple times
             for _ in range(3):
                 client_with_db.post(
-                    "/api/v1/chat",
-                    params={"channel_id": "fileSearchStores/test-store"},
+                    "/api/v1/channels/fileSearchStores/test-store/chat",
                     json={"query": "repeated question"},
                 )
 

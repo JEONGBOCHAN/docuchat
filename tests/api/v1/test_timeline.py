@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.timeline import get_channel_port
+from src.application.ports.channel import ChannelDTO
 from src.application.use_cases.timeline_briefing import TimelineResult, BriefingResult
 from src.application.ports.timeline import TimelineEventDTO, BriefingSectionDTO
 
@@ -16,11 +17,11 @@ class TestGenerateTimeline:
 
     def test_generate_timeline_success(self, client_with_db: TestClient, test_db):
         """Test successful timeline generation."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = TimelineResult(
@@ -41,7 +42,7 @@ class TestGenerateTimeline:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -59,15 +60,15 @@ class TestGenerateTimeline:
         assert data["events"][1]["source"] is None
         assert "generated_at" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_timeline_empty(self, client_with_db: TestClient, test_db):
         """Test timeline generation with no events found."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = TimelineResult(
@@ -75,7 +76,7 @@ class TestGenerateTimeline:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -88,14 +89,14 @@ class TestGenerateTimeline:
         assert data["total"] == 0
         assert data["events"] == []
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_timeline_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test timeline generation for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/generate-timeline",
@@ -104,15 +105,15 @@ class TestGenerateTimeline:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_timeline_api_error(self, client_with_db: TestClient, test_db):
         """Test timeline generation handles API errors."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = TimelineResult(
@@ -121,7 +122,7 @@ class TestGenerateTimeline:
             error="API Error",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -132,15 +133,15 @@ class TestGenerateTimeline:
         assert response.status_code == 500
         assert "Failed to generate timeline" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_timeline_custom_max_events(self, client_with_db: TestClient, test_db):
         """Test timeline generation with custom max_events."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = TimelineResult(
@@ -148,7 +149,7 @@ class TestGenerateTimeline:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -162,7 +163,7 @@ class TestGenerateTimeline:
             max_events=50,
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestGenerateBriefing:
@@ -170,11 +171,11 @@ class TestGenerateBriefing:
 
     def test_generate_briefing_success(self, client_with_db: TestClient, test_db):
         """Test successful briefing generation."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = BriefingResult(
@@ -192,7 +193,7 @@ class TestGenerateBriefing:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -210,15 +211,15 @@ class TestGenerateBriefing:
         assert len(data["key_points"]) == 3
         assert "generated_at" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_briefing_detailed_style(self, client_with_db: TestClient, test_db):
         """Test briefing generation with detailed style."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = BriefingResult(
@@ -229,7 +230,7 @@ class TestGenerateBriefing:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -244,17 +245,17 @@ class TestGenerateBriefing:
             max_sections=5,
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_briefing_invalid_style(self, client_with_db: TestClient, test_db):
         """Test briefing generation with invalid style."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
@@ -264,14 +265,14 @@ class TestGenerateBriefing:
         assert response.status_code == 400
         assert "executive" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_briefing_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test briefing generation for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/generate-briefing",
@@ -280,15 +281,15 @@ class TestGenerateBriefing:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_briefing_api_error(self, client_with_db: TestClient, test_db):
         """Test briefing generation handles API errors."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = BriefingResult(
@@ -300,7 +301,7 @@ class TestGenerateBriefing:
             error="API Error",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -311,15 +312,15 @@ class TestGenerateBriefing:
         assert response.status_code == 500
         assert "Failed to generate briefing" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_generate_briefing_default_values(self, client_with_db: TestClient, test_db):
         """Test briefing generation with default values."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = MagicMock()
         mock_use_case.execute.return_value = BriefingResult(
@@ -330,7 +331,7 @@ class TestGenerateBriefing:
             channel_id="fileSearchStores/test-store",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -345,4 +346,4 @@ class TestGenerateBriefing:
             max_sections=5,
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)

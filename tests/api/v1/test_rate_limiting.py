@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.core.rate_limiter import RateLimits
+from src.api.v1.chat import get_channel_port
+from src.application.ports.channel import ChannelDTO
 
 
 @pytest.fixture
@@ -16,18 +18,16 @@ def client():
 
 
 @pytest.fixture
-def mock_gemini():
-    """Mock GeminiService."""
-    with patch("src.api.v1.chat.get_gemini_service") as mock:
-        service = MagicMock()
-        service.get_store.return_value = {"name": "test-store", "display_name": "Test"}
-        service.search_and_answer.return_value = {
-            "response": "Test response",
-            "sources": [],
-            "error": None,
-        }
-        mock.return_value = service
-        yield service
+def mock_channel_port():
+    """Mock ChannelPort for chat endpoint."""
+    mock_port = MagicMock()
+    mock_port.get_channel.return_value = ChannelDTO(
+        name="test-store",
+        display_name="Test",
+    )
+    app.dependency_overrides[get_channel_port] = lambda: mock_port
+    yield mock_port
+    app.dependency_overrides.pop(get_channel_port, None)
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ class TestRateLimitingConfig:
 class TestRateLimiting429Response:
     """Test 429 Too Many Requests response."""
 
-    def test_rate_limit_exceeded_returns_429(self, client, mock_gemini, mock_db):
+    def test_rate_limit_exceeded_returns_429(self, client, mock_channel_port, mock_db):
         """Test that exceeding rate limit returns 429 status code."""
         # This test verifies the rate limiter is properly configured
         # by checking the endpoint responds with proper rate limit handling
@@ -70,17 +70,26 @@ class TestRateLimiting429Response:
             )
 
             with patch("src.services.channel_repository.ChatHistoryRepository"):
-                # Make multiple requests to trigger rate limit
-                # Note: In real test, you'd need to configure slowapi to use
-                # a lower limit for testing, or use time manipulation
-                response = client.post(
-                    "/api/v1/chat?channel_id=test-store",
-                    json={"query": "test question"},
-                )
+                with patch("src.infrastructure.di.create_process_query_use_case") as mock_uc:
+                    mock_uc.return_value.execute.return_value = MagicMock(
+                        response="Test response",
+                        sources=[],
+                        iterations=1,
+                        session_id="test-session",
+                        error=None,
+                    )
 
-                # First request should succeed (status 200 or 404/500 depending on mock)
-                # The important thing is it's not 429 on first request
-                assert response.status_code != 429 or "Retry-After" in response.headers
+                    # Make multiple requests to trigger rate limit
+                    # Note: In real test, you'd need to configure slowapi to use
+                    # a lower limit for testing, or use time manipulation
+                    response = client.post(
+                        "/api/v1/chat?channel_id=test-store",
+                        json={"query": "test question"},
+                    )
+
+                    # First request should succeed (status 200 or 404/500 depending on mock)
+                    # The important thing is it's not 429 on first request
+                    assert response.status_code != 429 or "Retry-After" in response.headers
 
 
 class TestRateLimitHeaders:

@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.favorites import get_channel_port
+from src.application.ports.channel import ChannelDTO
 from src.models.db_models import NoteDB
 
 
@@ -15,13 +16,13 @@ class TestAddFavorite:
 
     def test_add_channel_to_favorites(self, client_with_db: TestClient, test_db):
         """Test adding a channel to favorites."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -39,7 +40,7 @@ class TestAddFavorite:
         assert "id" in data
         assert "created_at" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_add_note_to_favorites(self, client_with_db: TestClient, test_db):
         """Test adding a note to favorites."""
@@ -53,8 +54,8 @@ class TestAddFavorite:
         test_db.commit()
         test_db.refresh(note)
 
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -69,12 +70,12 @@ class TestAddFavorite:
         assert data["target_type"] == "note"
         assert data["target_id"] == str(note.id)
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_add_document_to_favorites(self, client_with_db: TestClient, test_db):
         """Test adding a document to favorites."""
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -89,14 +90,14 @@ class TestAddFavorite:
         assert data["target_type"] == "document"
         assert data["target_id"] == "files/doc-123"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_add_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test adding non-existent channel returns 404."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -109,12 +110,12 @@ class TestAddFavorite:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_add_note_not_found(self, client_with_db: TestClient, test_db):
         """Test adding non-existent note returns 404."""
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -127,12 +128,12 @@ class TestAddFavorite:
         assert response.status_code == 404
         assert "Note not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_add_invalid_document_id(self, client_with_db: TestClient, test_db):
         """Test adding document with invalid ID format returns 400."""
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -145,17 +146,17 @@ class TestAddFavorite:
         assert response.status_code == 400
         assert "Invalid document ID format" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_add_duplicate_favorite_returns_existing(self, client_with_db: TestClient, test_db):
         """Test adding duplicate favorite returns existing one."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Add first time
         response1 = client_with_db.post(
@@ -179,7 +180,7 @@ class TestAddFavorite:
         assert response2.status_code == 201
         assert response2.json()["id"] == first_id  # Same ID
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestRemoveFavorite:
@@ -187,13 +188,13 @@ class TestRemoveFavorite:
 
     def test_remove_favorite(self, client_with_db: TestClient, test_db):
         """Test removing a favorite."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Add favorite first
         client_with_db.post(
@@ -215,7 +216,7 @@ class TestRemoveFavorite:
 
         assert response.status_code == 204
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_remove_nonexistent_favorite(self, client_with_db: TestClient, test_db):
         """Test removing non-existent favorite returns 404."""
@@ -244,13 +245,13 @@ class TestListFavorites:
 
     def test_list_favorites(self, client_with_db: TestClient, test_db):
         """Test listing favorites."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Add a favorite
         client_with_db.post(
@@ -269,17 +270,17 @@ class TestListFavorites:
         assert len(data["favorites"]) == 1
         assert data["favorites"][0]["target_type"] == "channel"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_list_favorites_filter_by_type(self, client_with_db: TestClient, test_db):
         """Test listing favorites filtered by type."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Add channel favorite
         client_with_db.post(
@@ -307,7 +308,7 @@ class TestListFavorites:
         assert data["total"] == 1
         assert data["favorites"][0]["target_type"] == "channel"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestCheckFavorite:
@@ -315,13 +316,13 @@ class TestCheckFavorite:
 
     def test_check_favorited(self, client_with_db: TestClient, test_db):
         """Test checking if item is favorited - true."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Add favorite
         client_with_db.post(
@@ -344,7 +345,7 @@ class TestCheckFavorite:
         assert response.status_code == 200
         assert response.json()["is_favorited"] is True
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_check_not_favorited(self, client_with_db: TestClient, test_db):
         """Test checking if item is favorited - false."""
@@ -365,13 +366,13 @@ class TestReorderFavorites:
 
     def test_reorder_favorites(self, client_with_db: TestClient, test_db):
         """Test reordering favorites."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Add two favorites
         r1 = client_with_db.post(
@@ -401,7 +402,7 @@ class TestReorderFavorites:
         assert response.status_code == 200
         assert response.json()["message"] == "Favorites reordered successfully"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestConvenienceEndpoints:
@@ -409,13 +410,13 @@ class TestConvenienceEndpoints:
 
     def test_favorite_channel(self, client_with_db: TestClient, test_db):
         """Test POST /favorites/channels/{id}."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post("/api/v1/favorites/channels/fileSearchStores/store-123")
 
@@ -424,17 +425,17 @@ class TestConvenienceEndpoints:
         assert data["target_type"] == "channel"
         assert data["target_id"] == "fileSearchStores/store-123"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_unfavorite_channel(self, client_with_db: TestClient, test_db):
         """Test DELETE /favorites/channels/{id}."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Add first
         client_with_db.post("/api/v1/favorites/channels/fileSearchStores/store-123")
@@ -444,7 +445,7 @@ class TestConvenienceEndpoints:
 
         assert response.status_code == 204
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_favorite_note(self, client_with_db: TestClient, test_db):
         """Test POST /favorites/notes/{id}."""
@@ -458,8 +459,8 @@ class TestConvenienceEndpoints:
         test_db.commit()
         test_db.refresh(note)
 
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(f"/api/v1/favorites/notes/{note.id}")
 
@@ -468,7 +469,7 @@ class TestConvenienceEndpoints:
         assert data["target_type"] == "note"
         assert data["target_id"] == str(note.id)
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_unfavorite_note(self, client_with_db: TestClient, test_db):
         """Test DELETE /favorites/notes/{id}."""
@@ -482,8 +483,8 @@ class TestConvenienceEndpoints:
         test_db.commit()
         test_db.refresh(note)
 
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Add first
         client_with_db.post(f"/api/v1/favorites/notes/{note.id}")
@@ -493,7 +494,7 @@ class TestConvenienceEndpoints:
 
         assert response.status_code == 204
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestChannelListWithFavorites:
@@ -501,17 +502,25 @@ class TestChannelListWithFavorites:
 
     def test_list_channels_with_favorites(self, client_with_db: TestClient, test_db):
         """Test that channel list includes is_favorited field."""
-        mock_gemini = MagicMock()
-        mock_gemini.list_stores.return_value = [
-            {"name": "fileSearchStores/store-1", "display_name": "Channel 1"},
-            {"name": "fileSearchStores/store-2", "display_name": "Channel 2"},
-        ]
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-1",
-            "display_name": "Channel 1",
-        }
+        from src.api.v1.channels import get_channel_port as channels_get_channel_port
+        from src.api.v1.channels import get_document_port as channels_get_document_port
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        mock_channel_port.list_channels.return_value = [
+            ChannelDTO(name="fileSearchStores/store-1", display_name="Channel 1"),
+            ChannelDTO(name="fileSearchStores/store-2", display_name="Channel 2"),
+        ]
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-1",
+            display_name="Channel 1",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[channels_get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[channels_get_document_port] = lambda: mock_document_port
 
         # Favorite only channel 1
         client_with_db.post("/api/v1/favorites/channels/fileSearchStores/store-1")
@@ -527,17 +536,27 @@ class TestChannelListWithFavorites:
         assert data["channels"][0]["is_favorited"] is True
         assert data["channels"][1]["is_favorited"] is False
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(channels_get_channel_port, None)
+        app.dependency_overrides.pop(channels_get_document_port, None)
 
     def test_get_channel_with_favorite_status(self, client_with_db: TestClient, test_db):
         """Test that get channel includes is_favorited field."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/store-123",
-            "display_name": "My Channel",
-        }
+        from src.api.v1.channels import get_channel_port as channels_get_channel_port
+        from src.api.v1.channels import get_document_port as channels_get_document_port
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/store-123",
+            display_name="My Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[channels_get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[channels_get_document_port] = lambda: mock_document_port
 
         # Not favorited
         response1 = client_with_db.get("/api/v1/channels/fileSearchStores/store-123")
@@ -552,4 +571,6 @@ class TestChannelListWithFavorites:
         assert response2.status_code == 200
         assert response2.json()["is_favorited"] is True
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(channels_get_channel_port, None)
+        app.dependency_overrides.pop(channels_get_document_port, None)

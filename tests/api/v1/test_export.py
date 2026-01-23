@@ -9,7 +9,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.export import get_channel_port
+from src.api.v1.notes import get_channel_port as notes_get_channel_port
+from src.application.ports.channel import ChannelDTO
 from src.models.db_models import ChannelMetadata, NoteDB, ChatMessageDB
 
 
@@ -18,13 +20,14 @@ class TestExportNote:
 
     def test_export_note_markdown(self, client_with_db: TestClient, test_db):
         """Test exporting a note as Markdown."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[notes_get_channel_port] = lambda: mock_channel_port
 
         # Create a note first
         create_response = client_with_db.post(
@@ -54,17 +57,19 @@ class TestExportNote:
         assert "This is a test note content." in content
         assert "doc.pdf" in content
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(notes_get_channel_port, None)
 
     def test_export_note_json(self, client_with_db: TestClient, test_db):
         """Test exporting a note as JSON."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[notes_get_channel_port] = lambda: mock_channel_port
 
         # Create a note first
         create_response = client_with_db.post(
@@ -92,17 +97,19 @@ class TestExportNote:
         assert data["title"] == "JSON Export Test"
         assert data["content"] == "Content for JSON export."
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(notes_get_channel_port, None)
 
     def test_export_note_pdf(self, client_with_db: TestClient, test_db):
         """Test exporting a note as PDF."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[notes_get_channel_port] = lambda: mock_channel_port
 
         # Create a note first
         create_response = client_with_db.post(
@@ -127,17 +134,18 @@ class TestExportNote:
         assert "application/pdf" in response.headers["content-type"]
         assert ".pdf" in response.headers["content-disposition"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(notes_get_channel_port, None)
 
     def test_export_note_not_found(self, client_with_db: TestClient, test_db):
         """Test exporting non-existent note."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             "/api/v1/export/channels/fileSearchStores/test-store/notes/99999",
@@ -146,7 +154,7 @@ class TestExportNote:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestExportChat:
@@ -172,13 +180,13 @@ class TestExportChat:
         test_db.add(msg2)
         test_db.commit()
 
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": sample_channel.gemini_store_id,
-            "display_name": sample_channel.name,
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name=sample_channel.gemini_store_id,
+            display_name=sample_channel.name,
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             f"/api/v1/export/channels/{sample_channel.gemini_store_id}/chat",
@@ -193,7 +201,7 @@ class TestExportChat:
         assert "Hello, can you help me?" in content
         assert "Of course! How can I assist you?" in content
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_export_chat_json(self, client_with_db: TestClient, test_db, sample_channel):
         """Test exporting chat history as JSON."""
@@ -208,13 +216,13 @@ class TestExportChat:
         test_db.add(msg)
         test_db.commit()
 
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": sample_channel.gemini_store_id,
-            "display_name": sample_channel.name,
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name=sample_channel.gemini_store_id,
+            display_name=sample_channel.name,
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             f"/api/v1/export/channels/{sample_channel.gemini_store_id}/chat",
@@ -229,17 +237,17 @@ class TestExportChat:
         assert len(data["messages"]) == 1
         assert data["messages"][0]["content"] == "Test message"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_export_chat_empty(self, client_with_db: TestClient, test_db):
         """Test exporting empty chat history."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/empty-channel",
-            "display_name": "Empty Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/empty-channel",
+            display_name="Empty Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             "/api/v1/export/channels/fileSearchStores/empty-channel/chat",
@@ -250,7 +258,7 @@ class TestExportChat:
         data = json.loads(response.content.decode("utf-8"))
         assert data["messages"] == []
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestExportChannel:
@@ -269,13 +277,13 @@ class TestExportChannel:
         test_db.add(note)
         test_db.commit()
 
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": sample_channel.gemini_store_id,
-            "display_name": sample_channel.name,
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name=sample_channel.gemini_store_id,
+            display_name=sample_channel.name,
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             f"/api/v1/export/channels/{sample_channel.gemini_store_id}",
@@ -291,17 +299,17 @@ class TestExportChannel:
         assert len(data["notes"]) == 1
         assert data["notes"][0]["title"] == "Channel Note"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_export_channel_markdown(self, client_with_db: TestClient, test_db, sample_channel):
         """Test exporting entire channel as Markdown."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": sample_channel.gemini_store_id,
-            "display_name": sample_channel.name,
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name=sample_channel.gemini_store_id,
+            display_name=sample_channel.name,
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             f"/api/v1/export/channels/{sample_channel.gemini_store_id}",
@@ -314,7 +322,7 @@ class TestExportChannel:
         content = response.content.decode("utf-8")
         assert sample_channel.name in content
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_export_channel_zip(self, client_with_db: TestClient, test_db, sample_channel):
         """Test exporting entire channel as ZIP (pdf format triggers zip)."""
@@ -329,13 +337,13 @@ class TestExportChannel:
         test_db.add(note)
         test_db.commit()
 
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": sample_channel.gemini_store_id,
-            "display_name": sample_channel.name,
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name=sample_channel.gemini_store_id,
+            display_name=sample_channel.name,
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             f"/api/v1/export/channels/{sample_channel.gemini_store_id}",
@@ -357,14 +365,14 @@ class TestExportChannel:
             # Check notes folder exists
             assert any("notes/" in name for name in namelist)
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_export_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test exporting non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             "/api/v1/export/channels/fileSearchStores/not-exists",
@@ -373,7 +381,7 @@ class TestExportChannel:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestExportService:

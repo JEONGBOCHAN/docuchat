@@ -109,8 +109,7 @@ class TestCoreWorkflow:
         # 4. Ask a question
         print("\n[4/5] Asking question...")
         chat_resp = e2e_client.post(
-            "/api/v1/chat",
-            params={"channel_id": channel_id},
+            f"/api/v1/channels/{channel_id}/chat",
             json={"query": "Who created Python?"},
         )
         skip_on_quota_error(chat_resp)
@@ -230,8 +229,7 @@ class TestChatFeatures:
     def test_streaming_chat(self, e2e_client, channel_with_doc):
         """Test streaming chat response."""
         resp = e2e_client.post(
-            "/api/v1/chat/stream",
-            params={"channel_id": channel_with_doc},
+            f"/api/v1/channels/{channel_with_doc}/chat/stream",
             json={"query": "What is the leave policy?"},
         )
         skip_on_quota_error(resp)
@@ -261,8 +259,7 @@ class TestChatFeatures:
         """Test multi-turn chat with session."""
         # Create session
         session_resp = e2e_client.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": channel_with_doc},
+            f"/api/v1/channels/{channel_with_doc}/chat/sessions",
             json={"title": "Test Session"},
         )
         if session_resp.status_code != 201:
@@ -273,8 +270,7 @@ class TestChatFeatures:
 
         # Chat with session
         chat_resp = e2e_client.post(
-            "/api/v1/chat",
-            params={"channel_id": channel_with_doc},
+            f"/api/v1/channels/{channel_with_doc}/chat",
             json={"query": "What is the policy?", "session_id": session_id},
         )
         skip_on_quota_error(chat_resp)
@@ -594,8 +590,7 @@ class TestErrorHandling:
     def test_invalid_channel_chat(self, e2e_client):
         """Test chat with non-existent channel."""
         resp = e2e_client.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/nonexistent-12345"},
+            "/api/v1/channels/fileSearchStores/nonexistent-12345/chat",
             json={"query": "Hello?"},
         )
         assert resp.status_code == 404
@@ -625,8 +620,7 @@ class TestErrorHandling:
         cleanup_channels.append(channel_id)
 
         resp = e2e_client.post(
-            "/api/v1/chat",
-            params={"channel_id": channel_id},
+            f"/api/v1/channels/{channel_id}/chat",
             json={"query": ""},
         )
         assert resp.status_code == 422  # Validation error

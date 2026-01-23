@@ -6,7 +6,9 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.summarize import get_channel_port, get_document_port
+from src.application.ports.channel import ChannelDTO
+from src.application.ports.document import DocumentDTO
 from src.application.use_cases.summarize import SummarizeResult
 
 
@@ -15,13 +17,15 @@ class TestSummarizeChannel:
 
     def test_summarize_channel_short_success(self, client_with_db: TestClient, test_db):
         """Test successful short channel summary."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file", display_name="test.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -31,7 +35,8 @@ class TestSummarizeChannel:
             summary_type="short",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -47,17 +52,20 @@ class TestSummarizeChannel:
         assert data["document_id"] is None
         assert "generated_at" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_summarize_channel_detailed_success(self, client_with_db: TestClient, test_db):
         """Test successful detailed channel summary."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file", display_name="test.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -67,7 +75,8 @@ class TestSummarizeChannel:
             summary_type="detailed",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -84,17 +93,20 @@ class TestSummarizeChannel:
             channel_id="fileSearchStores/test-store", summary_type="detailed"
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_summarize_channel_default_type(self, client_with_db: TestClient, test_db):
         """Test channel summary with default type (short)."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file", display_name="test.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -104,7 +116,8 @@ class TestSummarizeChannel:
             summary_type="short",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -120,14 +133,15 @@ class TestSummarizeChannel:
             channel_id="fileSearchStores/test-store", summary_type="short"
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_summarize_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test channel summary for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/summarize",
@@ -137,18 +151,21 @@ class TestSummarizeChannel:
         assert response.status_code == 404
         assert "Channel not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_summarize_channel_no_documents(self, client_with_db: TestClient, test_db):
         """Test channel summary when channel has no documents."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/empty-store",
-            "display_name": "Empty Channel",
-        }
-        mock_gemini.list_store_files.return_value = []
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/empty-store",
+            display_name="Empty Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/empty-store/summarize",
@@ -158,17 +175,20 @@ class TestSummarizeChannel:
         assert response.status_code == 400
         assert "no documents" in response.json()["detail"].lower()
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_summarize_channel_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors during channel summarization."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file", display_name="test.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -178,7 +198,8 @@ class TestSummarizeChannel:
             error="API rate limit exceeded",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -189,7 +210,8 @@ class TestSummarizeChannel:
         assert response.status_code == 500
         assert "Failed to generate summary" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
 
 class TestSummarizeDocument:
@@ -197,13 +219,15 @@ class TestSummarizeDocument:
 
     def test_summarize_document_short_success(self, client_with_db: TestClient, test_db):
         """Test successful short document summary."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file-123", "display_name": "report.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file-123", display_name="report.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -214,7 +238,8 @@ class TestSummarizeDocument:
             summary_type="short",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -230,17 +255,20 @@ class TestSummarizeDocument:
         assert data["summary"] == "This document is about..."
         assert "generated_at" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_summarize_document_detailed_success(self, client_with_db: TestClient, test_db):
         """Test successful detailed document summary."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file-123", "display_name": "report.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file-123", display_name="report.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -251,7 +279,8 @@ class TestSummarizeDocument:
             summary_type="detailed",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -270,14 +299,15 @@ class TestSummarizeDocument:
             summary_type="detailed",
         )
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_summarize_document_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test document summary for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/documents/files/doc-123/summarize",
@@ -287,20 +317,23 @@ class TestSummarizeDocument:
         assert response.status_code == 404
         assert "Channel not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_summarize_document_not_found(self, client_with_db: TestClient, test_db):
         """Test document summary for non-existent document."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/other-file", "display_name": "other.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/other-file", display_name="other.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/documents/files/not-exists/summarize",
@@ -310,17 +343,20 @@ class TestSummarizeDocument:
         assert response.status_code == 404
         assert "Document not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_summarize_document_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors during document summarization."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.list_store_files.return_value = [
-            {"name": "files/test-file-123", "display_name": "report.pdf", "size_bytes": 1024},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file-123", display_name="report.pdf", size_bytes=1024, state="ACTIVE"),
         ]
 
         mock_use_case = MagicMock()
@@ -331,7 +367,8 @@ class TestSummarizeDocument:
             error="Processing failed",
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -342,7 +379,8 @@ class TestSummarizeDocument:
         assert response.status_code == 500
         assert "Failed to generate summary" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_summarize_document_invalid_type(self, client_with_db: TestClient, test_db):
         """Test document summary with invalid summary type."""

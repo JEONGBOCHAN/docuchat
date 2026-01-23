@@ -7,9 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.citations import get_channel_port, get_citations_use_case
+from src.application.ports.channel import ChannelDTO
 from src.core.database import get_db
-from src.api.v1.citations import get_citations_use_case
 from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase, CitationSearchResult
 from src.application.ports.citation_search import CitationDTO
 
@@ -32,11 +32,11 @@ class TestQueryWithCitations:
 
     def test_query_with_citations_success(self, client_with_db: TestClient, test_db):
         """Test successful query with inline citations."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = _create_mock_use_case(
             result=CitationSearchResult(
@@ -64,7 +64,7 @@ class TestQueryWithCitations:
             )
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
@@ -84,17 +84,17 @@ class TestQueryWithCitations:
         assert data["citations"][0]["source"] == "document1.pdf"
         assert data["citations"][0]["location"]["page"] == 5
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
         app.dependency_overrides.pop(get_citations_use_case, None)
 
     def test_query_with_citations_channel_not_found(
         self, client_with_db: TestClient, test_db
     ):
         """Test query with non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -104,7 +104,7 @@ class TestQueryWithCitations:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_query_with_citations_empty_query(self, client_with_db: TestClient, test_db):
         """Test query with empty query fails validation."""
@@ -118,11 +118,11 @@ class TestQueryWithCitations:
 
     def test_query_with_citations_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = _create_mock_use_case(
             result=CitationSearchResult(
@@ -133,7 +133,7 @@ class TestQueryWithCitations:
             )
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
@@ -144,16 +144,16 @@ class TestQueryWithCitations:
 
         assert response.status_code == 500
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
         app.dependency_overrides.pop(get_citations_use_case, None)
 
     def test_query_with_no_citations(self, client_with_db: TestClient, test_db):
         """Test query that returns no citations."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = _create_mock_use_case(
             result=CitationSearchResult(
@@ -164,7 +164,7 @@ class TestQueryWithCitations:
             )
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
@@ -177,7 +177,7 @@ class TestQueryWithCitations:
         data = response.json()
         assert data["citations"] == []
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
         app.dependency_overrides.pop(get_citations_use_case, None)
 
 
@@ -186,11 +186,11 @@ class TestQueryWithCitationsStream:
 
     def test_stream_with_citations_success(self, client_with_db: TestClient, test_db):
         """Test successful streaming query with citations."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         stream_events = [
             {"type": "content", "text": "Hello "},
@@ -212,7 +212,7 @@ class TestQueryWithCitationsStream:
 
         mock_use_case = _create_mock_use_case(stream_events=stream_events)
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
@@ -238,15 +238,15 @@ class TestQueryWithCitationsStream:
         assert len(events[2]["citations"]) == 1
         assert events[3] == {"type": "done"}
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
         app.dependency_overrides.pop(get_citations_use_case, None)
 
     def test_stream_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test streaming with non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/citations/stream",
@@ -256,20 +256,20 @@ class TestQueryWithCitationsStream:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_stream_error_event(self, client_with_db: TestClient, test_db):
         """Test streaming with error event."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         stream_events = [{"type": "error", "error": "API Error"}]
         mock_use_case = _create_mock_use_case(stream_events=stream_events)
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
@@ -288,7 +288,7 @@ class TestQueryWithCitationsStream:
         assert len(events) == 1
         assert events[0]["type"] == "error"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
         app.dependency_overrides.pop(get_citations_use_case, None)
 
 
@@ -297,13 +297,13 @@ class TestGetCitationDetail:
 
     def test_get_citation_detail_success(self, client_with_db: TestClient, test_db):
         """Test getting citation details."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             "/api/v1/citations/1",
@@ -319,16 +319,16 @@ class TestGetCitationDetail:
         assert data["source"] == "document.pdf"
         assert "location" in data
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_citation_detail_channel_not_found(
         self, client_with_db: TestClient, test_db
     ):
         """Test getting citation for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
             "/api/v1/citations/1",
@@ -340,7 +340,7 @@ class TestGetCitationDetail:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestInlineCitationInsertion:
@@ -348,11 +348,11 @@ class TestInlineCitationInsertion:
 
     def test_citations_inserted_in_response(self, client_with_db: TestClient, test_db):
         """Test that citation markers are properly inserted."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         mock_use_case = _create_mock_use_case(
             result=CitationSearchResult(
@@ -366,7 +366,7 @@ class TestInlineCitationInsertion:
             )
         )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
 
         response = client_with_db.post(
@@ -384,5 +384,5 @@ class TestInlineCitationInsertion:
         assert "[1]" not in data["response_plain"]
         assert "[2]" not in data["response_plain"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
         app.dependency_overrides.pop(get_citations_use_case, None)

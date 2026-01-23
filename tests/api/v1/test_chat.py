@@ -7,7 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.services.gemini import get_gemini_service
+from src.api.v1.chat import get_channel_port
+from src.application.ports.channel import ChannelDTO
 from src.core.database import get_db
 from src.application.use_cases.process_query import QueryResult
 
@@ -17,25 +18,27 @@ class TestSendMessage:
 
     def test_send_message_success(self, client_with_db: TestClient, test_db):
         """Test successful chat message."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.search_and_answer.return_value = {
-            "response": "This is the answer based on the documents.",
-            "sources": [
-                {"source": "document.pdf", "content": "Relevant content here"},
-            ],
-        }
-
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
-
-        response = client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "What is the main topic?"},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
         )
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QueryResult(
+            response="This is the answer based on the documents.",
+            sources=[{"source": "document.pdf", "content": "Relevant content here"}],
+            iterations=1,
+            session_id=None,
+        )
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat",
+                json={"query": "What is the main topic?"},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -44,30 +47,28 @@ class TestSendMessage:
         assert len(data["sources"]) == 1
         assert data["sources"][0]["source"] == "document.pdf"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_send_message_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test sending message to non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/not-exists"},
+            "/api/v1/channels/fileSearchStores/not-exists/chat",
             json={"query": "What is this?"},
         )
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_send_message_empty_query(self, client_with_db: TestClient, test_db):
         """Test sending empty query fails."""
         response = client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat",
             json={"query": ""},
         )
 
@@ -75,28 +76,31 @@ class TestSendMessage:
 
     def test_send_message_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.search_and_answer.return_value = {
-            "response": "",
-            "error": "API Error occurred",
-            "sources": [],
-        }
-
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
-
-        response = client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "What is this?"},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
         )
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QueryResult(
+            response="",
+            sources=[],
+            iterations=1,
+            error="API Error occurred",
+        )
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat",
+                json={"query": "What is this?"},
+            )
 
         assert response.status_code == 500
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestGetChatHistory:
@@ -104,17 +108,16 @@ class TestGetChatHistory:
 
     def test_get_history_empty(self, client_with_db: TestClient, test_db):
         """Test getting empty history."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
-            "/api/v1/chat/history",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
         )
 
         assert response.status_code == 200
@@ -123,33 +126,35 @@ class TestGetChatHistory:
         assert data["messages"] == []
         assert data["total"] == 0
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_history_with_messages(self, client_with_db: TestClient, test_db):
         """Test getting history after sending messages."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.search_and_answer.return_value = {
-            "response": "Answer here",
-            "sources": [],
-        }
-
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
-
-        # Send a message first
-        client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "Hello?"},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
         )
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QueryResult(
+            response="Answer here",
+            sources=[],
+            iterations=1,
+        )
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            # Send a message first
+            client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat",
+                json={"query": "Hello?"},
+            )
 
         # Get history
         response = client_with_db.get(
-            "/api/v1/chat/history",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
         )
 
         assert response.status_code == 200
@@ -160,23 +165,22 @@ class TestGetChatHistory:
         assert data["messages"][1]["role"] == "assistant"
         assert data["messages"][1]["content"] == "Answer here"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_history_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test getting history for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.get(
-            "/api/v1/chat/history",
-            params={"channel_id": "fileSearchStores/not-exists"},
+            "/api/v1/channels/fileSearchStores/not-exists/chat/history",
         )
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestClearChatHistory:
@@ -184,57 +188,57 @@ class TestClearChatHistory:
 
     def test_clear_history_success(self, client_with_db: TestClient, test_db):
         """Test clearing chat history."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
-        mock_gemini.search_and_answer.return_value = {
-            "response": "Answer",
-            "sources": [],
-        }
-
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
-
-        # Send a message first
-        client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "Hello?"},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
         )
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QueryResult(
+            response="Answer",
+            sources=[],
+            iterations=1,
+        )
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            # Send a message first
+            client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat",
+                json={"query": "Hello?"},
+            )
 
         # Clear history
         response = client_with_db.delete(
-            "/api/v1/chat/history",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
         )
 
         assert response.status_code == 204
 
         # Verify history is cleared
         response = client_with_db.get(
-            "/api/v1/chat/history",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
         )
         assert response.json()["total"] == 0
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_clear_history_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test clearing history for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.delete(
-            "/api/v1/chat/history",
-            params={"channel_id": "fileSearchStores/not-exists"},
+            "/api/v1/channels/fileSearchStores/not-exists/chat/history",
         )
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestStreamMessage:
@@ -250,11 +254,11 @@ class TestStreamMessage:
 
     def test_stream_message_success(self, client_with_db: TestClient, test_db):
         """Test successful streaming chat message."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         # Mock ProcessQueryUseCase.execute_stream
         def mock_execute_stream(*args, **kwargs):
@@ -274,7 +278,7 @@ class TestStreamMessage:
         mock_use_case = MagicMock()
         mock_use_case.execute_stream = mock_execute_stream
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -305,14 +309,14 @@ class TestStreamMessage:
         # Should end with [DONE]
         assert "[DONE]" in events
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_stream_message_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test streaming to non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/chat/stream",
@@ -321,15 +325,15 @@ class TestStreamMessage:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_stream_message_error_event(self, client_with_db: TestClient, test_db):
         """Test streaming with error event."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         # Mock ProcessQueryUseCase.execute_stream to yield error
         def mock_execute_stream(*args, **kwargs):
@@ -345,7 +349,7 @@ class TestStreamMessage:
         mock_use_case = MagicMock()
         mock_use_case.execute_stream = mock_execute_stream
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -367,15 +371,15 @@ class TestStreamMessage:
         assert error_event is not None
         assert error_event["error"] == "API Error"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_stream_saves_to_history(self, client_with_db: TestClient, test_db):
         """Test that streaming saves messages to history."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         # Mock ProcessQueryUseCase.execute_stream
         def mock_execute_stream(*args, **kwargs):
@@ -393,7 +397,7 @@ class TestStreamMessage:
         mock_use_case = MagicMock()
         mock_use_case.execute_stream = mock_execute_stream
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
             # Stream a message
@@ -417,7 +421,7 @@ class TestStreamMessage:
         assert data["messages"][1]["role"] == "assistant"
         assert data["messages"][1]["content"] == "Streamed response"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_stream_empty_query_fails(self, client_with_db: TestClient, test_db):
         """Test streaming with empty query fails validation."""
@@ -434,17 +438,16 @@ class TestChatSession:
 
     def test_create_session_success(self, client_with_db: TestClient, test_db):
         """Test creating a new chat session."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/sessions",
             json={"context_window": 10},
         )
 
@@ -454,98 +457,120 @@ class TestChatSession:
         assert data["channel_id"] == "fileSearchStores/test-store"
         assert data["context_window"] == 10
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_create_session_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test creating session for non-existent channel."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = None
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         response = client_with_db.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": "fileSearchStores/not-exists"},
+            "/api/v1/channels/fileSearchStores/not-exists/chat/sessions",
             json={"context_window": 10},
         )
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_session_success(self, client_with_db: TestClient, test_db):
         """Test getting session information."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Create session first
         create_response = client_with_db.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/sessions",
             json={"context_window": 5},
         )
         session_id = create_response.json()["session_id"]
 
         # Get session
-        response = client_with_db.get(f"/api/v1/chat/sessions/{session_id}")
+        response = client_with_db.get(
+            f"/api/v1/channels/fileSearchStores/test-store/chat/sessions/{session_id}"
+        )
 
         assert response.status_code == 200
         data = response.json()
         assert data["session_id"] == session_id
         assert data["context_window"] == 5
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_session_not_found(self, client_with_db: TestClient, test_db):
         """Test getting non-existent session."""
-        mock_gemini = MagicMock()
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        response = client_with_db.get("/api/v1/chat/sessions/sess_nonexistent")
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        response = client_with_db.get(
+            "/api/v1/channels/fileSearchStores/test-store/chat/sessions/sess_nonexistent"
+        )
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_delete_session_success(self, client_with_db: TestClient, test_db):
         """Test deleting a session."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         # Create session first
         create_response = client_with_db.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": "fileSearchStores/test-store"},
+            "/api/v1/channels/fileSearchStores/test-store/chat/sessions",
             json={"context_window": 10},
         )
         session_id = create_response.json()["session_id"]
 
         # Delete session
-        response = client_with_db.delete(f"/api/v1/chat/sessions/{session_id}")
+        response = client_with_db.delete(
+            f"/api/v1/channels/fileSearchStores/test-store/chat/sessions/{session_id}"
+        )
 
         assert response.status_code == 204
 
         # Verify session is deleted
-        get_response = client_with_db.get(f"/api/v1/chat/sessions/{session_id}")
+        get_response = client_with_db.get(
+            f"/api/v1/channels/fileSearchStores/test-store/chat/sessions/{session_id}"
+        )
         assert get_response.status_code == 404
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_delete_session_not_found(self, client_with_db: TestClient, test_db):
         """Test deleting non-existent session."""
-        response = client_with_db.delete("/api/v1/chat/sessions/sess_nonexistent")
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        response = client_with_db.delete(
+            "/api/v1/channels/fileSearchStores/test-store/chat/sessions/sess_nonexistent"
+        )
 
         assert response.status_code == 404
+
+        app.dependency_overrides.pop(get_channel_port, None)
 
 
 class TestMultiTurnConversation:
@@ -553,50 +578,53 @@ class TestMultiTurnConversation:
 
     def test_chat_with_session_maintains_context(self, client_with_db: TestClient, test_db):
         """Test that chat with session_id maintains conversation context."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
-        # Track conversation history passed to search_and_answer
+        # Track conversation history passed to use case
         received_histories = []
+        call_count = [0]
 
-        def mock_search_and_answer(store_name, query, conversation_history=None, model="gemini-2.5-flash"):
-            received_histories.append(conversation_history)
-            return {
-                "response": f"Response to: {query}",
-                "sources": [],
-            }
+        def mock_execute(query, channel_id, conversation_history=None, **kwargs):
+            received_histories.append(conversation_history or [])
+            call_count[0] += 1
+            return QueryResult(
+                response=f"Response to: {query}",
+                sources=[],
+                iterations=1,
+                session_id=kwargs.get("session_id"),
+            )
 
-        mock_gemini.search_and_answer = mock_search_and_answer
+        mock_use_case = MagicMock()
+        mock_use_case.execute = mock_execute
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        # Create session
-        session_response = client_with_db.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"context_window": 10},
-        )
-        session_id = session_response.json()["session_id"]
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            # Create session
+            session_response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat/sessions",
+                json={"context_window": 10},
+            )
+            session_id = session_response.json()["session_id"]
 
-        # First message
-        response1 = client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "What is Python?", "session_id": session_id},
-        )
-        assert response1.status_code == 200
-        assert response1.json()["session_id"] == session_id
+            # First message
+            response1 = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat",
+                json={"query": "What is Python?", "session_id": session_id},
+            )
+            assert response1.status_code == 200
+            assert response1.json()["session_id"] == session_id
 
-        # Second message - should include first message in context
-        response2 = client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "Tell me more about it", "session_id": session_id},
-        )
-        assert response2.status_code == 200
+            # Second message - should include first message in context
+            response2 = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat",
+                json={"query": "Tell me more about it", "session_id": session_id},
+            )
+            assert response2.status_code == 200
 
         # Verify context was passed
         # First call has no history
@@ -609,81 +637,86 @@ class TestMultiTurnConversation:
         assert received_histories[1][1]["role"] == "assistant"
         assert "Response to: What is Python?" in received_histories[1][1]["content"]
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_chat_without_session_no_context(self, client_with_db: TestClient, test_db):
         """Test that chat without session_id doesn't maintain context."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         received_histories = []
 
-        def mock_search_and_answer(store_name, query, conversation_history=None, model="gemini-2.5-flash"):
-            received_histories.append(conversation_history)
-            return {
-                "response": f"Response to: {query}",
-                "sources": [],
-            }
+        def mock_execute(query, channel_id, conversation_history=None, **kwargs):
+            received_histories.append(conversation_history or [])
+            return QueryResult(
+                response=f"Response to: {query}",
+                sources=[],
+                iterations=1,
+            )
 
-        mock_gemini.search_and_answer = mock_search_and_answer
+        mock_use_case = MagicMock()
+        mock_use_case.execute = mock_execute
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        # First message without session
-        client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "What is Python?"},
-        )
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            # First message without session
+            client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat",
+                json={"query": "What is Python?"},
+            )
 
-        # Second message without session
-        client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/test-store"},
-            json={"query": "Tell me more about it"},
-        )
+            # Second message without session
+            client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/chat",
+                json={"query": "Tell me more about it"},
+            )
 
         # Both calls should have empty history
         assert received_histories[0] == []
         assert received_histories[1] == []
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_get_session_history(self, client_with_db: TestClient, test_db):
         """Test getting chat history for a specific session."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/session-history-store",
-            "display_name": "Session History Channel",
-        }
-        mock_gemini.search_and_answer.return_value = {
-            "response": "Test response",
-            "sources": [],
-        }
-
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
-
-        # Create session
-        session_response = client_with_db.post(
-            "/api/v1/chat/sessions",
-            params={"channel_id": "fileSearchStores/session-history-store"},
-            json={"context_window": 10},
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/session-history-store",
+            display_name="Session History Channel",
         )
-        session_id = session_response.json()["session_id"]
 
-        # Send message with session
-        chat_response = client_with_db.post(
-            "/api/v1/chat",
-            params={"channel_id": "fileSearchStores/session-history-store"},
-            json={"query": "Question 1", "session_id": session_id},
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = QueryResult(
+            response="Test response",
+            sources=[],
+            iterations=1,
         )
-        assert chat_response.status_code == 200
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
+            # Create session
+            session_response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/session-history-store/chat/sessions",
+                json={"context_window": 10},
+            )
+            session_id = session_response.json()["session_id"]
+
+            # Send message with session
+            chat_response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/session-history-store/chat",
+                json={"query": "Question 1", "session_id": session_id},
+            )
+            assert chat_response.status_code == 200
 
         # Get session history
-        response = client_with_db.get(f"/api/v1/chat/sessions/{session_id}/history")
+        response = client_with_db.get(
+            f"/api/v1/channels/fileSearchStores/session-history-store/chat/sessions/{session_id}/history"
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -693,15 +726,15 @@ class TestMultiTurnConversation:
         assert data["messages"][1]["role"] == "assistant"
         assert data["messages"][1]["content"] == "Test response"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_stream_with_session(self, client_with_db: TestClient, test_db):
         """Test streaming chat with session maintains context."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         received_histories = []
 
@@ -722,7 +755,7 @@ class TestMultiTurnConversation:
         mock_use_case = MagicMock()
         mock_use_case.execute_stream = mock_execute_stream
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
             # Create session
@@ -753,15 +786,15 @@ class TestMultiTurnConversation:
         assert len(received_histories[1]) == 2
         assert received_histories[1][0]["content"] == "First question"
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
 
     def test_stream_returns_session_id(self, client_with_db: TestClient, test_db):
         """Test that streaming response includes session_id event."""
-        mock_gemini = MagicMock()
-        mock_gemini.get_store.return_value = {
-            "name": "fileSearchStores/test-store",
-            "display_name": "Test Channel",
-        }
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
 
         # Mock ProcessQueryUseCase.execute_stream
         def mock_execute_stream(*args, **kwargs):
@@ -779,7 +812,7 @@ class TestMultiTurnConversation:
         mock_use_case = MagicMock()
         mock_use_case.execute_stream = mock_execute_stream
 
-        app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
         with patch("src.api.v1.chat.create_process_query_use_case", return_value=mock_use_case):
             # Create session
@@ -808,4 +841,4 @@ class TestMultiTurnConversation:
         assert session_event is not None
         assert session_event["session_id"] == session_id
 
-        app.dependency_overrides.pop(get_gemini_service, None)
+        app.dependency_overrides.pop(get_channel_port, None)
