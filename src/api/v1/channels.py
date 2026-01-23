@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 
 from src.models.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelList
 from src.models.favorite import TargetType
-from src.services.gemini import GeminiService, get_gemini_service
+from src.application.ports.channel import ChannelPort
+from src.application.ports.document import DocumentPort
+from src.infrastructure.di.container import create_channel_port, create_document_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
@@ -17,6 +19,16 @@ from src.services.favorite_repository import FavoriteRepository
 from src.services.cache_service import CacheService, get_cache_service
 
 router = APIRouter(prefix="/channels", tags=["channels"])
+
+
+def get_channel_port() -> ChannelPort:
+    """Get channel port instance."""
+    return create_channel_port()
+
+
+def get_document_port() -> DocumentPort:
+    """Get document port instance."""
+    return create_document_port()
 
 
 @router.post(
@@ -29,7 +41,7 @@ router = APIRouter(prefix="/channels", tags=["channels"])
 def create_channel(
     request: Request,
     data: ChannelCreate,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
 ) -> ChannelResponse:
@@ -38,12 +50,12 @@ def create_channel(
     A channel is a container for documents that can be searched together.
     """
     try:
-        store = gemini.create_store(data.name)
-        store_id = store["name"]
+        channel = channel_port.create_channel(data.name)
+        store_id = channel.name
 
         # Save to local metadata DB
         repo = ChannelRepository(db)
-        channel = repo.create(
+        local_channel = repo.create(
             gemini_store_id=store_id,
             name=data.name,
             description=data.description,
@@ -55,8 +67,8 @@ def create_channel(
         return ChannelResponse(
             id=store_id,
             name=data.name,
-            description=channel.description,
-            created_at=channel.created_at,
+            description=local_channel.description,
+            created_at=local_channel.created_at,
             file_count=0,
         )
     except Exception as e:
@@ -74,7 +86,8 @@ def create_channel(
 @limiter.limit(RateLimits.DEFAULT)
 def list_channels(
     request: Request,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
     limit: Annotated[int | None, Query(description="Maximum number of channels", ge=1, le=100)] = None,
@@ -85,10 +98,14 @@ def list_channels(
     """List all channels (File Search Stores)."""
     try:
         # Try to get from cache first
-        stores = cache.get_store_list()
-        if stores is None:
-            stores = gemini.list_stores()
+        stores_cache = cache.get_store_list()
+        if stores_cache is None:
+            channels_list = channel_port.list_channels()
+            # Convert to dict format for cache compatibility
+            stores = [{"name": ch.name, "display_name": ch.display_name} for ch in channels_list]
             cache.set_store_list(stores)
+        else:
+            stores = stores_cache
 
         repo = ChannelRepository(db)
         fav_repo = FavoriteRepository(db)
@@ -112,8 +129,8 @@ def list_channels(
             if local_meta and local_meta.is_deleted:
                 continue
 
-            # Get actual file count from Gemini API
-            files = gemini.list_store_files(store_id)
+            # Get actual file count from document port
+            files = document_port.list_documents(store_id)
             actual_file_count = len(files)
 
             # Sync file_count if different
@@ -174,7 +191,8 @@ def list_channels(
 def get_channel(
     request: Request,
     channel_id: str,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    document_port: Annotated[DocumentPort, Depends(get_document_port)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
 ) -> ChannelResponse:
@@ -204,15 +222,15 @@ def get_channel(
         cached_info["is_favorited"] = is_favorited
         return ChannelResponse(**cached_info)
 
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
 
-    # Get actual file count from Gemini API
-    files = gemini.list_store_files(channel_id)
+    # Get actual file count from document port
+    files = document_port.list_documents(channel_id)
     actual_file_count = len(files)
 
     # Update last accessed time and sync file_count in local DB
@@ -222,8 +240,8 @@ def get_channel(
         local_meta = repo.get_by_gemini_id(channel_id)
 
     response = ChannelResponse(
-        id=store["name"],
-        name=store.get("display_name", ""),
+        id=channel.name,
+        name=channel.display_name,
         description=local_meta.description if local_meta else None,
         created_at=local_meta.created_at if local_meta else datetime.now(UTC),
         file_count=actual_file_count,
@@ -246,7 +264,7 @@ def update_channel(
     request: Request,
     channel_id: str,
     data: ChannelUpdate,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
 ) -> ChannelResponse:
@@ -255,8 +273,8 @@ def update_channel(
     Note: channel_id should be the full store name (e.g., "fileSearchStores/xxx")
     """
     # Check if channel exists in Gemini
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -277,7 +295,7 @@ def update_channel(
         # Create local metadata if not exists
         local_meta = repo.create(
             gemini_store_id=channel_id,
-            name=data.name or store.get("display_name", ""),
+            name=data.name or channel.display_name,
             description=data.description,
         )
     else:
@@ -310,7 +328,7 @@ def update_channel(
 def delete_channel(
     request: Request,
     channel_id: str,
-    gemini: Annotated[GeminiService, Depends(get_gemini_service)],
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     db: Annotated[Session, Depends(get_db)],
     cache: Annotated[CacheService, Depends(get_cache_service)],
 ):
@@ -320,8 +338,8 @@ def delete_channel(
     Note: When trash UI is implemented, this will change to soft delete.
     """
     # First check if channel exists
-    store = gemini.get_store(channel_id)
-    if not store:
+    channel = channel_port.get_channel(channel_id)
+    if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
@@ -329,7 +347,14 @@ def delete_channel(
 
     # Delete from Gemini first
     try:
-        gemini.delete_store(channel_id, force=True)
+        success = channel_port.delete_channel(channel_id, force=True)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete channel from Gemini",
+            )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
