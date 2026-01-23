@@ -550,7 +550,7 @@ class TestMCPServerRegistration:
         from src.mcp_server.server import mcp_server
 
         assert mcp_server is not None
-        assert mcp_server.name == "agent-dashboard"
+        assert mcp_server.name == "docuchat"
 
     def test_mcp_server_has_tools(self):
         """Test that expected tools are registered."""
@@ -560,7 +560,7 @@ class TestMCPServerRegistration:
         # We can verify the server has the expected configuration
         assert mcp_server.instructions is not None
         assert "get_agent_status" in mcp_server.instructions
-        assert "run_rag_query" in mcp_server.instructions
+        assert "chat" in mcp_server.instructions
         assert "reset_agent_state" in mcp_server.instructions
 
 

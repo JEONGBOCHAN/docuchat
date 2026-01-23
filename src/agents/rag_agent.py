@@ -3,9 +3,11 @@
 RAG Agent using LangGraph create_react_agent pattern.
 
 Implements a document-grounded Q&A agent with middleware support.
+Supports both legacy middleware and new port-based event emission.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from langgraph.prebuilt import create_react_agent
@@ -17,6 +19,17 @@ from src.agents.tools.search_tools import (
 )
 from src.core.config import get_settings
 from src.services.gemini import GeminiService
+
+# Clean Architecture imports
+from src.application.ports.observability import AgentEventSinkPort
+from src.application.dto.agent_event import (
+    AgentStartedEvent,
+    AgentCompletedEvent,
+    AgentErrorEvent,
+    ToolStartedEvent,
+    ToolCompletedEvent,
+    generate_session_id,
+)
 
 
 # ============================================================
@@ -122,31 +135,49 @@ def run_rag_agent(
     conversation_history: list[dict] | None = None,
     max_iterations: int = 3,
     middleware: list[Any] | None = None,
+    event_sink: AgentEventSinkPort | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Run the RAG agent to answer a query.
 
     This function provides backward compatibility with the LangGraph-based
     implementation while using the new LangGraph create_react_agent pattern.
 
+    Supports two observability patterns:
+    1. Legacy middleware (for backward compatibility)
+    2. Port-based event sink (Clean Architecture approach)
+
     Args:
         channel_id: The channel ID to search in.
         query: User's question.
         conversation_history: Previous messages for context.
         max_iterations: Maximum iterations (default 3).
-        middleware: Optional list of middleware instances.
+        middleware: Optional list of middleware instances (legacy).
+        event_sink: Optional AgentEventSinkPort for Clean Architecture events.
+        session_id: Optional session ID for event tracking.
 
     Returns:
-        Dict with 'response', 'sources', 'iterations', and optional 'error'.
+        Dict with 'response', 'sources', 'iterations', 'session_id', and optional 'error'.
     """
-    from datetime import datetime
-
     config = RAGAgentConfig(
         channel_id=channel_id,
         max_iterations=max_iterations,
         middleware=middleware or [],
     )
 
-    # Notify middleware of agent start
+    # Generate session ID if event_sink is provided but no session_id
+    if event_sink and not session_id:
+        session_id = generate_session_id()
+
+    # Emit event: Agent Started (Clean Architecture)
+    if event_sink and session_id:
+        event_sink.emit(AgentStartedEvent(
+            session_id=session_id,
+            query=query,
+            channel_id=channel_id,
+        ))
+
+    # Notify middleware of agent start (Legacy)
     for mw in config.middleware:
         if hasattr(mw, 'on_agent_start'):
             mw.on_agent_start({"query": query, "channel_id": channel_id})
@@ -168,7 +199,16 @@ def run_rag_agent(
         # Add the current query
         messages.append(("user", query))
 
-        # Notify middleware of retrieve step
+        # Emit event: Tool Started - search_documents (Clean Architecture)
+        tool_start_time = datetime.now()
+        if event_sink and session_id:
+            event_sink.emit(ToolStartedEvent(
+                session_id=session_id,
+                tool_name="search_documents",
+                tool_input={"query": query},
+            ))
+
+        # Notify middleware of retrieve step (Legacy)
         for mw in config.middleware:
             if hasattr(mw, 'on_tool_start'):
                 mw.on_tool_start("retrieve", {"query": query})
@@ -179,7 +219,18 @@ def run_rag_agent(
             config={"recursion_limit": max_iterations * 2 + 1}
         )
 
-        # Notify middleware of retrieve complete
+        # Calculate tool duration
+        tool_duration_ms = (datetime.now() - tool_start_time).total_seconds() * 1000
+
+        # Emit event: Tool Completed (Clean Architecture)
+        if event_sink and session_id:
+            event_sink.emit(ToolCompletedEvent(
+                session_id=session_id,
+                tool_name="search_documents",
+                duration_ms=tool_duration_ms,
+            ))
+
+        # Notify middleware of retrieve complete (Legacy)
         for mw in config.middleware:
             if hasattr(mw, 'on_tool_end'):
                 mw.on_tool_end("retrieve", {})
@@ -213,7 +264,16 @@ def run_rag_agent(
                             except (IndexError, AttributeError):
                                 pass
 
-        # Notify middleware of agent complete
+        # Emit event: Agent Completed (Clean Architecture)
+        if event_sink and session_id:
+            event_sink.emit(AgentCompletedEvent(
+                session_id=session_id,
+                response=response_text,
+                sources=sources,
+                iterations=iterations,
+            ))
+
+        # Notify middleware of agent complete (Legacy)
         for mw in config.middleware:
             if hasattr(mw, 'on_agent_end'):
                 mw.on_agent_end({
@@ -226,11 +286,20 @@ def run_rag_agent(
             "response": response_text,
             "sources": sources,
             "iterations": iterations,
+            "session_id": session_id,
             "error": None,
         }
 
     except Exception as e:
-        # Notify middleware of error
+        # Emit event: Agent Error (Clean Architecture)
+        if event_sink and session_id:
+            event_sink.emit(AgentErrorEvent(
+                session_id=session_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            ))
+
+        # Notify middleware of error (Legacy)
         for mw in config.middleware:
             if hasattr(mw, 'on_agent_error'):
                 mw.on_agent_error(str(e))
@@ -239,5 +308,6 @@ def run_rag_agent(
             "response": f"Error: {str(e)}",
             "sources": [],
             "iterations": 0,
+            "session_id": session_id,
             "error": str(e),
         }

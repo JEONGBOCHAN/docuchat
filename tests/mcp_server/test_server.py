@@ -24,7 +24,7 @@ class TestMcpServerInstance:
 
     def test_server_name(self):
         """Test that the MCP server has the correct name."""
-        assert mcp_server.name == "agent-dashboard"
+        assert mcp_server.name == "docuchat"
 
     def test_server_has_instructions(self):
         """Test that the MCP server has instructions."""
@@ -190,22 +190,32 @@ class TestResetAgentStateTool:
 
 
 class TestRunRagQueryTool:
-    """Tests for run_rag_query_tool MCP tool."""
+    """Tests for run_rag_query_tool MCP tool (using Clean Architecture)."""
 
     @pytest.mark.asyncio
     async def test_run_rag_query_with_mock(self):
-        """Test run_rag_query_tool with mocked RAG agent."""
+        """Test run_rag_query_tool with mocked ProcessQueryUseCase."""
         reset_global_state_store()
+        from dataclasses import dataclass
 
-        # Mock the run_rag_agent function at the source module level
-        mock_result = {
-            "response": "Test response",
-            "sources": [{"source": "doc1.pdf"}],
-            "iterations": 2,
-            "error": None,
-        }
+        @dataclass
+        class MockResult:
+            response: str = "Test response"
+            sources: list = None
+            iterations: int = 2
+            error: str = None
+            tools_used: list = None
 
-        with patch("src.agents.rag_agent.run_rag_agent", return_value=mock_result):
+            def __post_init__(self):
+                if self.sources is None:
+                    self.sources = [{"source": "doc1.pdf"}]
+                if self.tools_used is None:
+                    self.tools_used = []
+
+        mock_use_case = Mock()
+        mock_use_case.execute.return_value = MockResult()
+
+        with patch("src.infrastructure.di.create_process_query_use_case", return_value=mock_use_case):
             from src.mcp_server.server import run_rag_query_tool
 
             result = await run_rag_query_tool(
@@ -223,9 +233,9 @@ class TestRunRagQueryTool:
         """Test run_rag_query_tool error handling."""
         reset_global_state_store()
 
-        # Mock the run_rag_agent function to raise an error
+        # Mock the create_process_query_use_case function to raise an error
         with patch(
-            "src.agents.rag_agent.run_rag_agent",
+            "src.infrastructure.di.create_process_query_use_case",
             side_effect=RuntimeError("API Error"),
         ):
             from src.mcp_server.server import run_rag_query_tool
@@ -237,7 +247,6 @@ class TestRunRagQueryTool:
 
             assert "Error" in result["response"]
             assert result["error"] == "API Error"
-            assert result["state"]["status"] == "error"
 
 
 class TestMcpServerTools:

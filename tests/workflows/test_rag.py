@@ -61,43 +61,43 @@ class TestCreateRagAgent:
     @patch("src.agents.rag_agent.get_settings")
     @patch("src.agents.rag_agent.GeminiService")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
-    @patch("src.agents.rag_agent.create_agent")
+    @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_with_config(
         self,
-        mock_create_agent,
+        mock_create_react_agent,
         mock_chat_model,
         mock_gemini_service,
         mock_get_settings,
     ):
         """Test creating agent with RAGAgentConfig."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
-        mock_create_agent.return_value = Mock()
+        mock_create_react_agent.return_value = Mock()
 
         config = RAGAgentConfig(channel_id="test-channel")
         agent = create_rag_agent(config=config)
 
         assert agent is not None
-        mock_create_agent.assert_called_once()
+        mock_create_react_agent.assert_called_once()
 
     @patch("src.agents.rag_agent.get_settings")
     @patch("src.agents.rag_agent.GeminiService")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
-    @patch("src.agents.rag_agent.create_agent")
+    @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_with_channel_id(
         self,
-        mock_create_agent,
+        mock_create_react_agent,
         mock_chat_model,
         mock_gemini_service,
         mock_get_settings,
     ):
         """Test creating agent with channel_id parameter (backward compat)."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
-        mock_create_agent.return_value = Mock()
+        mock_create_react_agent.return_value = Mock()
 
         agent = create_rag_agent(channel_id="test-channel")
 
         assert agent is not None
-        mock_create_agent.assert_called_once()
+        mock_create_react_agent.assert_called_once()
 
     def test_create_rag_agent_without_params_raises(self):
         """Test that creating agent without params raises ValueError."""

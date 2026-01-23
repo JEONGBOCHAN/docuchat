@@ -1,15 +1,33 @@
 # -*- coding: utf-8 -*-
 """
-MCP Tools for agent dashboard.
+MCP Tools Implementation.
 
-Provides MCP tool definitions that can be registered with the MCP server.
-These tools allow Claude to interact with the agent state and run RAG queries.
+Clean Architecture based implementation of MCP tools.
+All tools use ProcessQueryUseCase and other application layer components.
 """
 
 from typing import Any
+import uuid
 
-from src.mcp_server.state import AgentStateStore, AgentStatus, get_global_state_store
+from src.mcp_server.state import AgentStateStore, get_global_state_store
 
+
+# ============================================================
+# Session Storage (In-Memory for now)
+# ============================================================
+
+_sessions: dict[str, dict[str, Any]] = {}
+_chat_histories: dict[str, list[dict[str, Any]]] = {}
+
+
+def _generate_session_id() -> str:
+    """Generate a unique session ID."""
+    return str(uuid.uuid4())
+
+
+# ============================================================
+# Agent Status Tools
+# ============================================================
 
 async def get_agent_status(state_store: AgentStateStore | None = None) -> dict[str, Any]:
     """Get the current agent execution status.
@@ -31,71 +49,8 @@ async def get_agent_status(state_store: AgentStateStore | None = None) -> dict[s
     return store.get_state()
 
 
-async def run_rag_query(
-    channel_id: str,
-    query: str,
-    state_store: AgentStateStore | None = None,
-) -> dict[str, Any]:
-    """Run a RAG query with state publishing for dashboard visualization.
-
-    This tool runs the RAG agent and publishes execution state updates
-    that can be visualized in the MCP Apps dashboard.
-
-    Args:
-        channel_id: The channel (FileSearchStore) ID to search in.
-        query: The user's question to answer.
-        state_store: Optional state store to use. Uses global store if not provided.
-
-    Returns:
-        Dictionary with response, sources, and execution metadata.
-    """
-    store = state_store or get_global_state_store()
-
-    # Reset state for new query
-    store.reset()
-
-    # Import here to avoid circular imports
-    from src.agents.middlewares.dashboard import DashboardMiddleware
-    from src.agents.rag_agent import run_rag_agent
-
-    # Create middleware that publishes to our state store
-    middleware = DashboardMiddleware(state_updater=store.update)
-
-    try:
-        # Run the RAG agent with our middleware
-        result = run_rag_agent(
-            channel_id=channel_id,
-            query=query,
-            middleware=[middleware],
-        )
-
-        return {
-            "response": result.get("response", "No response generated"),
-            "sources": result.get("sources", []),
-            "iterations": result.get("iterations", 0),
-            "error": result.get("error"),
-            "state": store.get_state(),
-        }
-
-    except Exception as e:
-        # Ensure error state is recorded
-        store.update({
-            "event": "agent_error",
-            "error": str(e),
-        })
-        return {
-            "response": f"Error: {str(e)}",
-            "sources": [],
-            "iterations": 0,
-            "error": str(e),
-            "state": store.get_state(),
-        }
-
-
 async def reset_agent_state(state_store: AgentStateStore | None = None) -> dict[str, Any]:
     """Reset the agent state to idle.
-
-    Useful when starting a new conversation or after an error.
 
     Args:
         state_store: Optional state store to use. Uses global store if not provided.
@@ -109,3 +64,437 @@ async def reset_agent_state(state_store: AgentStateStore | None = None) -> dict[
         "message": "Agent state reset to idle",
         "state": store.get_state(),
     }
+
+
+# ============================================================
+# Channel Tools
+# ============================================================
+
+async def validate_channel(channel_id: str) -> dict[str, Any]:
+    """Validate if a channel exists.
+
+    Args:
+        channel_id: The channel ID to validate.
+
+    Returns:
+        Dictionary with validation result.
+    """
+    from src.services.gemini import GeminiService
+
+    try:
+        gemini = GeminiService()
+        store = gemini.get_store(channel_id)
+
+        if store:
+            return {
+                "valid": True,
+                "channel_id": channel_id,
+                "display_name": store.get("display_name", "unknown"),
+            }
+        else:
+            return {
+                "valid": False,
+                "channel_id": channel_id,
+                "error": "Channel not found",
+            }
+    except Exception as e:
+        return {
+            "valid": False,
+            "channel_id": channel_id,
+            "error": str(e),
+        }
+
+
+async def list_channels() -> dict[str, Any]:
+    """List all available channels.
+
+    Returns:
+        Dictionary with list of channels.
+    """
+    from src.services.gemini import GeminiService
+
+    try:
+        gemini = GeminiService()
+        stores = gemini.list_stores()
+
+        channels = []
+        for store in stores:
+            channels.append({
+                "channel_id": store.get("name", "").split("/")[-1],
+                "display_name": store.get("display_name", "unknown"),
+            })
+
+        return {
+            "channels": channels,
+            "total": len(channels),
+        }
+    except Exception as e:
+        return {
+            "channels": [],
+            "total": 0,
+            "error": str(e),
+        }
+
+
+# ============================================================
+# Session Tools
+# ============================================================
+
+async def create_session(channel_id: str) -> dict[str, Any]:
+    """Create a new chat session.
+
+    Args:
+        channel_id: The channel ID for this session.
+
+    Returns:
+        Dictionary with session information.
+    """
+    # Validate channel first
+    validation = await validate_channel(channel_id)
+    if not validation.get("valid"):
+        return {
+            "success": False,
+            "error": f"Invalid channel: {channel_id}",
+        }
+
+    session_id = _generate_session_id()
+    _sessions[session_id] = {
+        "session_id": session_id,
+        "channel_id": channel_id,
+        "created_at": __import__("datetime").datetime.now().isoformat(),
+    }
+    _chat_histories[session_id] = []
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "channel_id": channel_id,
+    }
+
+
+async def get_session(session_id: str) -> dict[str, Any]:
+    """Get session information.
+
+    Args:
+        session_id: The session ID to retrieve.
+
+    Returns:
+        Dictionary with session information.
+    """
+    if session_id not in _sessions:
+        return {
+            "success": False,
+            "error": f"Session not found: {session_id}",
+        }
+
+    session = _sessions[session_id]
+    return {
+        "success": True,
+        **session,
+        "message_count": len(_chat_histories.get(session_id, [])),
+    }
+
+
+async def delete_session(session_id: str) -> dict[str, Any]:
+    """Delete a chat session.
+
+    Args:
+        session_id: The session ID to delete.
+
+    Returns:
+        Dictionary confirming deletion.
+    """
+    if session_id not in _sessions:
+        return {
+            "success": False,
+            "error": f"Session not found: {session_id}",
+        }
+
+    del _sessions[session_id]
+    if session_id in _chat_histories:
+        del _chat_histories[session_id]
+
+    return {
+        "success": True,
+        "message": f"Session {session_id} deleted",
+    }
+
+
+async def list_sessions() -> dict[str, Any]:
+    """List all active sessions.
+
+    Returns:
+        Dictionary with list of sessions.
+    """
+    sessions = []
+    for session_id, session in _sessions.items():
+        sessions.append({
+            **session,
+            "message_count": len(_chat_histories.get(session_id, [])),
+        })
+
+    return {
+        "sessions": sessions,
+        "total": len(sessions),
+    }
+
+
+# ============================================================
+# Chat History Tools
+# ============================================================
+
+async def get_chat_history(session_id: str, limit: int = 100) -> dict[str, Any]:
+    """Get chat history for a session.
+
+    Args:
+        session_id: The session ID.
+        limit: Maximum number of messages to return.
+
+    Returns:
+        Dictionary with chat history.
+    """
+    if session_id not in _sessions:
+        return {
+            "success": False,
+            "error": f"Session not found: {session_id}",
+        }
+
+    history = _chat_histories.get(session_id, [])[-limit:]
+    return {
+        "success": True,
+        "session_id": session_id,
+        "messages": history,
+        "total": len(history),
+    }
+
+
+async def clear_chat_history(session_id: str) -> dict[str, Any]:
+    """Clear chat history for a session.
+
+    Args:
+        session_id: The session ID.
+
+    Returns:
+        Dictionary confirming deletion.
+    """
+    if session_id not in _sessions:
+        return {
+            "success": False,
+            "error": f"Session not found: {session_id}",
+        }
+
+    _chat_histories[session_id] = []
+    return {
+        "success": True,
+        "message": f"Chat history cleared for session {session_id}",
+    }
+
+
+# ============================================================
+# RAG Query Tool
+# ============================================================
+
+async def run_rag_query(
+    channel_id: str,
+    query: str,
+    session_id: str | None = None,
+    state_store: AgentStateStore | None = None,
+) -> dict[str, Any]:
+    """Run a RAG query with state publishing for dashboard visualization.
+
+    Uses Clean Architecture ProcessQueryUseCase.
+
+    Args:
+        channel_id: The channel (FileSearchStore) ID to search in.
+        query: The user's question to answer.
+        session_id: Optional session ID for conversation context.
+        state_store: Optional state store to use.
+
+    Returns:
+        Dictionary with response, sources, and execution metadata.
+    """
+    store = state_store or get_global_state_store()
+    store.reset()
+
+    # Get conversation history if session exists
+    conversation_history = []
+    if session_id and session_id in _chat_histories:
+        conversation_history = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in _chat_histories[session_id]
+        ]
+
+    try:
+        # Use Clean Architecture: ProcessQueryUseCase
+        from src.infrastructure.di import create_process_query_use_case
+
+        use_case = create_process_query_use_case(
+            use_legacy_dashboard=True,
+            include_web_search=False,
+        )
+
+        result = use_case.execute(
+            query=query,
+            channel_id=channel_id,
+            conversation_history=conversation_history,
+        )
+
+        response_data = {
+            "response": result.response,
+            "sources": result.sources,
+            "iterations": result.iterations,
+            "error": result.error,
+            "state": store.get_state(),
+        }
+
+        # Save to chat history if session exists
+        if session_id and session_id in _chat_histories:
+            _chat_histories[session_id].append({
+                "role": "user",
+                "content": query,
+            })
+            _chat_histories[session_id].append({
+                "role": "assistant",
+                "content": result.response,
+                "sources": result.sources,
+            })
+
+        return response_data
+
+    except Exception as e:
+        store.update({
+            "event": "agent_error",
+            "error": str(e),
+        })
+        return {
+            "response": f"Error: {str(e)}",
+            "sources": [],
+            "iterations": 0,
+            "error": str(e),
+            "state": store.get_state(),
+        }
+
+
+# ============================================================
+# Web Search Tool (Tavily)
+# ============================================================
+
+async def run_web_search(
+    query: str,
+    max_results: int = 5,
+) -> dict[str, Any]:
+    """Run a web search using Tavily.
+
+    Args:
+        query: The search query.
+        max_results: Maximum number of results.
+
+    Returns:
+        Dictionary with search results.
+    """
+    try:
+        from src.infrastructure.external.tavily import TavilyWebSearchAdapter
+
+        adapter = TavilyWebSearchAdapter()
+        results = adapter.search(query, max_results=max_results)
+
+        return {
+            "success": True,
+            "query": query,
+            "results": [
+                {
+                    "title": r.title,
+                    "url": r.url,
+                    "snippet": r.snippet,
+                    "score": r.score,
+                }
+                for r in results
+            ],
+            "total": len(results),
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "query": query,
+            "results": [],
+            "error": str(e),
+        }
+
+
+async def run_rag_with_web_search(
+    channel_id: str,
+    query: str,
+    session_id: str | None = None,
+    state_store: AgentStateStore | None = None,
+) -> dict[str, Any]:
+    """Run a RAG query with web search enabled.
+
+    Uses Clean Architecture ProcessQueryUseCase with Tavily web search.
+
+    Args:
+        channel_id: The channel ID to search in.
+        query: The user's question.
+        session_id: Optional session ID for conversation context.
+        state_store: Optional state store to use.
+
+    Returns:
+        Dictionary with response, sources, and execution metadata.
+    """
+    store = state_store or get_global_state_store()
+    store.reset()
+
+    conversation_history = []
+    if session_id and session_id in _chat_histories:
+        conversation_history = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in _chat_histories[session_id]
+        ]
+
+    try:
+        from src.infrastructure.di import create_process_query_use_case
+
+        use_case = create_process_query_use_case(
+            use_legacy_dashboard=True,
+            include_web_search=True,  # Enable Tavily
+        )
+
+        result = use_case.execute(
+            query=query,
+            channel_id=channel_id,
+            conversation_history=conversation_history,
+        )
+
+        response_data = {
+            "response": result.response,
+            "sources": result.sources,
+            "iterations": result.iterations,
+            "tools_used": result.tools_used,
+            "error": result.error,
+            "state": store.get_state(),
+        }
+
+        if session_id and session_id in _chat_histories:
+            _chat_histories[session_id].append({
+                "role": "user",
+                "content": query,
+            })
+            _chat_histories[session_id].append({
+                "role": "assistant",
+                "content": result.response,
+                "sources": result.sources,
+            })
+
+        return response_data
+
+    except Exception as e:
+        store.update({
+            "event": "agent_error",
+            "error": str(e),
+        })
+        return {
+            "response": f"Error: {str(e)}",
+            "sources": [],
+            "iterations": 0,
+            "error": str(e),
+            "state": store.get_state(),
+        }

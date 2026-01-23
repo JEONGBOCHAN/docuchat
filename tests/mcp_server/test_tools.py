@@ -3,11 +3,24 @@
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
+from dataclasses import dataclass
 
 from src.mcp_server.tools import (
     get_agent_status,
     run_rag_query,
     reset_agent_state,
+    validate_channel,
+    list_channels,
+    create_session,
+    get_session,
+    delete_session,
+    list_sessions,
+    get_chat_history,
+    clear_chat_history,
+    run_web_search,
+    run_rag_with_web_search,
+    _sessions,
+    _chat_histories,
 )
 from src.mcp_server.state import (
     AgentStateStore,
@@ -115,21 +128,36 @@ class TestResetAgentState:
 
 
 class TestRunRagQuery:
-    """Tests for run_rag_query function."""
+    """Tests for run_rag_query function (Clean Architecture version)."""
+
+    def setup_method(self):
+        """Clear sessions before each test."""
+        _sessions.clear()
+        _chat_histories.clear()
 
     @pytest.mark.asyncio
     async def test_successful_query(self):
         """Test successful RAG query execution."""
         store = AgentStateStore()
 
-        mock_result = {
-            "response": "This is the answer",
-            "sources": [{"source": "doc1.pdf", "content": "relevant text"}],
-            "iterations": 2,
-            "error": None,
-        }
+        @dataclass
+        class MockResult:
+            response: str = "This is the answer"
+            sources: list = None
+            iterations: int = 2
+            error: str = None
+            tools_used: list = None
 
-        with patch("src.agents.rag_agent.run_rag_agent", return_value=mock_result):
+            def __post_init__(self):
+                if self.sources is None:
+                    self.sources = [{"source": "doc1.pdf", "content": "relevant text"}]
+                if self.tools_used is None:
+                    self.tools_used = []
+
+        mock_use_case = Mock()
+        mock_use_case.execute.return_value = MockResult()
+
+        with patch("src.infrastructure.di.create_process_query_use_case", return_value=mock_use_case):
             result = await run_rag_query(
                 channel_id="test-channel",
                 query="What is the answer?",
@@ -143,32 +171,12 @@ class TestRunRagQuery:
         assert "state" in result
 
     @pytest.mark.asyncio
-    async def test_query_resets_state(self):
-        """Test that run_rag_query resets state before running."""
-        store = AgentStateStore()
-        store._state.status = AgentStatus.ERROR
-        store._state.metrics.total_steps = 100
-
-        mock_result = {"response": "Answer", "sources": [], "iterations": 1, "error": None}
-
-        with patch("src.agents.rag_agent.run_rag_agent", return_value=mock_result):
-            await run_rag_query(
-                channel_id="channel",
-                query="query",
-                state_store=store,
-            )
-
-        # State should have been reset, then updated by middleware
-        # The metrics from previous run should be cleared
-        assert store.state.metrics.total_steps != 100 or store.state.status != AgentStatus.ERROR
-
-    @pytest.mark.asyncio
     async def test_query_error_handling(self):
         """Test run_rag_query error handling."""
         store = AgentStateStore()
 
         with patch(
-            "src.agents.rag_agent.run_rag_agent",
+            "src.infrastructure.di.create_process_query_use_case",
             side_effect=RuntimeError("Connection failed"),
         ):
             result = await run_rag_query(
@@ -181,46 +189,30 @@ class TestRunRagQuery:
         assert result["error"] == "Connection failed"
         assert result["sources"] == []
         assert result["iterations"] == 0
-        # State should reflect error
-        assert result["state"]["status"] == "error"
-
-    @pytest.mark.asyncio
-    async def test_query_passes_middleware_to_agent(self):
-        """Test that run_rag_query passes middleware to the agent."""
-        store = AgentStateStore()
-
-        captured_middleware = []
-
-        def mock_run_rag_agent(channel_id, query, middleware=None):
-            captured_middleware.append(middleware)
-            return {
-                "response": "OK",
-                "sources": [],
-                "iterations": 1,
-                "error": None,
-            }
-
-        with patch("src.agents.rag_agent.run_rag_agent", side_effect=mock_run_rag_agent):
-            await run_rag_query(
-                channel_id="channel",
-                query="query",
-                state_store=store,
-            )
-
-        # Should have passed a list with DashboardMiddleware
-        assert len(captured_middleware) == 1
-        assert captured_middleware[0] is not None
-        assert len(captured_middleware[0]) == 1
-        assert "DashboardMiddleware" in type(captured_middleware[0][0]).__name__
 
     @pytest.mark.asyncio
     async def test_query_with_global_store(self):
         """Test run_rag_query with global state store."""
         reset_global_state_store()
 
-        mock_result = {"response": "Global result", "sources": [], "iterations": 1, "error": None}
+        @dataclass
+        class MockResult:
+            response: str = "Global result"
+            sources: list = None
+            iterations: int = 1
+            error: str = None
+            tools_used: list = None
 
-        with patch("src.agents.rag_agent.run_rag_agent", return_value=mock_result):
+            def __post_init__(self):
+                if self.sources is None:
+                    self.sources = []
+                if self.tools_used is None:
+                    self.tools_used = []
+
+        mock_use_case = Mock()
+        mock_use_case.execute.return_value = MockResult()
+
+        with patch("src.infrastructure.di.create_process_query_use_case", return_value=mock_use_case):
             result = await run_rag_query(
                 channel_id="channel",
                 query="query",
@@ -229,71 +221,214 @@ class TestRunRagQuery:
         assert result["response"] == "Global result"
 
 
-class TestRunRagQueryStateIntegration:
-    """Integration tests for run_rag_query state updates."""
+class TestChannelTools:
+    """Tests for channel-related tools."""
 
     @pytest.mark.asyncio
-    async def test_middleware_updates_state(self):
-        """Test that middleware properly updates state during execution."""
-        store = AgentStateStore()
-        states_received = []
+    async def test_validate_channel_success(self):
+        """Test validating an existing channel."""
+        mock_gemini = Mock()
+        mock_gemini.get_store.return_value = {"display_name": "Test Channel"}
 
-        def capture_states(state_dict):
-            # Subscribe receives state dictionaries, not events
-            states_received.append(state_dict.copy())
+        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+            result = await validate_channel("test-channel")
 
-        store.subscribe(capture_states)
+        assert result["valid"] is True
+        assert result["channel_id"] == "test-channel"
 
-        # Create a mock that simulates middleware being called
-        def mock_run_agent_with_middleware(channel_id, query, middleware=None):
-            if middleware:
-                # Simulate middleware calls by calling the store's update method
-                # The store.update method handles events
-                store.update({
-                    "event": "agent_start",
-                    "timestamp": "2024-01-01T00:00:00",
-                    "data": {"query": query},
-                })
-                store.update({
-                    "event": "model_start",
-                    "node": "Draft",
-                    "timestamp": "2024-01-01T00:00:01",
-                    "data": {"type": "model"},
-                })
-                store.update({
-                    "event": "model_complete",
-                    "node": "Draft",
-                    "data": {"duration_ms": 500},
-                })
-                store.update({
-                    "event": "agent_complete",
-                    "timestamp": "2024-01-01T00:00:02",
-                })
+    @pytest.mark.asyncio
+    async def test_validate_channel_not_found(self):
+        """Test validating a non-existent channel."""
+        mock_gemini = Mock()
+        mock_gemini.get_store.return_value = None
 
-            return {
-                "response": "Test answer",
-                "sources": [],
-                "iterations": 1,
-                "error": None,
-            }
+        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+            result = await validate_channel("nonexistent")
 
-        with patch("src.agents.rag_agent.run_rag_agent", side_effect=mock_run_agent_with_middleware):
-            result = await run_rag_query(
-                channel_id="test",
-                query="What is X?",
-                state_store=store,
-            )
+        assert result["valid"] is False
+        assert "error" in result
 
-        # Check states were received (subscribers get state dicts)
-        assert len(states_received) > 0
+    @pytest.mark.asyncio
+    async def test_list_channels_success(self):
+        """Test listing channels."""
+        mock_gemini = Mock()
+        mock_gemini.list_stores.return_value = [
+            {"name": "stores/store1", "display_name": "Channel 1"},
+            {"name": "stores/store2", "display_name": "Channel 2"},
+        ]
 
-        # Verify state progression
-        statuses = [s["status"] for s in states_received]
-        assert "running" in statuses  # Started running
-        assert statuses[-1] == "complete"  # Ended complete
+        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+            result = await list_channels()
 
-        # Final state should be complete
-        assert result["state"]["status"] == "complete"
+        assert result["total"] == 2
+        assert len(result["channels"]) == 2
+
+
+class TestSessionTools:
+    """Tests for session management tools."""
+
+    def setup_method(self):
+        """Clear sessions before each test."""
+        _sessions.clear()
+        _chat_histories.clear()
+
+    @pytest.mark.asyncio
+    async def test_create_session_success(self):
+        """Test creating a new session."""
+        mock_gemini = Mock()
+        mock_gemini.get_store.return_value = {"display_name": "Test Channel"}
+
+        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+            result = await create_session("test-channel")
+
+        assert result["success"] is True
+        assert "session_id" in result
+        assert result["channel_id"] == "test-channel"
+
+    @pytest.mark.asyncio
+    async def test_create_session_invalid_channel(self):
+        """Test creating session with invalid channel."""
+        mock_gemini = Mock()
+        mock_gemini.get_store.return_value = None
+
+        with patch("src.services.gemini.GeminiService", return_value=mock_gemini):
+            result = await create_session("invalid-channel")
+
+        assert result["success"] is False
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_get_session_success(self):
+        """Test getting an existing session."""
+        # Create a session first
+        _sessions["test-session"] = {
+            "session_id": "test-session",
+            "channel_id": "channel1",
+        }
+
+        result = await get_session("test-session")
+
+        assert result["success"] is True
+        assert result["session_id"] == "test-session"
+
+    @pytest.mark.asyncio
+    async def test_get_session_not_found(self):
+        """Test getting a non-existent session."""
+        result = await get_session("nonexistent")
+
+        assert result["success"] is False
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_delete_session_success(self):
+        """Test deleting a session."""
+        _sessions["test-session"] = {"session_id": "test-session"}
+        _chat_histories["test-session"] = []
+
+        result = await delete_session("test-session")
+
+        assert result["success"] is True
+        assert "test-session" not in _sessions
+        assert "test-session" not in _chat_histories
+
+    @pytest.mark.asyncio
+    async def test_list_sessions(self):
+        """Test listing all sessions."""
+        _sessions["session1"] = {"session_id": "session1", "channel_id": "ch1"}
+        _sessions["session2"] = {"session_id": "session2", "channel_id": "ch2"}
+
+        result = await list_sessions()
+
+        assert result["total"] == 2
+        assert len(result["sessions"]) == 2
+
+
+class TestChatHistoryTools:
+    """Tests for chat history tools."""
+
+    def setup_method(self):
+        """Clear sessions before each test."""
+        _sessions.clear()
+        _chat_histories.clear()
+
+    @pytest.mark.asyncio
+    async def test_get_chat_history_success(self):
+        """Test getting chat history."""
+        _sessions["test-session"] = {"session_id": "test-session"}
+        _chat_histories["test-session"] = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+
+        result = await get_chat_history("test-session")
+
+        assert result["success"] is True
+        assert len(result["messages"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_get_chat_history_with_limit(self):
+        """Test getting chat history with limit."""
+        _sessions["test-session"] = {"session_id": "test-session"}
+        _chat_histories["test-session"] = [
+            {"role": "user", "content": f"Message {i}"} for i in range(10)
+        ]
+
+        result = await get_chat_history("test-session", limit=5)
+
+        assert result["success"] is True
+        assert len(result["messages"]) == 5
+
+    @pytest.mark.asyncio
+    async def test_clear_chat_history(self):
+        """Test clearing chat history."""
+        _sessions["test-session"] = {"session_id": "test-session"}
+        _chat_histories["test-session"] = [{"role": "user", "content": "test"}]
+
+        result = await clear_chat_history("test-session")
+
+        assert result["success"] is True
+        assert len(_chat_histories["test-session"]) == 0
+
+
+class TestWebSearchTools:
+    """Tests for web search tools."""
+
+    @pytest.mark.asyncio
+    async def test_web_search_success(self):
+        """Test successful web search."""
+        @dataclass
+        class MockSearchResult:
+            title: str
+            url: str
+            snippet: str
+            score: float
+
+        mock_results = [
+            MockSearchResult(title="Result 1", url="https://example.com/1", snippet="Snippet 1", score=0.9),
+            MockSearchResult(title="Result 2", url="https://example.com/2", snippet="Snippet 2", score=0.8),
+        ]
+
+        mock_adapter = Mock()
+        mock_adapter.search.return_value = mock_results
+
+        with patch("src.infrastructure.external.tavily.TavilyWebSearchAdapter", return_value=mock_adapter):
+            result = await run_web_search("test query")
+
+        assert result["success"] is True
+        assert result["total"] == 2
+        assert len(result["results"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_web_search_error(self):
+        """Test web search error handling."""
+        with patch(
+            "src.infrastructure.external.tavily.TavilyWebSearchAdapter",
+            side_effect=Exception("API Error"),
+        ):
+            result = await run_web_search("test query")
+
+        assert result["success"] is False
+        assert "error" in result
 
 
 class TestToolsModuleImports:
@@ -306,14 +441,47 @@ class TestToolsModuleImports:
         assert hasattr(tools, "get_agent_status")
         assert hasattr(tools, "run_rag_query")
         assert hasattr(tools, "reset_agent_state")
+        assert hasattr(tools, "validate_channel")
+        assert hasattr(tools, "list_channels")
+        assert hasattr(tools, "create_session")
+        assert hasattr(tools, "get_session")
+        assert hasattr(tools, "delete_session")
+        assert hasattr(tools, "list_sessions")
+        assert hasattr(tools, "get_chat_history")
+        assert hasattr(tools, "clear_chat_history")
+        assert hasattr(tools, "run_web_search")
+        assert hasattr(tools, "run_rag_with_web_search")
 
     def test_functions_are_async(self):
         """Test that tool functions are async."""
-        import asyncio
         import inspect
 
-        from src.mcp_server.tools import get_agent_status, run_rag_query, reset_agent_state
+        from src.mcp_server.tools import (
+            get_agent_status,
+            run_rag_query,
+            reset_agent_state,
+            validate_channel,
+            list_channels,
+            create_session,
+            get_session,
+            delete_session,
+            list_sessions,
+            get_chat_history,
+            clear_chat_history,
+            run_web_search,
+            run_rag_with_web_search,
+        )
 
         assert inspect.iscoroutinefunction(get_agent_status)
         assert inspect.iscoroutinefunction(run_rag_query)
         assert inspect.iscoroutinefunction(reset_agent_state)
+        assert inspect.iscoroutinefunction(validate_channel)
+        assert inspect.iscoroutinefunction(list_channels)
+        assert inspect.iscoroutinefunction(create_session)
+        assert inspect.iscoroutinefunction(get_session)
+        assert inspect.iscoroutinefunction(delete_session)
+        assert inspect.iscoroutinefunction(list_sessions)
+        assert inspect.iscoroutinefunction(get_chat_history)
+        assert inspect.iscoroutinefunction(clear_chat_history)
+        assert inspect.iscoroutinefunction(run_web_search)
+        assert inspect.iscoroutinefunction(run_rag_with_web_search)

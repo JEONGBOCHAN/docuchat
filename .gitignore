@@ -40,17 +40,6 @@ data/
 # Claude Code 내부 문서
 CLAUDE.md
 .claude/
-docs/claude-*.md
-docs/dev-result-*.md
-docs/dev-schedule-*.md
-docs/issue-report-*.md
-docs/status-board.md
-docs/deployment-proposal.md
-docs/azure-deployment-troubleshooting_for_llm.md
-docs/messages/
+docs/
 result_*.txt
 nul
-
-# Claude generated docs
-docs/agent-pattern-analysis.md
-docs/mcp-apps-dashboard-implementation.md

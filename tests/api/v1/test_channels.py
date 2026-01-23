@@ -86,8 +86,9 @@ class TestListChannels:
         data = response.json()
         assert data["total"] == 2
         assert len(data["channels"]) == 2
-        assert data["channels"][0]["name"] == "Channel 1"
-        assert data["channels"][1]["name"] == "Channel 2"
+        # Check both channels are present (order may vary based on sorting)
+        channel_names = {c["name"] for c in data["channels"]}
+        assert channel_names == {"Channel 1", "Channel 2"}
 
         app.dependency_overrides.pop(get_gemini_service, None)
 

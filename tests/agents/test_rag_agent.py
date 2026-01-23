@@ -115,17 +115,17 @@ class TestCreateRAGAgent:
     @patch("src.agents.rag_agent.get_settings")
     @patch("src.agents.rag_agent.GeminiService")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
-    @patch("src.agents.rag_agent.create_agent")
+    @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_basic(
         self,
-        mock_create_agent,
+        mock_create_react_agent,
         mock_chat_model,
         mock_gemini_service,
         mock_get_settings,
     ):
         """Test basic agent creation."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
-        mock_create_agent.return_value = Mock()
+        mock_create_react_agent.return_value = Mock()
 
         config = RAGAgentConfig(channel_id="test-channel")
         agent = create_rag_agent(config)
@@ -137,27 +137,26 @@ class TestCreateRAGAgent:
         assert call_kwargs["google_api_key"] == "test-key"
         assert call_kwargs["temperature"] == 0.0
 
-        # Verify create_agent was called
-        mock_create_agent.assert_called_once()
-        call_kwargs = mock_create_agent.call_args[1]
+        # Verify create_react_agent was called
+        mock_create_react_agent.assert_called_once()
+        call_kwargs = mock_create_react_agent.call_args[1]
         assert len(call_kwargs["tools"]) == 2  # search and finish tools
-        assert call_kwargs["system_prompt"] == RAG_AGENT_SYSTEM_PROMPT
-        assert call_kwargs["middleware"] == []
+        assert call_kwargs["state_modifier"] == RAG_AGENT_SYSTEM_PROMPT
 
     @patch("src.agents.rag_agent.get_settings")
     @patch("src.agents.rag_agent.GeminiService")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
-    @patch("src.agents.rag_agent.create_agent")
+    @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_with_custom_prompt(
         self,
-        mock_create_agent,
+        mock_create_react_agent,
         mock_chat_model,
         mock_gemini_service,
         mock_get_settings,
     ):
         """Test agent creation with custom system prompt."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
-        mock_create_agent.return_value = Mock()
+        mock_create_react_agent.return_value = Mock()
 
         custom_prompt = "You are a custom assistant."
         config = RAGAgentConfig(
@@ -166,23 +165,23 @@ class TestCreateRAGAgent:
         )
         create_rag_agent(config)
 
-        call_kwargs = mock_create_agent.call_args[1]
-        assert call_kwargs["system_prompt"] == custom_prompt
+        call_kwargs = mock_create_react_agent.call_args[1]
+        assert call_kwargs["state_modifier"] == custom_prompt
 
     @patch("src.agents.rag_agent.get_settings")
     @patch("src.agents.rag_agent.GeminiService")
     @patch("src.agents.rag_agent.ChatGoogleGenerativeAI")
-    @patch("src.agents.rag_agent.create_agent")
+    @patch("src.agents.rag_agent.create_react_agent")
     def test_create_rag_agent_with_middleware(
         self,
-        mock_create_agent,
+        mock_create_react_agent,
         mock_chat_model,
         mock_gemini_service,
         mock_get_settings,
     ):
-        """Test agent creation with middleware."""
+        """Test agent creation with middleware (middleware stored in config, not passed to create_react_agent)."""
         mock_get_settings.return_value = Mock(google_api_key="test-key")
-        mock_create_agent.return_value = Mock()
+        mock_create_react_agent.return_value = Mock()
 
         mock_middleware = [Mock(), Mock()]
         config = RAGAgentConfig(
@@ -191,8 +190,9 @@ class TestCreateRAGAgent:
         )
         create_rag_agent(config)
 
-        call_kwargs = mock_create_agent.call_args[1]
-        assert call_kwargs["middleware"] == mock_middleware
+        # Middleware is handled separately in run_rag_agent, not in create_react_agent
+        mock_create_react_agent.assert_called_once()
+        # Just verify create_react_agent was called (middleware is applied during run_rag_agent)
 
 
 class TestRunRAGAgent:

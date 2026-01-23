@@ -29,9 +29,10 @@ from src.services.channel_repository import (
 )
 from src.services.cache_service import CacheService, get_cache_service
 from src.services.search_repository import SearchHistoryRepository
-from src.workflows import run_rag_agent
-from src.agents.middlewares.dashboard import DashboardMiddleware
 from src.mcp_server.state import get_global_state_store
+
+# Clean Architecture imports
+from src.infrastructure.di import create_process_query_use_case
 
 router = APIRouter(prefix="/channels", tags=["chat"])
 
@@ -94,7 +95,12 @@ def _run_agent_chat(
     conversation_history: list[dict[str, str]] | None = None,
     max_iterations: int = 3,
 ) -> dict:
-    """Run the LangGraph agent to answer a query using documents in the channel.
+    """Run the agent to answer a query using documents in the channel.
+
+    Uses Clean Architecture ProcessQueryUseCase which:
+    - Abstracts LangGraph via AgentRunnerPort
+    - Emits events via AgentEventSinkPort
+    - Bridges to legacy dashboard via StateStoreAdapter
 
     Args:
         channel_id: The channel ID to search in
@@ -103,19 +109,29 @@ def _run_agent_chat(
         max_iterations: Maximum agent iterations (default 3)
 
     Returns:
-        Dict with 'response', 'sources', and 'iterations'
+        Dict with 'response', 'sources', 'iterations', and 'session_id'
     """
-    # Create dashboard middleware for real-time state updates
-    state_store = get_global_state_store()
-    middleware = DashboardMiddleware(state_store=state_store)
+    # Use Clean Architecture: ProcessQueryUseCase
+    use_case = create_process_query_use_case(
+        use_legacy_dashboard=True,
+        include_web_search=False,
+    )
 
-    return run_rag_agent(
-        channel_id=channel_id,
+    result = use_case.execute(
         query=query,
+        channel_id=channel_id,
         conversation_history=conversation_history,
         max_iterations=max_iterations,
-        middleware=[middleware],
     )
+
+    # Convert QueryResult to dict for backward compatibility
+    return {
+        "response": result.response,
+        "sources": result.sources,
+        "iterations": result.iterations,
+        "session_id": result.session_id,
+        "error": result.error,
+    }
 
 
 def _format_sse_event(data: dict | str) -> str:
