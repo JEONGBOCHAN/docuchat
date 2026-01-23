@@ -29,6 +29,8 @@ from src.services.channel_repository import (
 from src.services.cache_service import CacheService, get_cache_service
 from src.services.search_repository import SearchHistoryRepository
 from src.workflows import run_rag_agent
+from src.agents.middlewares.dashboard import DashboardMiddleware
+from src.mcp_server.state import get_global_state_store
 
 router = APIRouter(prefix="/channels", tags=["chat"])
 
@@ -50,11 +52,16 @@ def _run_agent_chat(
     Returns:
         Dict with 'response', 'sources', and 'iterations'
     """
+    # Create dashboard middleware for real-time state updates
+    state_store = get_global_state_store()
+    middleware = DashboardMiddleware(state_store=state_store)
+
     return run_rag_agent(
         channel_id=channel_id,
         query=query,
         conversation_history=conversation_history,
         max_iterations=max_iterations,
+        middleware=[middleware],
     )
 
 
