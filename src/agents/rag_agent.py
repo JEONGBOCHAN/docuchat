@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-RAG Agent using LangChain create_agent pattern.
+RAG Agent using LangGraph create_react_agent pattern.
 
 Implements a document-grounded Q&A agent with middleware support.
 """
@@ -8,7 +8,7 @@ Implements a document-grounded Q&A agent with middleware support.
 from dataclasses import dataclass, field
 from typing import Any
 
-from langchain.agents import create_agent
+from langgraph.prebuilt import create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from src.agents.tools.search_tools import (
@@ -73,13 +73,13 @@ class RAGAgentConfig:
 # ============================================================
 
 def create_rag_agent(config: RAGAgentConfig) -> Any:
-    """Create a RAG agent using LangChain's create_agent.
+    """Create a RAG agent using LangGraph's create_react_agent.
 
     Args:
         config: RAGAgentConfig with channel_id and other settings.
 
     Returns:
-        A compiled LangChain agent graph.
+        A compiled LangGraph agent.
     """
     settings = get_settings()
     gemini_service = GeminiService()
@@ -101,12 +101,12 @@ def create_rag_agent(config: RAGAgentConfig) -> Any:
     # Use custom system prompt if provided, otherwise use default
     system_prompt = config.system_prompt or RAG_AGENT_SYSTEM_PROMPT
 
-    # Create the agent with middleware support
-    agent = create_agent(
+    # Create the agent using LangGraph's create_react_agent
+    # Note: middleware is handled separately in run_rag_agent
+    agent = create_react_agent(
         model=llm,
         tools=[search_tool, finish_tool],
-        system_prompt=system_prompt,
-        middleware=config.middleware,
+        state_modifier=system_prompt,
     )
 
     return agent
@@ -126,7 +126,7 @@ def run_rag_agent(
     """Run the RAG agent to answer a query.
 
     This function provides backward compatibility with the LangGraph-based
-    implementation while using the new LangChain create_agent pattern.
+    implementation while using the new LangGraph create_react_agent pattern.
 
     Args:
         channel_id: The channel ID to search in.
@@ -138,11 +138,18 @@ def run_rag_agent(
     Returns:
         Dict with 'response', 'sources', 'iterations', and optional 'error'.
     """
+    from datetime import datetime
+
     config = RAGAgentConfig(
         channel_id=channel_id,
         max_iterations=max_iterations,
         middleware=middleware or [],
     )
+
+    # Notify middleware of agent start
+    for mw in config.middleware:
+        if hasattr(mw, 'on_agent_start'):
+            mw.on_agent_start({"query": query, "channel_id": channel_id})
 
     try:
         agent = create_rag_agent(config)
@@ -154,15 +161,28 @@ def run_rag_agent(
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 if role == "user":
-                    messages.append({"role": "user", "content": content})
+                    messages.append(("user", content))
                 else:
-                    messages.append({"role": "assistant", "content": content})
+                    messages.append(("assistant", content))
 
         # Add the current query
-        messages.append({"role": "user", "content": query})
+        messages.append(("user", query))
 
-        # Run the agent
-        result = agent.invoke({"messages": messages})
+        # Notify middleware of retrieve step
+        for mw in config.middleware:
+            if hasattr(mw, 'on_tool_start'):
+                mw.on_tool_start("retrieve", {"query": query})
+
+        # Run the agent with recursion limit
+        result = agent.invoke(
+            {"messages": messages},
+            config={"recursion_limit": max_iterations * 2 + 1}
+        )
+
+        # Notify middleware of retrieve complete
+        for mw in config.middleware:
+            if hasattr(mw, 'on_tool_end'):
+                mw.on_tool_end("retrieve", {})
 
         # Extract the final response
         final_message = result.get("messages", [])[-1] if result.get("messages") else None
@@ -193,6 +213,15 @@ def run_rag_agent(
                             except (IndexError, AttributeError):
                                 pass
 
+        # Notify middleware of agent complete
+        for mw in config.middleware:
+            if hasattr(mw, 'on_agent_end'):
+                mw.on_agent_end({
+                    "response": response_text,
+                    "sources": sources,
+                    "iterations": iterations,
+                })
+
         return {
             "response": response_text,
             "sources": sources,
@@ -201,6 +230,11 @@ def run_rag_agent(
         }
 
     except Exception as e:
+        # Notify middleware of error
+        for mw in config.middleware:
+            if hasattr(mw, 'on_agent_error'):
+                mw.on_agent_error(str(e))
+
         return {
             "response": f"Error: {str(e)}",
             "sources": [],

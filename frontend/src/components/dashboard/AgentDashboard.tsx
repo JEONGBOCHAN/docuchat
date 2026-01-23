@@ -148,7 +148,7 @@ export function AgentDashboard({
     if (renderMode === 'iframe' && iframeRef.current && agentState) {
       try {
         iframeRef.current.contentWindow?.postMessage(
-          { type: 'STATE_UPDATE', state: agentState },
+          { type: 'state_update', state: agentState },
           '*'
         );
       } catch {

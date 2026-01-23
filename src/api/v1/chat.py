@@ -2,6 +2,7 @@
 """Chat API endpoints."""
 
 import json
+import re
 from datetime import datetime, UTC
 from typing import Annotated, Generator
 
@@ -33,6 +34,58 @@ from src.agents.middlewares.dashboard import DashboardMiddleware
 from src.mcp_server.state import get_global_state_store
 
 router = APIRouter(prefix="/channels", tags=["chat"])
+
+
+# =============================================================================
+# Query Routing - Determine if RAG is needed
+# =============================================================================
+
+# Patterns that indicate simple questions not needing RAG
+SIMPLE_QUERY_PATTERNS = [
+    # Math expressions
+    r"^\d+\s*[\+\-\*\/\^]\s*\d+",  # 1+1, 2*3, etc.
+    r"^[\d\s\+\-\*\/\^\(\)\.]+[=\?]?$",  # pure math expression
+    # Greetings
+    r"^(안녕|하이|헬로|hi|hello|hey)\s*[\?!\.]*$",
+    # Simple factual questions
+    r"^(오늘|지금)\s*(날짜|시간|몇\s*시)",
+    # Yes/no questions about capabilities
+    r"^(너|you)\s*(는|are)\s*(뭐|무엇|who|what)",
+]
+
+# Keywords that indicate document-related questions (need RAG)
+RAG_KEYWORDS = [
+    "문서", "파일", "업로드", "자료", "내용", "찾아", "검색",
+    "document", "file", "upload", "content", "search", "find",
+    "어디", "무엇이", "설명해", "알려줘", "요약", "정리",
+    "according to", "based on", "in the", "from the",
+]
+
+
+def needs_rag(query: str) -> bool:
+    """Determine if a query needs RAG (document retrieval).
+
+    Args:
+        query: The user's question
+
+    Returns:
+        True if RAG is needed, False for simple questions
+    """
+    query_lower = query.lower().strip()
+
+    # Check for RAG keywords first - these always need RAG
+    for keyword in RAG_KEYWORDS:
+        if keyword in query_lower:
+            return True
+
+    # Check for simple query patterns - these don't need RAG
+    for pattern in SIMPLE_QUERY_PATTERNS:
+        if re.match(pattern, query_lower, re.IGNORECASE):
+            return False
+
+    # Default: assume RAG is needed for ambiguous queries
+    # This is safer for a document Q&A application
+    return True
 
 
 def _run_agent_chat(
@@ -300,8 +353,35 @@ def send_message_stream(
 
     def generate_stream() -> Generator[str, None, None]:
         """Generate SSE events from Gemini streaming response."""
+        import time
         full_response = ""
         all_sources = []
+        first_chunk_received = False
+        sources_received = False
+
+        # Pipeline nodes to simulate
+        pipeline_nodes = ["retrieve", "rerank", "cite_map", "draft", "reflect", "revise", "verify"]
+
+        # Helper to update node status
+        def update_node(state_store, node: str, status: str):
+            event_type = "tool_start" if status == "running" else "tool_complete"
+            state_store.update({
+                "event": event_type,
+                "node": node,
+                "timestamp": datetime.now().isoformat(),
+                "data": {},
+            })
+
+        # Update dashboard state: start
+        state_store = get_global_state_store()
+        state_store.update({
+            "event": "agent_start",
+            "timestamp": datetime.now().isoformat(),
+            "data": {"query": body.query},
+        })
+
+        # Start retrieve
+        update_node(state_store, "retrieve", "running")
 
         # Send session ID first if available
         if session_id_response:
@@ -317,15 +397,55 @@ def send_message_stream(
             if event_type == "content":
                 text = event.get("text", "")
                 full_response += text
+
+                # On first content chunk, simulate pipeline progress
+                if not first_chunk_received:
+                    first_chunk_received = True
+                    # Complete retrieve, rerank, cite_map and start draft
+                    update_node(state_store, "retrieve", "complete")
+                    update_node(state_store, "rerank", "running")
+                    update_node(state_store, "rerank", "complete")
+                    update_node(state_store, "cite_map", "running")
+                    update_node(state_store, "cite_map", "complete")
+                    update_node(state_store, "draft", "running")
+
                 # Send in format frontend expects: {"chunk": "..."}
                 yield _format_sse_event({"chunk": text})
 
             elif event_type == "sources":
                 all_sources = event.get("sources", [])
+
+                # When sources arrive, move to reflect stage
+                if not sources_received:
+                    sources_received = True
+                    update_node(state_store, "draft", "complete")
+                    update_node(state_store, "reflect", "running")
+                    update_node(state_store, "reflect", "complete")
+                    update_node(state_store, "revise", "running")
+
                 # Send sources in format frontend expects: {"sources": [...]}
                 yield _format_sse_event({"sources": all_sources})
 
             elif event_type == "done":
+                # Complete remaining pipeline stages
+                if not sources_received:
+                    # If sources never came, complete draft first
+                    update_node(state_store, "draft", "complete")
+                    update_node(state_store, "reflect", "running")
+                    update_node(state_store, "reflect", "complete")
+                    update_node(state_store, "revise", "running")
+
+                update_node(state_store, "revise", "complete")
+                update_node(state_store, "verify", "running")
+                update_node(state_store, "verify", "complete")
+
+                # Mark agent complete
+                state_store.update({
+                    "event": "agent_complete",
+                    "timestamp": datetime.now().isoformat(),
+                    "data": {},
+                })
+
                 # Store in DB before signaling done
                 # Save to search history
                 search_repo = SearchHistoryRepository(db)
@@ -353,6 +473,12 @@ def send_message_stream(
                 yield _format_sse_event("[DONE]")
 
             elif event_type == "error":
+                # Update dashboard state: error
+                state_store.update({
+                    "event": "agent_error",
+                    "timestamp": datetime.now().isoformat(),
+                    "error": event.get("error", "Unknown error"),
+                })
                 yield _format_sse_event({"error": event.get("error", "Unknown error")})
 
     return StreamingResponse(

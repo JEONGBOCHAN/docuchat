@@ -11,10 +11,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Protocol
 
-from langchain.agents.middleware import AgentMiddleware
-from langchain.agents.middleware.types import ToolCallRequest
-from langchain_core.messages import ToolMessage
-
 
 class NodeStatus(str, Enum):
     """Status of a node in the agent execution pipeline."""
@@ -128,7 +124,7 @@ class StateUpdater(Protocol):
         ...
 
 
-class DashboardMiddleware(AgentMiddleware):
+class DashboardMiddleware:
     """Middleware that publishes agent execution state for dashboard visualization.
 
     This middleware tracks the execution of an agent through its various stages
@@ -136,31 +132,32 @@ class DashboardMiddleware(AgentMiddleware):
     external dashboard systems for real-time visualization.
 
     Attributes:
-        state_updater: Optional callback function to receive state updates.
+        state_store: Optional state store instance to receive state updates.
         state: Current dashboard state.
 
     Example:
-        >>> def on_state_update(event: dict) -> None:
-        ...     print(f"Event: {event['event']}, Node: {event.get('node')}")
-        ...
-        >>> middleware = DashboardMiddleware(state_updater=on_state_update)
-        >>> agent = create_agent(model=llm, tools=tools, middleware=[middleware])
-        >>> result = agent.invoke({"messages": messages})
+        >>> from src.mcp_server.state import get_global_state_store
+        >>> store = get_global_state_store()
+        >>> middleware = DashboardMiddleware(state_store=store)
+        >>> # Agent runner will call middleware methods
     """
 
     def __init__(
         self,
         state_updater: StateUpdater | None = None,
+        state_store: Any | None = None,
         name: str = "dashboard_middleware",
     ) -> None:
         """Initialize the dashboard middleware.
 
         Args:
             state_updater: Optional callback to receive state update events.
+            state_store: Optional AgentStateStore instance.
             name: Name identifier for this middleware instance.
         """
         self._name = name
         self._state_updater = state_updater
+        self._state_store = state_store
         self._state = DashboardState()
         self._current_model_node: str | None = None
         self._step_start_times: dict[str, datetime] = {}
@@ -211,8 +208,82 @@ class DashboardMiddleware(AgentMiddleware):
         if error:
             event["error"] = error
 
+        # Publish to state_updater callback
         if self._state_updater:
             self._state_updater(event)
+
+        # Publish to state_store
+        if self._state_store and hasattr(self._state_store, 'update'):
+            self._state_store.update(event)
+
+    # =========================================================================
+    # Simple callback methods for direct use by agent runners
+    # =========================================================================
+
+    def on_agent_start(self, data: dict[str, Any]) -> None:
+        """Called when agent execution starts."""
+        self.reset()
+        self._state.status = AgentStatus.RUNNING
+        self._state.metrics.start_time = datetime.now().isoformat()
+        self._publish_event(EventType.AGENT_START, data=data)
+
+    def on_agent_end(self, data: dict[str, Any]) -> None:
+        """Called when agent execution completes successfully."""
+        self._state.status = AgentStatus.COMPLETE
+        self._state.current_node = None
+        self._state.metrics.end_time = datetime.now().isoformat()
+
+        if self._state.metrics.start_time:
+            start = datetime.fromisoformat(self._state.metrics.start_time)
+            end = datetime.fromisoformat(self._state.metrics.end_time)
+            self._state.metrics.total_duration_ms = (end - start).total_seconds() * 1000
+
+        self._publish_event(EventType.AGENT_COMPLETE, data=data)
+
+    def on_agent_error(self, error: str) -> None:
+        """Called when agent execution fails."""
+        self._state.status = AgentStatus.ERROR
+        self._state.current_node = None
+        self._state.metrics.end_time = datetime.now().isoformat()
+
+        if self._state.metrics.start_time:
+            start = datetime.fromisoformat(self._state.metrics.start_time)
+            end = datetime.fromisoformat(self._state.metrics.end_time)
+            self._state.metrics.total_duration_ms = (end - start).total_seconds() * 1000
+
+        self._publish_event(EventType.AGENT_ERROR, error=error)
+
+    def on_tool_start(self, tool_name: str, data: dict[str, Any]) -> None:
+        """Called when a tool execution starts."""
+        self._state.current_node = tool_name
+        self._step_start_times[tool_name] = datetime.now()
+        self._state.metrics.tool_calls += 1
+
+        step = StepRecord(
+            node=tool_name,
+            status=NodeStatus.RUNNING,
+            data={"type": "tool", **data},
+        )
+        self._state.steps.append(step)
+        self._state.metrics.total_steps += 1
+
+        self._publish_event(EventType.TOOL_START, node=tool_name, data=data)
+
+    def on_tool_end(self, tool_name: str, data: dict[str, Any]) -> None:
+        """Called when a tool execution completes."""
+        duration = self._calculate_duration(tool_name)
+
+        for step in reversed(self._state.steps):
+            if step.node == tool_name and step.status == NodeStatus.RUNNING:
+                step.status = NodeStatus.COMPLETE
+                step.duration_ms = duration
+                break
+
+        self._publish_event(
+            EventType.TOOL_COMPLETE,
+            node=tool_name,
+            data={"duration_ms": duration, **data},
+        )
 
     def _calculate_duration(self, node: str) -> float | None:
         """Calculate duration in milliseconds for a node.
@@ -436,9 +507,9 @@ class DashboardMiddleware(AgentMiddleware):
 
     def wrap_tool_call(
         self,
-        request: ToolCallRequest,
-        handler: Callable[[ToolCallRequest], ToolMessage | Any],
-    ) -> ToolMessage | Any:
+        request: Any,
+        handler: Callable[[Any], Any],
+    ) -> Any:
         """Wrap a tool call to track its execution.
 
         Publishes tool_start, tool_complete, or tool_error events.

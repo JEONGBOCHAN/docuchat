@@ -50,3 +50,7 @@ docs/azure-deployment-troubleshooting_for_llm.md
 docs/messages/
 result_*.txt
 nul
+
+# Claude generated docs
+docs/agent-pattern-analysis.md
+docs/mcp-apps-dashboard-implementation.md
