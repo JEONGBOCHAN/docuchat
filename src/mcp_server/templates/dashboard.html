@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Status Dashboard</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #1a1a2e;
+            color: #e4e4e7;
+            min-height: 100vh;
+            padding: 16px;
+            line-height: 1.5;
+        }
+
+        .dashboard {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #3d3d5c;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        /* Status indicator */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .status-idle .status-dot {
+            background: #6b7280;
+        }
+        .status-idle {
+            background: rgba(107, 114, 128, 0.2);
+            color: #9ca3af;
+        }
+
+        .status-running .status-dot {
+            background: #4ade80;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        .status-running {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+        }
+
+        .status-complete .status-dot {
+            background: #60a5fa;
+        }
+        .status-complete {
+            background: rgba(96, 165, 250, 0.15);
+            color: #60a5fa;
+        }
+
+        .status-error .status-dot {
+            background: #f87171;
+        }
+        .status-error {
+            background: rgba(248, 113, 113, 0.15);
+            color: #f87171;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
+        }
+
+        /* Query display */
+        .query-section {
+            background: #2d2d44;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+        }
+
+        .query-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+
+        .query-text {
+            font-size: 14px;
+            color: #e4e4e7;
+        }
+
+        /* Pipeline visualization */
+        .pipeline-section {
+            margin-bottom: 24px;
+        }
+
+        .pipeline-section h2 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #9ca3af;
+            margin-bottom: 12px;
+        }
+
+        .pipeline-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .pipeline-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: #2d2d44;
+            border: 2px solid #3d3d5c;
+            min-width: 80px;
+            transition: all 0.2s ease;
+        }
+
+        .pipeline-node .node-name {
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .pipeline-node .node-status {
+            font-size: 16px;
+        }
+
+        .pipeline-node .node-duration {
+            font-size: 10px;
+            color: #9ca3af;
+            margin-top: 2px;
+        }
+
+        .pipeline-node.pending {
+            opacity: 0.5;
+        }
+
+        .pipeline-node.running {
+            border-color: #4ade80;
+            box-shadow: 0 0 12px rgba(74, 222, 128, 0.3);
+            animation: glow 1.5s ease-in-out infinite;
+        }
+
+        .pipeline-node.complete {
+            border-color: #60a5fa;
+            background: #1e3a5f;
+        }
+
+        .pipeline-node.error {
+            border-color: #f87171;
+            background: #3f1d1d;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 8px rgba(74, 222, 128, 0.3); }
+            50% { box-shadow: 0 0 16px rgba(74, 222, 128, 0.5); }
+        }
+
+        .pipeline-arrow {
+            color: #6b7280;
+            font-size: 18px;
+        }
+
+        .pipeline-divider {
+            width: 100%;
+            height: 1px;
+            background: #3d3d5c;
+            margin: 8px 0;
+            position: relative;
+        }
+
+        .pipeline-divider::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid #6b7280;
+        }
+
+        /* Info panel */
+        .info-panel {
+            background: #2d2d44;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .info-panel h2 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #9ca3af;
+            padding: 12px 16px;
+            background: #252538;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid #3d3d5c;
+            font-size: 13px;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #9ca3af;
+        }
+
+        .info-value {
+            font-weight: 500;
+            color: #e4e4e7;
+        }
+
+        /* Steps timeline */
+        .steps-section {
+            margin-top: 24px;
+        }
+
+        .steps-section h2 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #9ca3af;
+            margin-bottom: 12px;
+        }
+
+        .steps-list {
+            background: #2d2d44;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            border-bottom: 1px solid #3d3d5c;
+            font-size: 13px;
+        }
+
+        .step-item:last-child {
+            border-bottom: none;
+        }
+
+        .step-icon {
+            font-size: 14px;
+        }
+
+        .step-name {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .step-duration {
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        /* Error message */
+        .error-message {
+            background: rgba(248, 113, 113, 0.15);
+            border: 1px solid #f87171;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            color: #f87171;
+            font-size: 13px;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #9ca3af;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header with status -->
+        <div class="header">
+            <h1>Agent Status Dashboard</h1>
+            <div class="status-indicator status-idle" id="statusIndicator">
+                <div class="status-dot"></div>
+                <span id="statusText">Idle</span>
+            </div>
+        </div>
+
+        <!-- Current query -->
+        <div class="query-section" id="querySection" style="display: none;">
+            <div class="query-label">Current Query</div>
+            <div class="query-text" id="queryText"></div>
+        </div>
+
+        <!-- Error message -->
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
+
+        <!-- Pipeline visualization -->
+        <div class="pipeline-section">
+            <h2>Pipeline</h2>
+
+            <!-- Row 1: Tool nodes -->
+            <div class="pipeline-row" id="toolNodesRow">
+                <div class="pipeline-node pending" data-node="retrieve">
+                    <span class="node-name">Retrieve</span>
+                    <span class="node-status"></span>
+                    <span class="node-duration"></span>
+                </div>
+                <span class="pipeline-arrow">&rarr;</span>
+                <div class="pipeline-node pending" data-node="rerank">
+                    <span class="node-name">Rerank</span>
+                    <span class="node-status"></span>
+                    <span class="node-duration"></span>
+                </div>
+                <span class="pipeline-arrow">&rarr;</span>
+                <div class="pipeline-node pending" data-node="cite_map">
+                    <span class="node-name">Cite Map</span>
+                    <span class="node-status"></span>
+                    <span class="node-duration"></span>
+                </div>
+            </div>
+
+            <div class="pipeline-divider"></div>
+
+            <!-- Row 2: Model nodes -->
+            <div class="pipeline-row" id="modelNodesRow">
+                <div class="pipeline-node pending" data-node="draft">
+                    <span class="node-name">Draft</span>
+                    <span class="node-status"></span>
+                    <span class="node-duration"></span>
+                </div>
+                <span class="pipeline-arrow">&rarr;</span>
+                <div class="pipeline-node pending" data-node="reflect">
+                    <span class="node-name">Reflect</span>
+                    <span class="node-status"></span>
+                    <span class="node-duration"></span>
+                </div>
+                <span class="pipeline-arrow">&rarr;</span>
+                <div class="pipeline-node pending" data-node="revise">
+                    <span class="node-name">Revise</span>
+                    <span class="node-status"></span>
+                    <span class="node-duration"></span>
+                </div>
+            </div>
+
+            <div class="pipeline-divider"></div>
+
+            <!-- Row 3: Verify -->
+            <div class="pipeline-row" style="justify-content: center;">
+                <div class="pipeline-node pending" data-node="verify">
+                    <span class="node-name">Verify</span>
+                    <span class="node-status"></span>
+                    <span class="node-duration"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics panel -->
+        <div class="info-panel">
+            <h2>Metrics</h2>
+            <div class="info-row">
+                <span class="info-label">Current Node</span>
+                <span class="info-value" id="currentNode">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Total Steps</span>
+                <span class="info-value" id="totalSteps">0</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Model Calls</span>
+                <span class="info-value" id="modelCalls">0</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Tool Calls</span>
+                <span class="info-value" id="toolCalls">0</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Duration</span>
+                <span class="info-value" id="duration">-</span>
+            </div>
+        </div>
+
+        <!-- Steps timeline -->
+        <div class="steps-section" id="stepsSection" style="display: none;">
+            <h2>Execution Steps</h2>
+            <div class="steps-list" id="stepsList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initial state (injected by server)
+        let currentState = __INITIAL_STATE__;
+
+        // Status text mapping
+        const statusLabels = {
+            'idle': 'Idle',
+            'running': 'Running',
+            'complete': 'Complete',
+            'error': 'Error'
+        };
+
+        // Status icons for nodes
+        const statusIcons = {
+            'pending': '',
+            'running': '',
+            'complete': '',
+            'error': ''
+        };
+
+        // Step icons
+        const stepIcons = {
+            'running': '',
+            'complete': '',
+            'error': ''
+        };
+
+        // Render the dashboard based on state
+        function render(state) {
+            if (!state) return;
+
+            // Update status indicator
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            indicator.className = 'status-indicator status-' + (state.status || 'idle');
+            statusText.textContent = statusLabels[state.status] || 'Unknown';
+
+            // Update query
+            const querySection = document.getElementById('querySection');
+            const queryText = document.getElementById('queryText');
+            if (state.current_query) {
+                querySection.style.display = 'block';
+                queryText.textContent = state.current_query;
+            } else {
+                querySection.style.display = 'none';
+            }
+
+            // Update error message
+            const errorMessage = document.getElementById('errorMessage');
+            if (state.last_error) {
+                errorMessage.style.display = 'block';
+                errorMessage.textContent = state.last_error;
+            } else {
+                errorMessage.style.display = 'none';
+            }
+
+            // Update pipeline nodes
+            updatePipelineNodes(state);
+
+            // Update metrics
+            document.getElementById('currentNode').textContent = state.current_node || '-';
+            document.getElementById('totalSteps').textContent = state.metrics?.total_steps || 0;
+            document.getElementById('modelCalls').textContent = state.metrics?.model_calls || 0;
+            document.getElementById('toolCalls').textContent = state.metrics?.tool_calls || 0;
+
+            if (state.metrics?.total_duration_ms) {
+                document.getElementById('duration').textContent =
+                    (state.metrics.total_duration_ms / 1000).toFixed(2) + 's';
+            } else if (state.metrics?.start_time && state.status === 'running') {
+                const start = new Date(state.metrics.start_time);
+                const now = new Date();
+                const elapsed = ((now - start) / 1000).toFixed(1);
+                document.getElementById('duration').textContent = elapsed + 's...';
+            } else {
+                document.getElementById('duration').textContent = '-';
+            }
+
+            // Update steps list
+            updateStepsList(state.steps || []);
+        }
+
+        function updatePipelineNodes(state) {
+            // Build a map of node statuses from steps
+            const nodeStatuses = {};
+            const nodeDurations = {};
+
+            (state.steps || []).forEach(step => {
+                const nodeId = step.node.toLowerCase().replace(/\s+/g, '_');
+                nodeStatuses[nodeId] = step.status;
+                if (step.duration_ms) {
+                    nodeDurations[nodeId] = step.duration_ms;
+                }
+            });
+
+            // Also use pipeline_nodes if available
+            (state.pipeline_nodes || []).forEach(node => {
+                if (node.status && node.status !== 'pending') {
+                    nodeStatuses[node.id] = node.status;
+                }
+            });
+
+            // Update all pipeline node elements
+            document.querySelectorAll('.pipeline-node').forEach(nodeEl => {
+                const nodeId = nodeEl.dataset.node;
+                const status = nodeStatuses[nodeId] || 'pending';
+                const duration = nodeDurations[nodeId];
+
+                // Update class
+                nodeEl.className = 'pipeline-node ' + status;
+
+                // Update status icon
+                const statusEl = nodeEl.querySelector('.node-status');
+                statusEl.textContent = statusIcons[status] || '';
+
+                // Update duration
+                const durationEl = nodeEl.querySelector('.node-duration');
+                if (duration) {
+                    durationEl.textContent = (duration / 1000).toFixed(2) + 's';
+                } else {
+                    durationEl.textContent = '';
+                }
+            });
+        }
+
+        function updateStepsList(steps) {
+            const stepsSection = document.getElementById('stepsSection');
+            const stepsList = document.getElementById('stepsList');
+
+            if (!steps || steps.length === 0) {
+                stepsSection.style.display = 'none';
+                return;
+            }
+
+            stepsSection.style.display = 'block';
+            stepsList.innerHTML = '';
+
+            // Show steps in reverse order (most recent first)
+            [...steps].reverse().forEach(step => {
+                const stepEl = document.createElement('div');
+                stepEl.className = 'step-item';
+
+                const icon = stepIcons[step.status] || '';
+                const duration = step.duration_ms
+                    ? (step.duration_ms / 1000).toFixed(2) + 's'
+                    : '';
+
+                stepEl.innerHTML = `
+                    <span class="step-icon">${icon}</span>
+                    <span class="step-name">${step.node}</span>
+                    <span class="step-duration">${duration}</span>
+                `;
+
+                stepsList.appendChild(stepEl);
+            });
+        }
+
+        // Listen for state updates from MCP host
+        window.addEventListener('message', (event) => {
+            if (event.data?.type === 'mcp_state' || event.data?.type === 'state_update') {
+                currentState = event.data.state || event.data;
+                render(currentState);
+            }
+        });
+
+        // Request initial state from parent
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: 'mcp_get_state' }, '*');
+        }
+
+        // Poll for updates (fallback mechanism)
+        // This helps when postMessage isn't working
+        let lastStateJson = JSON.stringify(currentState);
+        setInterval(() => {
+            // In a real MCP Apps integration, state would be pushed via postMessage
+            // For now, we just re-render with current state
+            const currentJson = JSON.stringify(currentState);
+            if (currentJson !== lastStateJson) {
+                lastStateJson = currentJson;
+                render(currentState);
+            }
+        }, 500);
+
+        // Initial render
+        render(currentState);
+
+        // Auto-update duration while running
+        setInterval(() => {
+            if (currentState?.status === 'running' && currentState?.metrics?.start_time) {
+                const start = new Date(currentState.metrics.start_time);
+                const now = new Date();
+                const elapsed = ((now - start) / 1000).toFixed(1);
+                document.getElementById('duration').textContent = elapsed + 's...';
+            }
+        }, 100);
+    </script>
+</body>
+</html>
