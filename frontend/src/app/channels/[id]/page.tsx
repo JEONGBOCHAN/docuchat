@@ -1,11 +1,12 @@
 'use client';
 
-import { useReducer, useEffect, useRef, useCallback } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
 import { ChatContainer } from '@/components/chat';
 import { DocumentUploader, DocumentList } from '@/components/documents';
 import { NotesList, NoteEditor, DeleteNoteModal } from '@/components/notes';
+import { AgentDashboard, AgentStatusBadge } from '@/components/dashboard';
 import { channelsApi, decodeChannelIdFromUrl, type Channel } from '@/lib/api/channels';
 import { notesApi, type Note, type CreateNoteRequest, type UpdateNoteRequest } from '@/lib/api/notes';
 import type { ChatSource } from '@/lib/api/chat';
@@ -219,6 +220,9 @@ export default function ChannelDetailPage() {
 
   const [state, dispatch] = useReducer(channelPageReducer, initialState);
   const requestIdRef = useRef(0);
+
+  // Dashboard visibility state (separate from reducer for simplicity)
+  const [showDashboard, setShowDashboard] = useState(false);
 
   const {
     channel,
@@ -449,6 +453,24 @@ export default function ChannelDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </button>
+
+            {/* Agent Dashboard Toggle */}
+            <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700">
+              <AgentStatusBadge />
+              <button
+                onClick={() => setShowDashboard(!showDashboard)}
+                className={`p-2 rounded-md transition-colors ${
+                  showDashboard
+                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400'
+                }`}
+                title={showDashboard ? 'Hide agent dashboard' : 'Show agent dashboard'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -515,6 +537,30 @@ export default function ChannelDetailPage() {
               </>
             )}
           </div>
+
+          {/* Agent Dashboard Panel */}
+          {showDashboard && (
+            <div className="w-96 flex-shrink-0 border-l border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Agent Dashboard</h3>
+                <button
+                  onClick={() => setShowDashboard(false)}
+                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <AgentDashboard
+                  pollingInterval={2000}
+                  renderMode="iframe"
+                  className="h-full"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

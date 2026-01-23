@@ -62,6 +62,7 @@ export interface InitializeParams {
   protocolVersion: string;
   capabilities: MCPCapabilities;
   clientInfo?: MCPClientInfo;
+  [key: string]: unknown;
 }
 
 export interface InitializeResult {
@@ -91,6 +92,7 @@ export interface ResourceContent {
 
 export interface ResourcesReadParams {
   uri: string;
+  [key: string]: unknown;
 }
 
 export interface ResourcesReadResult {
@@ -122,6 +124,7 @@ export interface ToolContent {
 export interface ToolsCallParams {
   name: string;
   arguments?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface ToolsCallResult {

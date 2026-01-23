@@ -112,15 +112,15 @@ export class MCPClient {
     return ++this.requestId;
   }
 
-  private async sendRequest<T>(
+  private async sendRequest<T, P extends object = Record<string, unknown>>(
     method: string,
-    params: Record<string, unknown> = {}
+    params: P = {} as P
   ): Promise<T> {
     const request: JsonRpcRequest = {
       jsonrpc: '2.0',
       id: this.getNextRequestId(),
       method,
-      params,
+      params: params as Record<string, unknown>,
     };
 
     const headers: HeadersInit = {
