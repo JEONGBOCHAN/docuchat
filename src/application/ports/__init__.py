@@ -21,6 +21,7 @@ Available Ports:
 - StudyGuidePort: Study guide generation
 - QuizPort: Quiz generation
 - PodcastScriptPort: Podcast script generation
+- ChannelPort: Channel (File Search Store) CRUD operations
 """
 
 from src.application.ports.observability import AgentEventSinkPort
@@ -62,6 +63,7 @@ from src.application.ports.podcast import (
     PodcastScriptDTO,
     DialogueLineDTO,
 )
+from src.application.ports.channel import ChannelPort, ChannelDTO
 
 __all__ = [
     # Observability
@@ -112,4 +114,7 @@ __all__ = [
     "PodcastScriptPort",
     "PodcastScriptDTO",
     "DialogueLineDTO",
+    # Channel
+    "ChannelPort",
+    "ChannelDTO",
 ]

@@ -17,6 +17,30 @@
 
 ## 현재 미션
 
+> **원래 요청**: "Clean Architecture Phase 3 - Store/Document CRUD를 Port/Adapter 패턴으로 전환하여 완전한 Clean Architecture 달성"
+
+**핵심 의도**:
+- GeminiService에 남아있는 Store(Channel) CRUD, Document CRUD를 Clean Architecture로 마이그레이션
+- 모든 API 엔드포인트에서 `gemini.get_store()` 같은 직접 호출 제거
+- 완전한 Clean Architecture 달성 (GeminiService 레거시 완전 제거)
+
+**배경**:
+- Phase 1 완료 (CHA-84~86): Chat/Query 기능 마이그레이션
+- Phase 2 완료 (CHA-87~93): AI 컨텐츠 생성 기능 마이그레이션 (FAQ, Citation, Summary 등)
+- 남은 작업: Store/Document CRUD (581줄), 19개 API 파일에서 GeminiService 직접 사용 중
+
+**남은 GeminiService 기능**:
+- Store CRUD: `create_store`, `get_store`, `list_stores`, `delete_store`
+- Document CRUD: `upload_file`, `list_store_files`, `delete_file`, `delete_store_document`
+- Search: `multi_store_search`, `multi_store_search_stream`, `search_documents`
+- Utility: `call_with_tools`, `generate`
+
+**이슈 타입**: Feature (Refactoring)
+
+---
+
+## 이전 미션 (완료)
+
 > **원래 요청**: "프론트엔드(Next.js)에 MCP 클라이언트 기능 추가. Streamable HTTP 기반 MCP 프로토콜로 서버와 통신."
 
 **핵심 의도**:
@@ -47,6 +71,35 @@
 | CHA-77 | Local container integration testing for MCP Apps | ✅ Done | - | Feature | Medium |
 | CHA-78 | Azure deployment for MCP Apps dashboard | ✅ Done | - | Feature | Medium |
 
+### 완료된 이슈 (레거시 정리 - Clean Architecture Phase 1)
+| ID | 제목 | 상태 | 담당 | 라벨 | 우선순위 |
+|----|------|------|------|------|----------|
+| CHA-84 | Add streaming support to ProcessQueryUseCase | ✅ Done | 개발팀장 | Feature | High |
+| CHA-85 | Migrate /chat/stream to Clean Architecture | ✅ Done | 개발팀장 | Feature | High |
+| CHA-86 | Remove legacy GeminiService chat methods | ✅ Done | 개발팀장 | Feature | Medium |
+
+### 완료된 이슈 (Clean Architecture Phase 2 - AI 컨텐츠 생성)
+| ID | 제목 | 상태 | 담당 | 라벨 | 우선순위 |
+|----|------|------|------|------|----------|
+| CHA-87 | Migrate FAQ generation to Clean Architecture | ✅ Done | 개발팀장 | Feature | High |
+| CHA-88 | Migrate Citation search to Clean Architecture | ✅ Done | 개발팀장 | Feature | High |
+| CHA-89 | Migrate Summarization to Clean Architecture | ✅ Done | 개발팀장 | Feature | Medium |
+| CHA-90 | Migrate Timeline and Briefing to Clean Architecture | ✅ Done | 개발팀장 | Feature | Medium |
+| CHA-91 | Migrate Learning features to Clean Architecture | ✅ Done | 개발팀장 | Feature | Medium |
+| CHA-92 | Migrate Podcast Script generation to Clean Architecture | ✅ Done | 개발팀장 | Feature | Low |
+| CHA-93 | Clean up GeminiService after Phase 2 migration | ✅ Done | 개발팀장 | Feature | Low |
+
+### 진행 중인 이슈 (Clean Architecture Phase 3 - Store/Document CRUD)
+| ID | 제목 | 상태 | 담당 | 라벨 | 우선순위 |
+|----|------|------|------|------|----------|
+| CHA-94 | Create ChannelPort and GeminiChannelAdapter for Store CRUD | ⏳ Backlog | - | Feature | High |
+| CHA-95 | Create DocumentPort and GeminiDocumentAdapter for Document CRUD | ⏳ Backlog | - | Feature | High |
+| CHA-96 | Migrate Channel API to Clean Architecture | ⏳ Backlog | - | Feature | High |
+| CHA-97 | Migrate Document API to Clean Architecture | ⏳ Backlog | - | Feature | High |
+| CHA-98 | Create channel validation dependency for API endpoints | ⏳ Backlog | - | Feature | Medium |
+| CHA-99 | Migrate remaining API files to use channel validation dependency | ⏳ Backlog | - | Feature | Medium |
+| CHA-100 | Clean up GeminiService after Phase 3 migration | ⏳ Backlog | - | Feature | Low |
+
 ### 완료된 이슈 (Streamable HTTP MCP 클라이언트) - 오케스트레이션 사이클 완료
 | ID | 제목 | 상태 | 담당 | 라벨 | 우선순위 |
 |----|------|------|------|------|----------|
@@ -62,40 +115,32 @@
 
 ## 의존성 그래프
 
-**상태**: ✅ 오케스트레이션 사이클 완료
+**상태**: ✅ 이슈 등록 완료
 
 ```
-[Streamable HTTP MCP 클라이언트 - 순차 의존성]
+[Clean Architecture Phase 3 - Store/Document CRUD]
 
-CHA-79 (백엔드 Streamable HTTP 엔드포인트)
-    │   └─ src/api/v1/mcp.py (신규), router.py
-    ▼
-CHA-80 (프론트엔드 MCP 클라이언트)
-    │   └─ frontend/src/lib/mcp/*.ts (신규)
-    ▼
-CHA-81 (MCPProvider React Context)
-    │   └─ frontend/src/contexts/MCPContext.tsx (신규)
-    ▼
-CHA-82 (AgentDashboard 컴포넌트)
-    │   └─ frontend/src/components/dashboard/*.tsx (신규)
-    ▼
-CHA-83 (채널 페이지 통합)
-        └─ frontend/src/app/channels/[id]/page.tsx
+Phase 1 완료 (CHA-84~86): Chat/Query 기능 ✅
+Phase 2 완료 (CHA-87~93): AI 컨텐츠 생성 기능 ✅
+
+Phase 3 (CHA-94~100): Store/Document CRUD
+
+CHA-94 ChannelPort ──┬──▶ CHA-96 Channel API Migration
+                     │
+                     └──▶ CHA-98 Validation Dependency ──▶ CHA-99 Remaining APIs
+                                                                    │
+CHA-95 DocumentPort ────▶ CHA-97 Document API Migration             │
+                                        │                           │
+                                        └───────────┬───────────────┘
+                                                    ▼
+                                           CHA-100 Final Cleanup
 ```
 
-**실행 계획**: 순차 실행 (5단계, 각 단독 실행)
-
-| 단계 | 이슈 | 예상 소요 |
-|------|------|----------|
-| 1 | CHA-79 | ~5분 |
-| 2 | CHA-80 | ~5분 |
-| 3 | CHA-81 | ~5분 |
-| 4 | CHA-82 | ~5분 |
-| 5 | CHA-83 | ~5분 |
-
-**병렬 실행 불가 사유**: 파일 충돌은 없으나, import 의존성으로 순차 실행 필수
-
-**스케줄 문서**: `docs/schedules/schedule_CHA-79-83.md`
+**실행 계획**:
+- Step 1: CHA-94, CHA-95 (병렬 가능)
+- Step 2: CHA-96, CHA-97, CHA-98 (CHA-94/95 완료 후)
+- Step 3: CHA-99 (CHA-98 완료 후)
+- Step 4: CHA-100 (CHA-96, CHA-97, CHA-99 완료 후)
 
 > ※ 대화는 `docs/messages/`에서 진행 → 승인 후 여기에 반영
 
@@ -115,6 +160,10 @@ CHA-83 (채널 페이지 통합)
 
 | 시간 | 결정자 | 내용 |
 |------|--------|------|
+| 2026-01-23 | 오케스트레이터 | Phase 3 이슈 등록 완료 (CHA-94~100) - Store/Document CRUD 마이그레이션 7개 이슈 |
+| 2026-01-23 | 개발팀장 | Step 1 완료 (CHA-87, CHA-88) - 병렬 실행, 58개 테스트 통과, 1차 검수 완료, 2차 검수 대기 |
+| 2026-01-23 | 오케스트레이터 | Clean Architecture Phase 2 오케스트레이션 시작 - 전체 GeminiService 기능 마이그레이션 |
+| 2026-01-23 | 오케스트레이터 | CHA-84~86 완료 확인 - Chat/Query 기능 Clean Architecture 마이그레이션 완료 |
 | 2026-01-23 | 오케스트레이터 | CHA-79~83 2차 검수 승인 - Streamable HTTP MCP 클라이언트 오케스트레이션 사이클 완료 |
 | 2026-01-23 | 개발팀장 | CHA-79~83 개발 완료 - 57개 프론트엔드 테스트 통과, 1차 검수 완료, 2차 검수 대기 |
 | 2026-01-23 | 오케스트레이터 | Streamable HTTP MCP 클라이언트 이슈 등록 (CHA-79~83) - 2차 검수 승인 |
@@ -143,6 +192,24 @@ CHA-83 (채널 페이지 통합)
 
 | 파일 | 이슈 | 변경 유형 |
 |------|------|----------|
+| src/application/ports/faq_generation.py | CHA-87 | 신규 (FAQGenerationPort, FAQItemDTO) |
+| src/infrastructure/external/gemini/faq.py | CHA-87 | 신규 (GeminiFAQAdapter) |
+| src/application/use_cases/generate_faq.py | CHA-87 | 신규 (GenerateFAQUseCase) |
+| src/api/v1/faq.py | CHA-87 | 수정 (UseCase 사용) |
+| tests/application/use_cases/test_generate_faq.py | CHA-87 | 신규 (10 tests) |
+| tests/infrastructure/external/gemini/test_faq_adapter.py | CHA-87 | 신규 (9 tests) |
+| tests/api/v1/test_faq.py | CHA-87 | 수정 (6 tests) |
+| src/application/ports/citation_search.py | CHA-88 | 신규 (CitationSearchPort, DTOs) |
+| src/infrastructure/external/gemini/citation.py | CHA-88 | 신규 (GeminiCitationAdapter) |
+| src/application/use_cases/search_with_citations.py | CHA-88 | 신규 (SearchWithCitationsUseCase) |
+| src/api/v1/citations.py | CHA-88 | 수정 (UseCase 사용) |
+| tests/application/use_cases/test_search_with_citations.py | CHA-88 | 신규 (11 tests) |
+| tests/infrastructure/external/gemini/test_citation_adapter.py | CHA-88 | 신규 (11 tests) |
+| tests/api/v1/test_citations.py | CHA-88 | 수정 (11 tests) |
+| src/infrastructure/di/container.py | CHA-87, CHA-88 | 수정 (Factory functions 추가) |
+| src/application/ports/__init__.py | CHA-87, CHA-88 | 수정 (Exports 추가) |
+| docs/results/result_CHA-87.txt | CHA-87 | 신규 |
+| docs/results/result_CHA-88.txt | CHA-88 | 신규 |
 | src/api/v1/mcp.py | CHA-79 | 신규 (MCP Streamable HTTP endpoint) |
 | src/api/v1/router.py | CHA-79 | 수정 (MCP router 등록) |
 | tests/api/v1/test_mcp.py | CHA-79 | 신규 (20 tests) |
@@ -166,14 +233,17 @@ CHA-83 (채널 페이지 통합)
 ## 테스트 상태
 
 ```
-마지막 실행: 2026-01-23 (CHA-79~83)
-Frontend MCP 테스트: 57 passed
-  - mcp-client.test.ts: 17 passed
-  - mcp-context.test.tsx: 18 passed
-  - agent-dashboard.test.tsx: 13 passed
-  - dark-mode.test.tsx: 9 passed
-Backend MCP 테스트: 20 passed (test_mcp.py)
-TypeScript 컴파일: No errors
+마지막 실행: 2026-01-23 (CHA-87~88)
+Clean Architecture Phase 2 Step 1:
+  - CHA-87 (FAQ): 25 passed
+    - test_generate_faq.py (UseCase): 10 passed
+    - test_faq_adapter.py (Adapter): 9 passed
+    - test_faq.py (API): 6 passed
+  - CHA-88 (Citation): 33 passed
+    - test_search_with_citations.py (UseCase): 11 passed
+    - test_citation_adapter.py (Adapter): 11 passed
+    - test_citations.py (API): 11 passed
+  합계: 58 tests passed
 ```
 
 ---
@@ -182,6 +252,10 @@ TypeScript 컴파일: No errors
 
 | 시간 | 내용 |
 |------|------|
+| 2026-01-23 | 오케스트레이터: Phase 3 이슈 등록 완료 (CHA-94~100) - Store/Document CRUD 마이그레이션 |
+| 2026-01-23 | 개발팀장: Step 1 완료 (CHA-87, CHA-88) - FAQ/Citation Clean Architecture 마이그레이션, 58개 테스트 통과, 1차 검수 완료 |
+| 2026-01-23 | 오케스트레이터: Clean Architecture Phase 2 오케스트레이션 시작 |
+| 2026-01-23 | 오케스트레이터: CHA-84~86 완료 확인 (Chat/Query Clean Architecture 마이그레이션) |
 | 2026-01-23 | 오케스트레이터: CHA-79~83 2차 검수 승인, 오케스트레이션 사이클 완료 |
 | 2026-01-23 | 개발팀장: CHA-79~83 개발 완료, 57개 프론트엔드 테스트 통과, 1차 검수 완료, 2차 검수 대기 |
 | 2026-01-23 | 개발팀장: CHA-79~83 의존성 분석 완료, 스케줄 문서 작성, 오케스트레이터 승인 대기 |

@@ -26,6 +26,7 @@ from src.application.ports import (
     StudyGuidePort,
     QuizPort,
     PodcastScriptPort,
+    ChannelPort,
 )
 from src.application.ports.citation_search import CitationSearchPort
 from src.application.use_cases.process_query import ProcessQueryUseCase
@@ -56,6 +57,7 @@ from src.infrastructure.external.gemini.briefing import GeminiBriefingAdapter
 from src.infrastructure.external.gemini.study_guide import GeminiStudyGuideAdapter
 from src.infrastructure.external.gemini.quiz import GeminiQuizAdapter
 from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
+from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 from src.infrastructure.external.tavily.web_search import TavilyWebSearchAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
@@ -457,3 +459,16 @@ def create_generate_podcast_script_use_case() -> GeneratePodcastScriptUseCase:
         )
     """
     return GeneratePodcastScriptUseCase(podcast_port=create_podcast_script())
+
+
+# ============================================================
+# Channel Factory Functions
+# ============================================================
+
+def create_channel_port() -> ChannelPort:
+    """Create channel adapter.
+
+    Returns:
+        ChannelPort implementation (GeminiChannelAdapter).
+    """
+    return GeminiChannelAdapter()
