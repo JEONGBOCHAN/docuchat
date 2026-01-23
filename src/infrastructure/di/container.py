@@ -20,17 +20,42 @@ from src.application.ports import (
     DocumentSearchPort,
     WebSearchPort,
     FAQGenerationPort,
+    SummarizationPort,
+    TimelinePort,
+    BriefingPort,
+    StudyGuidePort,
+    QuizPort,
+    PodcastScriptPort,
 )
 from src.application.ports.citation_search import CitationSearchPort
 from src.application.use_cases.process_query import ProcessQueryUseCase
 from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
 from src.application.use_cases.generate_faq import GenerateFAQUseCase
+from src.application.use_cases.summarize import (
+    SummarizeChannelUseCase,
+    SummarizeDocumentUseCase,
+)
+from src.application.use_cases.timeline_briefing import (
+    GenerateTimelineUseCase,
+    GenerateBriefingUseCase,
+)
+from src.application.use_cases.learning import (
+    GenerateStudyGuideUseCase,
+    GenerateQuizUseCase,
+)
+from src.application.use_cases.podcast import GeneratePodcastScriptUseCase
 
 # Infrastructure implementations
 from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
 from src.infrastructure.external.gemini.document_search import GeminiDocumentSearchAdapter
 from src.infrastructure.external.gemini.citation import GeminiCitationAdapter
 from src.infrastructure.external.gemini.faq import GeminiFAQAdapter
+from src.infrastructure.external.gemini.summarization import GeminiSummarizationAdapter
+from src.infrastructure.external.gemini.timeline import GeminiTimelineAdapter
+from src.infrastructure.external.gemini.briefing import GeminiBriefingAdapter
+from src.infrastructure.external.gemini.study_guide import GeminiStudyGuideAdapter
+from src.infrastructure.external.gemini.quiz import GeminiQuizAdapter
+from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
 from src.infrastructure.external.tavily.web_search import TavilyWebSearchAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
@@ -247,3 +272,188 @@ def create_generate_faq_use_case() -> GenerateFAQUseCase:
         )
     """
     return GenerateFAQUseCase(faq_port=create_faq_generation())
+
+
+# ============================================================
+# Summarization Factory Functions
+# ============================================================
+
+def create_summarization() -> SummarizationPort:
+    """Create summarization adapter.
+
+    Returns:
+        SummarizationPort implementation (GeminiSummarizationAdapter).
+    """
+    return GeminiSummarizationAdapter()
+
+
+def create_summarize_channel_use_case() -> SummarizeChannelUseCase:
+    """Create SummarizeChannelUseCase with dependencies.
+
+    Returns:
+        Fully configured SummarizeChannelUseCase.
+
+    Example:
+        use_case = create_summarize_channel_use_case()
+        result = use_case.execute(
+            channel_id="channel-123",
+            summary_type="detailed",
+        )
+    """
+    return SummarizeChannelUseCase(summarization_port=create_summarization())
+
+
+def create_summarize_document_use_case() -> SummarizeDocumentUseCase:
+    """Create SummarizeDocumentUseCase with dependencies.
+
+    Returns:
+        Fully configured SummarizeDocumentUseCase.
+
+    Example:
+        use_case = create_summarize_document_use_case()
+        result = use_case.execute(
+            channel_id="channel-123",
+            document_name="report.pdf",
+            summary_type="short",
+        )
+    """
+    return SummarizeDocumentUseCase(summarization_port=create_summarization())
+
+
+# ============================================================
+# Timeline and Briefing Factory Functions
+# ============================================================
+
+def create_timeline() -> TimelinePort:
+    """Create timeline adapter.
+
+    Returns:
+        TimelinePort implementation (GeminiTimelineAdapter).
+    """
+    return GeminiTimelineAdapter()
+
+
+def create_briefing() -> BriefingPort:
+    """Create briefing adapter.
+
+    Returns:
+        BriefingPort implementation (GeminiBriefingAdapter).
+    """
+    return GeminiBriefingAdapter()
+
+
+def create_generate_timeline_use_case() -> GenerateTimelineUseCase:
+    """Create GenerateTimelineUseCase with dependencies.
+
+    Returns:
+        Fully configured GenerateTimelineUseCase.
+
+    Example:
+        use_case = create_generate_timeline_use_case()
+        result = use_case.execute(
+            channel_id="channel-123",
+            max_events=10,
+        )
+    """
+    return GenerateTimelineUseCase(timeline_port=create_timeline())
+
+
+def create_generate_briefing_use_case() -> GenerateBriefingUseCase:
+    """Create GenerateBriefingUseCase with dependencies.
+
+    Returns:
+        Fully configured GenerateBriefingUseCase.
+
+    Example:
+        use_case = create_generate_briefing_use_case()
+        result = use_case.execute(
+            channel_id="channel-123",
+            style="executive",
+        )
+    """
+    return GenerateBriefingUseCase(briefing_port=create_briefing())
+
+
+# ============================================================
+# Learning Features Factory Functions
+# ============================================================
+
+def create_study_guide() -> StudyGuidePort:
+    """Create study guide adapter.
+
+    Returns:
+        StudyGuidePort implementation (GeminiStudyGuideAdapter).
+    """
+    return GeminiStudyGuideAdapter()
+
+
+def create_quiz() -> QuizPort:
+    """Create quiz adapter.
+
+    Returns:
+        QuizPort implementation (GeminiQuizAdapter).
+    """
+    return GeminiQuizAdapter()
+
+
+def create_generate_study_guide_use_case() -> GenerateStudyGuideUseCase:
+    """Create GenerateStudyGuideUseCase with dependencies.
+
+    Returns:
+        Fully configured GenerateStudyGuideUseCase.
+
+    Example:
+        use_case = create_generate_study_guide_use_case()
+        result = use_case.execute(
+            channel_id="channel-123",
+            difficulty="medium",
+        )
+    """
+    return GenerateStudyGuideUseCase(study_guide_port=create_study_guide())
+
+
+def create_generate_quiz_use_case() -> GenerateQuizUseCase:
+    """Create GenerateQuizUseCase with dependencies.
+
+    Returns:
+        Fully configured GenerateQuizUseCase.
+
+    Example:
+        use_case = create_generate_quiz_use_case()
+        result = use_case.execute(
+            channel_id="channel-123",
+            count=10,
+            quiz_type="mixed",
+        )
+    """
+    return GenerateQuizUseCase(quiz_port=create_quiz())
+
+
+# ============================================================
+# Podcast Factory Functions
+# ============================================================
+
+def create_podcast_script() -> PodcastScriptPort:
+    """Create podcast script adapter.
+
+    Returns:
+        PodcastScriptPort implementation (GeminiPodcastAdapter).
+    """
+    return GeminiPodcastAdapter()
+
+
+def create_generate_podcast_script_use_case() -> GeneratePodcastScriptUseCase:
+    """Create GeneratePodcastScriptUseCase with dependencies.
+
+    Returns:
+        Fully configured GeneratePodcastScriptUseCase.
+
+    Example:
+        use_case = create_generate_podcast_script_use_case()
+        result = use_case.execute(
+            store_name="channel-123",
+            duration_minutes=5,
+            style="conversational",
+        )
+    """
+    return GeneratePodcastScriptUseCase(podcast_port=create_podcast_script())

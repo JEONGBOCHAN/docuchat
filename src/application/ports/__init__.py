@@ -15,6 +15,12 @@ Available Ports:
 - AgentRunnerPort: Agent execution framework abstraction
 - FAQGenerationPort: FAQ generation from documents
 - CitationSearchPort: Document search with inline citations
+- SummarizationPort: Document and channel summarization
+- TimelinePort: Timeline extraction from documents
+- BriefingPort: Briefing document generation
+- StudyGuidePort: Study guide generation
+- QuizPort: Quiz generation
+- PodcastScriptPort: Podcast script generation
 """
 
 from src.application.ports.observability import AgentEventSinkPort
@@ -32,6 +38,29 @@ from src.application.ports.citation_search import (
     CitationSearchPort,
     CitationDTO,
     CitationResultDTO,
+)
+from src.application.ports.summarization import SummarizationPort, SummaryDTO
+from src.application.ports.timeline import (
+    TimelinePort,
+    TimelineEventDTO,
+    BriefingPort,
+    BriefingDTO,
+    BriefingSectionDTO,
+)
+from src.application.ports.learning import (
+    StudyGuidePort,
+    StudyGuideDTO,
+    StudySectionDTO,
+    KeyConceptDTO,
+    QuizPort,
+    QuizDTO,
+    QuizQuestionDTO,
+    QuizChoiceDTO,
+)
+from src.application.ports.podcast import (
+    PodcastScriptPort,
+    PodcastScriptDTO,
+    DialogueLineDTO,
 )
 
 __all__ = [
@@ -59,4 +88,28 @@ __all__ = [
     "CitationSearchPort",
     "CitationDTO",
     "CitationResultDTO",
+    # Summarization
+    "SummarizationPort",
+    "SummaryDTO",
+    # Timeline
+    "TimelinePort",
+    "TimelineEventDTO",
+    # Briefing
+    "BriefingPort",
+    "BriefingDTO",
+    "BriefingSectionDTO",
+    # Study Guide
+    "StudyGuidePort",
+    "StudyGuideDTO",
+    "StudySectionDTO",
+    "KeyConceptDTO",
+    # Quiz
+    "QuizPort",
+    "QuizDTO",
+    "QuizQuestionDTO",
+    "QuizChoiceDTO",
+    # Podcast
+    "PodcastScriptPort",
+    "PodcastScriptDTO",
+    "DialogueLineDTO",
 ]

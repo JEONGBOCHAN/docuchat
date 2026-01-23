@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """Tests for Summarize API."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 from src.main import app
 from src.services.gemini import get_gemini_service
+from src.application.use_cases.summarize import SummarizeResult
 
 
 class TestSummarizeChannel:
@@ -22,16 +23,21 @@ class TestSummarizeChannel:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.summarize_channel.return_value = {
-            "summary": "This is a short summary of the documents.",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = SummarizeResult(
+            summary="This is a short summary of the documents.",
+            channel_id="fileSearchStores/test-store",
+            summary_type="short",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/summarize",
-            json={"summary_type": "short"},
-        )
+        with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/summarize",
+                json={"summary_type": "short"},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -53,24 +59,29 @@ class TestSummarizeChannel:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.summarize_channel.return_value = {
-            "summary": "**Overview**: Detailed summary...\n**Key Topics**: ...",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = SummarizeResult(
+            summary="**Overview**: Detailed summary...\n**Key Topics**: ...",
+            channel_id="fileSearchStores/test-store",
+            summary_type="detailed",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/summarize",
-            json={"summary_type": "detailed"},
-        )
+        with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/summarize",
+                json={"summary_type": "detailed"},
+            )
 
         assert response.status_code == 200
         data = response.json()
         assert data["summary_type"] == "detailed"
         assert "Overview" in data["summary"]
 
-        mock_gemini.summarize_channel.assert_called_once_with(
-            "fileSearchStores/test-store", summary_type="detailed"
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store", summary_type="detailed"
         )
 
         app.dependency_overrides.pop(get_gemini_service, None)
@@ -85,23 +96,28 @@ class TestSummarizeChannel:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.summarize_channel.return_value = {
-            "summary": "Short summary.",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = SummarizeResult(
+            summary="Short summary.",
+            channel_id="fileSearchStores/test-store",
+            summary_type="short",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/summarize",
-            json={},
-        )
+        with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/summarize",
+                json={},
+            )
 
         assert response.status_code == 200
         data = response.json()
         assert data["summary_type"] == "short"
 
-        mock_gemini.summarize_channel.assert_called_once_with(
-            "fileSearchStores/test-store", summary_type="short"
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store", summary_type="short"
         )
 
         app.dependency_overrides.pop(get_gemini_service, None)
@@ -154,17 +170,21 @@ class TestSummarizeChannel:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file", "display_name": "test.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.summarize_channel.return_value = {
-            "summary": "",
-            "error": "API rate limit exceeded",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = SummarizeResult(
+            summary="",
+            channel_id="fileSearchStores/test-store",
+            error="API rate limit exceeded",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/summarize",
-            json={},
-        )
+        with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/summarize",
+                json={},
+            )
 
         assert response.status_code == 500
         assert "Failed to generate summary" in response.json()["detail"]
@@ -185,16 +205,22 @@ class TestSummarizeDocument:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file-123", "display_name": "report.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.summarize_document.return_value = {
-            "summary": "This document is about...",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = SummarizeResult(
+            summary="This document is about...",
+            channel_id="fileSearchStores/test-store",
+            document_id="report.pdf",
+            summary_type="short",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
-            json={"summary_type": "short"},
-        )
+        with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
+                json={"summary_type": "short"},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -216,24 +242,30 @@ class TestSummarizeDocument:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file-123", "display_name": "report.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.summarize_document.return_value = {
-            "summary": "**Overview**: Document details...\n**Key Points**: ...",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = SummarizeResult(
+            summary="**Overview**: Document details...\n**Key Points**: ...",
+            channel_id="fileSearchStores/test-store",
+            document_id="report.pdf",
+            summary_type="detailed",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
-            json={"summary_type": "detailed"},
-        )
+        with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
+                json={"summary_type": "detailed"},
+            )
 
         assert response.status_code == 200
         data = response.json()
         assert data["summary_type"] == "detailed"
         assert "Overview" in data["summary"]
 
-        mock_gemini.summarize_document.assert_called_once_with(
-            "fileSearchStores/test-store",
+        mock_use_case.execute.assert_called_once_with(
+            channel_id="fileSearchStores/test-store",
             document_name="report.pdf",
             summary_type="detailed",
         )
@@ -290,17 +322,22 @@ class TestSummarizeDocument:
         mock_gemini.list_store_files.return_value = [
             {"name": "files/test-file-123", "display_name": "report.pdf", "size_bytes": 1024},
         ]
-        mock_gemini.summarize_document.return_value = {
-            "summary": "",
-            "error": "Processing failed",
-        }
+
+        mock_use_case = MagicMock()
+        mock_use_case.execute.return_value = SummarizeResult(
+            summary="",
+            channel_id="fileSearchStores/test-store",
+            document_id="report.pdf",
+            error="Processing failed",
+        )
 
         app.dependency_overrides[get_gemini_service] = lambda: mock_gemini
 
-        response = client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
-            json={},
-        )
+        with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
+            response = client_with_db.post(
+                "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
+                json={},
+            )
 
         assert response.status_code == 500
         assert "Failed to generate summary" in response.json()["detail"]

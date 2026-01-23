@@ -11,6 +11,10 @@ from src.services.gemini import GeminiService, get_gemini_service
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.channel_repository import ChannelRepository
+from src.infrastructure.di.container import (
+    create_summarize_channel_use_case,
+    create_summarize_document_use_case,
+)
 
 router = APIRouter(prefix="/channels", tags=["summarize"])
 
@@ -67,24 +71,25 @@ def summarize_document(
         document_id,
     )
 
-    # Generate summary
-    result = gemini.summarize_document(
-        channel_id,
+    # Generate summary using Clean Architecture use case
+    use_case = create_summarize_document_use_case()
+    result = use_case.execute(
+        channel_id=channel_id,
         document_name=document_name,
         summary_type=body.summary_type.value,
     )
 
-    if "error" in result and result["error"]:
+    if result.error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate summary: {result['error']}",
+            detail=f"Failed to generate summary: {result.error}",
         )
 
     return SummarizeResponse(
         channel_id=channel_id,
         document_id=document_id,
         summary_type=body.summary_type,
-        summary=result["summary"],
+        summary=result.summary,
     )
 
 
@@ -127,17 +132,21 @@ def summarize_channel(
     channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
-    # Generate summary
-    result = gemini.summarize_channel(channel_id, summary_type=body.summary_type.value)
+    # Generate summary using Clean Architecture use case
+    use_case = create_summarize_channel_use_case()
+    result = use_case.execute(
+        channel_id=channel_id,
+        summary_type=body.summary_type.value,
+    )
 
-    if "error" in result and result["error"]:
+    if result.error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate summary: {result['error']}",
+            detail=f"Failed to generate summary: {result.error}",
         )
 
     return SummarizeResponse(
         channel_id=channel_id,
         summary_type=body.summary_type,
-        summary=result["summary"],
+        summary=result.summary,
     )
