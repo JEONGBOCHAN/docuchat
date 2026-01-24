@@ -28,6 +28,24 @@ from src.application.ports import (
     PodcastScriptPort,
     ChannelPort,
     DocumentPort,
+    # Persistence Ports
+    ChannelRepositoryPort,
+    ChatHistoryRepositoryPort,
+    ChatSessionRepositoryPort,
+    NoteRepositoryPort,
+    FavoriteRepositoryPort,
+    SearchHistoryRepositoryPort,
+    TrashRepositoryPort,
+    AudioRepositoryPort,
+    # External Service Ports
+    YouTubePort,
+    CrawlerPort,
+    TTSPort,
+    # Cache Port
+    CachePort,
+    # Infrastructure Ports
+    ApiMetricsPort,
+    SchedulerPort,
 )
 from src.application.ports.citation_search import CitationSearchPort
 from src.application.use_cases.process_query import ProcessQueryUseCase
@@ -487,3 +505,277 @@ def create_document_port() -> DocumentPort:
         DocumentPort implementation (GeminiDocumentAdapter).
     """
     return GeminiDocumentAdapter()
+
+
+# ============================================================
+# Repository Port Factory Functions
+# ============================================================
+
+def create_channel_repository_port(db=None) -> ChannelRepositoryPort:
+    """Create channel repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        ChannelRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import ChannelRepositoryAdapter
+    return ChannelRepositoryAdapter(db)
+
+
+def create_chat_history_repository_port(db=None) -> ChatHistoryRepositoryPort:
+    """Create chat history repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        ChatHistoryRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import ChatHistoryRepositoryAdapter
+    return ChatHistoryRepositoryAdapter(db)
+
+
+def create_chat_session_repository_port(db=None) -> ChatSessionRepositoryPort:
+    """Create chat session repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        ChatSessionRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import ChatSessionRepositoryAdapter
+    return ChatSessionRepositoryAdapter(db)
+
+
+def create_note_repository_port(db=None) -> NoteRepositoryPort:
+    """Create note repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        NoteRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import NoteRepositoryAdapter
+    return NoteRepositoryAdapter(db)
+
+
+def create_favorite_repository_port(db=None) -> FavoriteRepositoryPort:
+    """Create favorite repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        FavoriteRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import FavoriteRepositoryAdapter
+    return FavoriteRepositoryAdapter(db)
+
+
+def create_search_history_repository_port(db=None) -> SearchHistoryRepositoryPort:
+    """Create search history repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        SearchHistoryRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import SearchHistoryRepositoryAdapter
+    return SearchHistoryRepositoryAdapter(db)
+
+
+def create_trash_repository_port(db=None) -> TrashRepositoryPort:
+    """Create trash repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        TrashRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import TrashRepositoryAdapter
+    return TrashRepositoryAdapter(db)
+
+
+def create_audio_repository_port(db=None) -> AudioRepositoryPort:
+    """Create audio repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        AudioRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import AudioRepositoryAdapter
+    return AudioRepositoryAdapter(db)
+
+
+# ============================================================
+# External Service Port Factory Functions
+# ============================================================
+
+def create_youtube_port() -> YouTubePort:
+    """Create YouTube service port.
+
+    Returns:
+        YouTubePort implementation.
+    """
+    from src.infrastructure.external.adapters import YouTubeAdapter
+    return YouTubeAdapter()
+
+
+def create_crawler_port() -> CrawlerPort:
+    """Create crawler service port.
+
+    Returns:
+        CrawlerPort implementation.
+    """
+    from src.infrastructure.external.adapters import CrawlerAdapter
+    return CrawlerAdapter()
+
+
+def create_tts_port() -> TTSPort:
+    """Create TTS service port.
+
+    Returns:
+        TTSPort implementation.
+    """
+    from src.infrastructure.external.adapters import TTSAdapter
+    return TTSAdapter()
+
+
+# ============================================================
+# Cache Port Factory Functions
+# ============================================================
+
+def create_cache_port() -> CachePort:
+    """Create cache port.
+
+    Returns:
+        CachePort implementation.
+    """
+    from src.infrastructure.cache.adapters import CacheAdapter
+    return CacheAdapter()
+
+
+# ============================================================
+# Application Service Factory Functions
+# ============================================================
+
+def create_capacity_service(db=None):
+    """Create capacity service.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        CapacityService instance with all dependencies wired.
+    """
+    if db is None:
+        from src.core.database import get_db
+        db = next(get_db())
+    from src.application.services.capacity_service import CapacityService
+    return CapacityService(
+        channel_repo=create_channel_repository_port(db),
+    )
+
+
+def create_export_service(db=None):
+    """Create export service.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        ExportService instance with all dependencies wired.
+    """
+    if db is None:
+        from src.core.database import get_db
+        db = next(get_db())
+    from src.application.services.export_service import ExportService
+    return ExportService(
+        channel_repo=create_channel_repository_port(db),
+        note_repo=create_note_repository_port(db),
+        chat_repo=create_chat_history_repository_port(db),
+    )
+
+
+def create_admin_stats_service(db=None):
+    """Create admin stats service.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        AdminStatsService instance with all dependencies wired.
+    """
+    if db is None:
+        from src.core.database import get_db
+        db = next(get_db())
+    from src.application.services.admin_stats import AdminStatsService
+    return AdminStatsService(
+        channel_repo=create_channel_repository_port(db),
+        api_metrics=create_api_metrics_port(),
+        scheduler=create_scheduler_port(),
+    )
+
+
+def create_preview_service(db=None):
+    """Create preview service.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        PreviewService instance with all dependencies wired.
+    """
+    if db is None:
+        from src.core.database import get_db
+        db = next(get_db())
+    from src.application.services.preview_service import PreviewService
+    return PreviewService(
+        db=db,
+        document_search=create_document_search(),
+    )
+
+
+# ============================================================
+# Infrastructure Port Factory Functions
+# ============================================================
+
+# Singleton instances for infrastructure ports
+_api_metrics_port: ApiMetricsPort | None = None
+_scheduler_port: SchedulerPort | None = None
+
+
+def create_api_metrics_port() -> ApiMetricsPort:
+    """Create or get API metrics port (singleton).
+
+    Returns:
+        ApiMetricsPort implementation.
+    """
+    global _api_metrics_port
+    if _api_metrics_port is None:
+        from src.infrastructure.monitoring.api_metrics import get_api_metrics
+        from src.infrastructure.monitoring.adapters import ApiMetricsAdapter
+        _api_metrics_port = ApiMetricsAdapter(get_api_metrics())
+    return _api_metrics_port
+
+
+def create_scheduler_port() -> SchedulerPort:
+    """Create or get scheduler port (singleton).
+
+    Returns:
+        SchedulerPort implementation.
+    """
+    global _scheduler_port
+    if _scheduler_port is None:
+        from src.infrastructure.scheduler.scheduler import get_scheduler
+        from src.infrastructure.scheduler.adapters import SchedulerAdapter
+        _scheduler_port = SchedulerAdapter(get_scheduler())
+    return _scheduler_port

@@ -389,17 +389,17 @@ class TestExportService:
 
     def test_parse_sources_empty(self, test_db):
         """Test parsing empty sources."""
-        from src.application.services.export_service import ExportService
+        from src.infrastructure.di.container import create_export_service
 
-        service = ExportService(test_db)
+        service = create_export_service(test_db)
         sources = service._parse_sources("")
         assert sources == []
 
     def test_parse_sources_valid(self, test_db):
         """Test parsing valid sources JSON."""
-        from src.application.services.export_service import ExportService
+        from src.infrastructure.di.container import create_export_service
 
-        service = ExportService(test_db)
+        service = create_export_service(test_db)
         sources_json = '[{"source": "test.pdf", "content": "Test content", "page": 1}]'
         sources = service._parse_sources(sources_json)
 
@@ -409,8 +409,8 @@ class TestExportService:
 
     def test_parse_sources_invalid_json(self, test_db):
         """Test parsing invalid JSON returns empty list."""
-        from src.application.services.export_service import ExportService
+        from src.infrastructure.di.container import create_export_service
 
-        service = ExportService(test_db)
+        service = create_export_service(test_db)
         sources = service._parse_sources("invalid json")
         assert sources == []

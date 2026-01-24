@@ -12,16 +12,20 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from sqlalchemy.orm import Session
 
 from src.core.config import get_settings
-from src.core.database import get_db
 from src.core.logging import get_logger
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
-from src.infrastructure.di.container import create_channel_port, create_document_port
-from src.application.services.capacity_service import CapacityService, CapacityExceededError
-from src.infrastructure.cache.cache_service import CacheService, get_cache_service
+from src.application.ports.cache import CachePort
+from src.application.services.capacity_service import CapacityService
+from src.domain.exceptions import CapacityExceededError
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_document_port,
+    create_cache_port,
+    create_capacity_service,
+)
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -37,6 +41,17 @@ def get_channel_port() -> ChannelPort:
 def get_document_port() -> DocumentPort:
     """Get document port instance."""
     return create_document_port()
+
+
+def get_cache_port() -> CachePort:
+    """Get cache port instance."""
+    return create_cache_port()
+
+
+def get_capacity_service() -> CapacityService:
+    """Get capacity service instance."""
+    return create_capacity_service()
+
 
 # OAuth 2.0 scopes for Google Drive
 SCOPES = [
@@ -256,8 +271,8 @@ async def import_file(
     request: ImportFileRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    db: Annotated[Session, Depends(get_db)],
-    cache: Annotated[CacheService, Depends(get_cache_service)],
+    cache: Annotated[CachePort, Depends(get_cache_port)],
+    capacity_service: Annotated[CapacityService, Depends(get_capacity_service)],
 ):
     """
     Import a file from Google Drive to a channel.
@@ -335,7 +350,6 @@ async def import_file(
             )
 
         # Check capacity limits
-        capacity_service = CapacityService(db)
         try:
             capacity_service.validate_upload(channel_id, actual_size)
         except CapacityExceededError as e:

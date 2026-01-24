@@ -9,11 +9,15 @@ from sqlalchemy.orm import Session
 
 from src.models.export import ExportFormat
 from src.application.ports.channel import ChannelPort
-from src.infrastructure.di.container import create_channel_port
+from src.application.ports.persistence import ChannelRepositoryPort
+from src.application.services.export_service import ExportService
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_channel_repository_port,
+    create_export_service,
+)
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.infrastructure.persistence.channel_repository import ChannelRepository
-from src.application.services.export_service import ExportService
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -23,8 +27,18 @@ def get_channel_port() -> ChannelPort:
     return create_channel_port()
 
 
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
+
+
+def get_export_service(db: Session = Depends(get_db)) -> ExportService:
+    """Get export service instance."""
+    return create_export_service(db)
+
+
 def _get_channel_or_404(
-    channel_id: str, channel_port: ChannelPort, db: Session
+    channel_id: str, channel_port: ChannelPort, channel_repo: ChannelRepositoryPort
 ) -> tuple:
     """Get channel or raise 404."""
     channel = channel_port.get_channel(channel_id)
@@ -34,7 +48,6 @@ def _get_channel_or_404(
             detail=f"Channel not found: {channel_id}",
         )
 
-    channel_repo = ChannelRepository(db)
     channel_meta = channel_repo.get_by_gemini_id(channel_id)
     if not channel_meta:
         channel_meta = channel_repo.create(
@@ -59,8 +72,9 @@ def export_note(
         ExportFormat,
         Query(description="Export format: markdown, pdf, or json"),
     ] = ExportFormat.MARKDOWN,
-    channel_port: ChannelPort = Depends(get_channel_port),
-    db: Session = Depends(get_db),
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)] = None,
+    export_service: Annotated[ExportService, Depends(get_export_service)] = None,
 ) -> Response:
     """Export a specific note.
 
@@ -68,9 +82,8 @@ def export_note(
     - **pdf**: PDF document
     - **json**: Structured JSON format
     """
-    _, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
+    _, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
 
-    export_service = ExportService(db)
     try:
         content, content_type, filename = export_service.export_note(
             channel_meta, note_id, format
@@ -108,8 +121,9 @@ def export_chat(
         ExportFormat,
         Query(description="Export format: markdown or json (pdf not supported)"),
     ] = ExportFormat.MARKDOWN,
-    channel_port: ChannelPort = Depends(get_channel_port),
-    db: Session = Depends(get_db),
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)] = None,
+    export_service: Annotated[ExportService, Depends(get_export_service)] = None,
 ) -> Response:
     """Export chat history of a channel.
 
@@ -118,13 +132,12 @@ def export_chat(
 
     Note: PDF format is not supported for chat export.
     """
-    _, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
+    _, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
 
     # PDF not supported for chat, fallback to markdown
     if format == ExportFormat.PDF:
         format = ExportFormat.MARKDOWN
 
-    export_service = ExportService(db)
     content, content_type, filename = export_service.export_chat(channel_meta, format)
 
     return Response(
@@ -147,8 +160,9 @@ def export_channel(
         ExportFormat,
         Query(description="Export format: markdown, json, or pdf (pdf exports as zip)"),
     ] = ExportFormat.JSON,
-    channel_port: ChannelPort = Depends(get_channel_port),
-    db: Session = Depends(get_db),
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)] = None,
+    export_service: Annotated[ExportService, Depends(get_export_service)] = None,
 ) -> Response:
     """Export entire channel with all notes and chat history.
 
@@ -156,9 +170,8 @@ def export_channel(
     - **json**: Structured JSON format for data backup
     - **pdf**: ZIP archive containing all files
     """
-    _, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
+    _, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
 
-    export_service = ExportService(db)
     content, content_type, filename = export_service.export_channel(channel_meta, format)
 
     if isinstance(content, bytes):

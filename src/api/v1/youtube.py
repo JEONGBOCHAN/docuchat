@@ -5,9 +5,7 @@ import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
-from sqlalchemy.orm import Session
 
-from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.models.youtube import (
     YouTubeSourceRequest,
@@ -15,15 +13,20 @@ from src.models.youtube import (
 )
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
-from src.infrastructure.di.container import create_channel_port, create_document_port
-from src.infrastructure.external.youtube.youtube_service import (
-    YouTubeService,
-    get_youtube_service,
+from src.application.ports.external_services import YouTubePort
+from src.application.services.capacity_service import CapacityService
+from src.domain.exceptions import (
     YouTubeServiceError,
     TranscriptNotAvailableError,
     InvalidVideoError,
+    CapacityExceededError,
 )
-from src.application.services.capacity_service import CapacityService, CapacityExceededError
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_document_port,
+    create_youtube_port,
+    create_capacity_service,
+)
 
 router = APIRouter(prefix="/channels", tags=["youtube"])
 
@@ -36,6 +39,16 @@ def get_channel_port() -> ChannelPort:
 def get_document_port() -> DocumentPort:
     """Get document port instance."""
     return create_document_port()
+
+
+def get_youtube_port() -> YouTubePort:
+    """Get YouTube port instance."""
+    return create_youtube_port()
+
+
+def get_capacity_service() -> CapacityService:
+    """Get capacity service instance."""
+    return create_capacity_service()
 
 
 @router.post(
@@ -51,8 +64,8 @@ def add_youtube_source(
     body: YouTubeSourceRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    youtube: Annotated[YouTubeService, Depends(get_youtube_service)],
-    db: Annotated[Session, Depends(get_db)],
+    youtube: Annotated[YouTubePort, Depends(get_youtube_port)],
+    capacity_service: Annotated[CapacityService, Depends(get_capacity_service)],
 ) -> YouTubeSourceResponse:
     """Add a YouTube video as a source to the channel.
 
@@ -87,7 +100,6 @@ def add_youtube_source(
         )
 
         # Check capacity
-        capacity_service = CapacityService(db)
         file_size = os.path.getsize(tmp_path)
         try:
             capacity_service.validate_upload(channel_id, file_size)
@@ -158,7 +170,7 @@ def preview_youtube_transcript(
     channel_id: str,
     url: Annotated[str, Query(description="YouTube video URL")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    youtube: Annotated[YouTubeService, Depends(get_youtube_service)],
+    youtube: Annotated[YouTubePort, Depends(get_youtube_port)],
 ) -> dict:
     """Preview the transcript of a YouTube video before adding it.
 

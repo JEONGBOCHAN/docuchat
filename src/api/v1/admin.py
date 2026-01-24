@@ -10,12 +10,26 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
+from src.core.database import get_db
 from src.application.services.admin_stats import AdminStatsService
-from src.infrastructure.monitoring.api_metrics import get_api_metrics
+from src.application.ports.infrastructure import ApiMetricsPort
+from src.infrastructure.di.container import (
+    create_admin_stats_service,
+    create_api_metrics_port,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def get_admin_stats_service(db: Session = Depends(get_db)) -> AdminStatsService:
+    """Get admin stats service instance."""
+    return create_admin_stats_service(db)
+
+
+def get_api_metrics_port() -> ApiMetricsPort:
+    """Get API metrics port instance."""
+    return create_api_metrics_port()
 
 
 class ChannelStats(BaseModel):
@@ -120,13 +134,12 @@ class ApiMetricsResponse(BaseModel):
 @limiter.limit(RateLimits.DEFAULT)
 def get_system_stats(
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
+    stats_service: Annotated[AdminStatsService, Depends(get_admin_stats_service)],
 ) -> SystemStatsResponse:
     """Get comprehensive system statistics for monitoring.
 
     Returns channel counts, storage usage, API metrics, and scheduler status.
     """
-    stats_service = AdminStatsService(db)
     stats = stats_service.get_system_stats()
     stats_dict = stats.to_dict()
 
@@ -147,13 +160,12 @@ def get_system_stats(
 @limiter.limit(RateLimits.DEFAULT)
 def get_channel_breakdown(
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
+    stats_service: Annotated[AdminStatsService, Depends(get_admin_stats_service)],
 ) -> ChannelBreakdownResponse:
     """Get detailed breakdown of all channels.
 
     Returns each channel's status, usage, and lifecycle state.
     """
-    stats_service = AdminStatsService(db)
     breakdown = stats_service.get_channel_breakdown()
 
     return ChannelBreakdownResponse(
@@ -168,23 +180,25 @@ def get_channel_breakdown(
     summary="Get detailed API metrics",
 )
 @limiter.limit(RateLimits.DEFAULT)
-def get_api_metrics_endpoint(request: Request) -> ApiMetricsResponse:
+def get_api_metrics_endpoint(
+    request: Request,
+    metrics_port: Annotated[ApiMetricsPort, Depends(get_api_metrics_port)],
+) -> ApiMetricsResponse:
     """Get detailed API call metrics.
 
     Returns call counts, error rates, and latencies per endpoint.
     """
-    metrics = get_api_metrics()
-    stats = metrics.get_stats()
+    stats = metrics_port.get_stats()
 
     return ApiMetricsResponse(
-        uptime_seconds=stats["uptime_seconds"],
-        started_at=stats["started_at"],
-        total_api_calls=stats["total_api_calls"],
-        total_errors=stats["total_errors"],
-        error_rate_percent=stats["error_rate_percent"],
-        avg_latency_ms=stats["avg_latency_ms"],
-        gemini_api_calls=stats["gemini_api_calls"],
-        top_endpoints=[EndpointMetric(**ep) for ep in stats["top_endpoints"]],
+        uptime_seconds=stats.uptime_seconds,
+        started_at=stats.started_at,
+        total_api_calls=stats.total_api_calls,
+        total_errors=stats.total_errors,
+        error_rate_percent=stats.error_rate_percent,
+        avg_latency_ms=stats.avg_latency_ms,
+        gemini_api_calls=stats.gemini_api_calls,
+        top_endpoints=[EndpointMetric(**ep) for ep in stats.top_endpoints],
     )
 
 
@@ -193,11 +207,13 @@ def get_api_metrics_endpoint(request: Request) -> ApiMetricsResponse:
     summary="Reset API metrics",
 )
 @limiter.limit(RateLimits.DEFAULT)
-def reset_api_metrics(request: Request) -> dict:
+def reset_api_metrics(
+    request: Request,
+    metrics_port: Annotated[ApiMetricsPort, Depends(get_api_metrics_port)],
+) -> dict:
     """Reset all API metrics counters.
 
     Use this to start fresh metrics collection.
     """
-    metrics = get_api_metrics()
-    metrics.reset()
+    metrics_port.reset()
     return {"message": "API metrics have been reset"}

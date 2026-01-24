@@ -6,10 +6,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.documents import get_channel_port, get_document_port
+from src.api.v1.documents import get_channel_port, get_document_port, get_crawler_port
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO, UploadResultDTO
-from src.infrastructure.external.crawler.crawler import get_crawler_service, CrawlResult
+from src.infrastructure.external.crawler.crawler import CrawlResult
 
 
 class TestUploadDocument:
@@ -324,7 +324,7 @@ class TestUploadFromUrl:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port] = lambda: mock_document_port
-        app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
+        app.dependency_overrides[get_crawler_port] = lambda: mock_crawler
 
         response = client_with_db.post(
             "/api/v1/documents/url",
@@ -340,7 +340,7 @@ class TestUploadFromUrl:
 
         app.dependency_overrides.pop(get_channel_port, None)
         app.dependency_overrides.pop(get_document_port, None)
-        app.dependency_overrides.pop(get_crawler_service, None)
+        app.dependency_overrides.pop(get_crawler_port, None)
 
     def test_upload_from_url_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test URL upload to non-existent channel."""
@@ -371,7 +371,7 @@ class TestUploadFromUrl:
         mock_crawler.fetch_url.side_effect = ValueError("Invalid URL: not-a-url")
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
+        app.dependency_overrides[get_crawler_port] = lambda: mock_crawler
 
         response = client_with_db.post(
             "/api/v1/documents/url",
@@ -383,7 +383,7 @@ class TestUploadFromUrl:
         assert "Invalid URL" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_crawler_service, None)
+        app.dependency_overrides.pop(get_crawler_port, None)
 
     def test_upload_from_url_crawl_error(self, client_with_db: TestClient, test_db):
         """Test URL upload handles crawl errors."""
@@ -397,7 +397,7 @@ class TestUploadFromUrl:
         mock_crawler.fetch_url.side_effect = Exception("Connection failed")
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_crawler_service] = lambda: mock_crawler
+        app.dependency_overrides[get_crawler_port] = lambda: mock_crawler
 
         response = client_with_db.post(
             "/api/v1/documents/url",
@@ -409,7 +409,7 @@ class TestUploadFromUrl:
         assert "Failed to upload from URL" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_crawler_service, None)
+        app.dependency_overrides.pop(get_crawler_port, None)
 
     def test_upload_from_url_empty_url(self, client_with_db: TestClient, test_db):
         """Test URL upload with empty URL."""

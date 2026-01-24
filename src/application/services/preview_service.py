@@ -2,9 +2,6 @@
 """Document preview service for text extraction and display."""
 
 import re
-from functools import lru_cache
-
-from sqlalchemy.orm import Session
 
 from src.application.ports.document_search import DocumentSearchPort
 from src.models.db_models import DocumentPreviewCacheDB
@@ -300,21 +297,17 @@ Return the extracted text content now:"""
         return highlights
 
 
-@lru_cache
-def get_preview_service_factory():
-    """Factory for creating document search instance."""
-    from src.infrastructure.di import create_document_search
-    return create_document_search()
-
-
-def get_preview_service(db: Session) -> PreviewService:
+def get_preview_service(
+    db,
+    document_search: DocumentSearchPort,
+) -> PreviewService:
     """Get preview service instance with injected dependencies.
 
     Args:
         db: Database session
+        document_search: Document search port instance
 
     Returns:
         PreviewService instance
     """
-    document_search = get_preview_service_factory()
     return PreviewService(db, document_search)

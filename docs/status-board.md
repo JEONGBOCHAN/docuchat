@@ -17,6 +17,22 @@
 
 ## 현재 미션
 
+> **🔄 진행중**: "Clean Architecture Phase 4 - API에서 인프라 직접 참조 제거하여 완전한 의존성 역전 달성"
+
+**목표**:
+1. API → Infrastructure 직접 참조 제거 (17개 파일)
+2. DB 모델을 infrastructure/persistence/로 이동
+3. 도메인 엔티티 정리
+
+**위반 현황** (Codex 리뷰 기반):
+- 17개 API 파일이 인프라 직접 참조
+- Repository, Cache, External Services 모두 해당
+- DB 모델 위치 혼재
+
+---
+
+## 이전 미션 (완료)
+
 > **✅ 완료**: "Clean Architecture Phase 3 - Store/Document CRUD를 Port/Adapter 패턴으로 전환하여 완전한 Clean Architecture 달성"
 
 **결과**:

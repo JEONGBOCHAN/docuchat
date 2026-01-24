@@ -9,13 +9,14 @@ from sqlalchemy.orm import Session
 from src.models.faq import FAQItem, FAQGenerateRequest, FAQGenerateResponse
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
+from src.application.ports.persistence import ChannelRepositoryPort
+from src.core.database import get_db
 from src.infrastructure.di.container import (
     create_channel_port,
     create_document_port,
     create_generate_faq_use_case,
+    create_channel_repository_port,
 )
-from src.core.database import get_db
-from src.infrastructure.persistence.channel_repository import ChannelRepository
 
 router = APIRouter(prefix="/channels", tags=["faq"])
 
@@ -30,6 +31,11 @@ def get_document_port() -> DocumentPort:
     return create_document_port()
 
 
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
+
+
 @router.post(
     "/{channel_id:path}/generate-faq",
     response_model=FAQGenerateResponse,
@@ -40,7 +46,7 @@ def generate_faq(
     request: FAQGenerateRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
 ) -> FAQGenerateResponse:
     """Generate frequently asked questions based on channel documents.
 
@@ -64,7 +70,6 @@ def generate_faq(
         )
 
     # Update last accessed time
-    channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
     # Generate FAQ using Clean Architecture UseCase

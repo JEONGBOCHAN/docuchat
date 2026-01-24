@@ -16,14 +16,15 @@ from src.models.timeline import (
     GenerateBriefingRequest,
 )
 from src.application.ports.channel import ChannelPort
+from src.application.ports.persistence import ChannelRepositoryPort
+from src.core.database import get_db
 from src.infrastructure.di.container import (
     create_channel_port,
     create_generate_timeline_use_case,
     create_generate_briefing_use_case,
+    create_channel_repository_port,
 )
-from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.infrastructure.persistence.channel_repository import ChannelRepository
 
 router = APIRouter(prefix="/channels", tags=["timeline"])
 
@@ -31,6 +32,11 @@ router = APIRouter(prefix="/channels", tags=["timeline"])
 def get_channel_port() -> ChannelPort:
     """Get channel port instance."""
     return create_channel_port()
+
+
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
 
 
 @router.post(
@@ -44,7 +50,7 @@ def generate_timeline(
     channel_id: str,
     body: GenerateTimelineRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
 ) -> TimelineResponse:
     """Generate a chronological timeline of events from documents.
 
@@ -60,8 +66,7 @@ def generate_timeline(
         )
 
     # Update last accessed time
-    repo = ChannelRepository(db)
-    repo.touch(channel_id)
+    channel_repo.touch(channel_id)
 
     # Generate timeline using Clean Architecture use case
     use_case = create_generate_timeline_use_case()
@@ -106,7 +111,7 @@ def generate_briefing(
     channel_id: str,
     body: GenerateBriefingRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
 ) -> BriefingResponse:
     """Generate a structured briefing document from channel content.
 
@@ -129,8 +134,7 @@ def generate_briefing(
         )
 
     # Update last accessed time
-    repo = ChannelRepository(db)
-    repo.touch(channel_id)
+    channel_repo.touch(channel_id)
 
     # Generate briefing using Clean Architecture use case
     use_case = create_generate_briefing_use_case()

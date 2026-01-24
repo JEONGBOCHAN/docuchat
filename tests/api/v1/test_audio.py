@@ -258,7 +258,7 @@ class TestDeleteAudioOverview:
         test_db.add(audio)
         test_db.commit()
 
-        with patch("src.api.v1.audio.get_tts_service") as mock_tts:
+        with patch("src.api.v1.audio.create_tts_port") as mock_tts:
             mock_tts.return_value.delete_audio.return_value = True
 
             response = client_with_db.delete(

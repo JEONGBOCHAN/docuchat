@@ -17,12 +17,16 @@ from src.models.citation import (
     CitationDetail,
 )
 from src.application.ports.channel import ChannelPort
-from src.infrastructure.di.container import create_channel_port, create_search_with_citations_use_case
+from src.application.ports.persistence import ChannelRepositoryPort
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
 from src.application.ports.citation_search import CitationDTO
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_search_with_citations_use_case,
+    create_channel_repository_port,
+)
 
 router = APIRouter(prefix="/citations", tags=["citations"])
 
@@ -30,6 +34,11 @@ router = APIRouter(prefix="/citations", tags=["citations"])
 def get_channel_port() -> ChannelPort:
     """Get channel port instance."""
     return create_channel_port()
+
+
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
 
 
 def _format_sse_event(data: dict) -> str:
@@ -81,7 +90,7 @@ def query_with_citations(
     channel_id: Annotated[str, Query(description="Channel ID to query")],
     body: CitationRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
     use_case: Annotated[SearchWithCitationsUseCase, Depends(get_citations_use_case)],
 ) -> CitedResponse:
     """Send a question and get an AI-generated answer with inline citations.
@@ -100,7 +109,6 @@ def query_with_citations(
         )
 
     # Update last accessed time
-    channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
     # Execute use case for citation search
@@ -137,7 +145,7 @@ def query_with_citations_stream(
     channel_id: Annotated[str, Query(description="Channel ID to query")],
     body: CitationRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
     use_case: Annotated[SearchWithCitationsUseCase, Depends(get_citations_use_case)],
 ) -> StreamingResponse:
     """Send a question and get a streaming response with inline citations.
@@ -157,7 +165,6 @@ def query_with_citations_stream(
         )
 
     # Update last accessed time
-    channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
     def generate_stream() -> Generator[str, None, None]:
@@ -218,7 +225,6 @@ def get_citation_detail(
     citation_index: int,
     source: Annotated[str, Query(description="Source file name")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
 ) -> CitationDetail:
     """Get detailed information about a citation for navigation.
 

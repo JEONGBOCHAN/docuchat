@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from src.models.capacity import CapacityUsageResponse
 from src.application.ports.channel import ChannelPort
-from src.infrastructure.di.container import create_channel_port
 from src.application.services.capacity_service import CapacityService
+from src.infrastructure.di.container import create_channel_port, create_capacity_service
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 
@@ -19,6 +19,11 @@ router = APIRouter(prefix="/capacity", tags=["capacity"])
 def get_channel_port() -> ChannelPort:
     """Get channel port instance."""
     return create_channel_port()
+
+
+def get_capacity_service(db: Session = Depends(get_db)) -> CapacityService:
+    """Get capacity service instance."""
+    return create_capacity_service(db)
 
 
 @router.get(
@@ -31,7 +36,7 @@ def get_capacity_usage(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID to check capacity")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    capacity_service: Annotated[CapacityService, Depends(get_capacity_service)],
 ) -> CapacityUsageResponse:
     """Get the current capacity usage for a channel.
 
@@ -44,8 +49,6 @@ def get_capacity_usage(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
-
-    capacity_service = CapacityService(db)
     usage = capacity_service.get_usage(channel_id)
 
     if not usage:

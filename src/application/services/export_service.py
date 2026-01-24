@@ -5,7 +5,8 @@ import io
 import json
 import zipfile
 from datetime import datetime, UTC
-from sqlalchemy.orm import Session
+
+from typing import Any
 
 from src.models.db_models import ChannelMetadata, NoteDB, ChatMessageDB
 from src.models.export import (
@@ -16,19 +17,34 @@ from src.models.export import (
     ChannelFullExport,
 )
 from src.models.chat import GroundingSource, ChatMessage
-from src.infrastructure.persistence.channel_repository import ChannelRepository, ChatHistoryRepository
-from src.infrastructure.persistence.note_repository import NoteRepository
+from src.application.ports.persistence import (
+    ChannelRepositoryPort,
+    ChatHistoryRepositoryPort,
+    NoteRepositoryPort,
+    NoteDTO,
+    ChatMessageDTO,
+)
 
 
 class ExportService:
     """Service for exporting data in various formats."""
 
-    def __init__(self, db: Session):
-        """Initialize export service with database session."""
-        self.db = db
-        self.channel_repo = ChannelRepository(db)
-        self.note_repo = NoteRepository(db)
-        self.chat_repo = ChatHistoryRepository(db)
+    def __init__(
+        self,
+        channel_repo: ChannelRepositoryPort,
+        note_repo: NoteRepositoryPort,
+        chat_repo: ChatHistoryRepositoryPort,
+    ):
+        """Initialize export service with repository ports.
+
+        Args:
+            channel_repo: Channel repository port
+            note_repo: Note repository port
+            chat_repo: Chat history repository port
+        """
+        self.channel_repo = channel_repo
+        self.note_repo = note_repo
+        self.chat_repo = chat_repo
 
     def _parse_sources(self, sources_json: str) -> list[GroundingSource]:
         """Parse sources JSON string to list of GroundingSource."""
@@ -38,23 +54,40 @@ class ExportService:
         except (json.JSONDecodeError, TypeError):
             return []
 
-    def _note_db_to_export(self, note: NoteDB) -> NoteExportData:
-        """Convert NoteDB to NoteExportData."""
+    def _sources_from_list(self, sources: list[dict[str, Any]]) -> list[GroundingSource]:
+        """Convert sources list (from DTO) to list of GroundingSource."""
+        try:
+            return [GroundingSource(**s) for s in sources] if sources else []
+        except (TypeError, KeyError):
+            return []
+
+    def _note_db_to_export(self, note: NoteDB | NoteDTO) -> NoteExportData:
+        """Convert NoteDB or NoteDTO to NoteExportData."""
+        # Handle both NoteDB (with sources_json) and NoteDTO (with sources list)
+        if hasattr(note, 'sources_json'):
+            sources = self._parse_sources(note.sources_json)
+        else:
+            sources = self._sources_from_list(note.sources)
         return NoteExportData(
             id=note.id,
             title=note.title,
             content=note.content,
-            sources=self._parse_sources(note.sources_json),
+            sources=sources,
             created_at=note.created_at,
             updated_at=note.updated_at,
         )
 
-    def _message_db_to_chat(self, msg: ChatMessageDB) -> ChatMessage:
-        """Convert ChatMessageDB to ChatMessage."""
+    def _message_db_to_chat(self, msg: ChatMessageDB | ChatMessageDTO) -> ChatMessage:
+        """Convert ChatMessageDB or ChatMessageDTO to ChatMessage."""
+        # Handle both ChatMessageDB (with sources_json) and ChatMessageDTO (with sources list)
+        if hasattr(msg, 'sources_json'):
+            sources = self._parse_sources(msg.sources_json)
+        else:
+            sources = self._sources_from_list(msg.sources)
         return ChatMessage(
             role=msg.role,
             content=msg.content,
-            sources=self._parse_sources(msg.sources_json),
+            sources=sources,
             created_at=msg.created_at,
         )
 
@@ -71,7 +104,7 @@ class ExportService:
 
     # ---- Note Export ----
 
-    def export_note_markdown(self, note: NoteDB) -> str:
+    def export_note_markdown(self, note: NoteDB | NoteDTO) -> str:
         """Export a single note as Markdown."""
         lines = [
             f"# {note.title}",
@@ -80,7 +113,11 @@ class ExportService:
             "",
         ]
 
-        sources = self._parse_sources(note.sources_json)
+        # Handle both NoteDB (with sources_json) and NoteDTO (with sources list)
+        if hasattr(note, 'sources_json'):
+            sources = self._parse_sources(note.sources_json)
+        else:
+            sources = self._sources_from_list(note.sources)
         if sources:
             lines.append("---")
             lines.append("")
@@ -99,12 +136,12 @@ class ExportService:
 
         return "\n".join(lines)
 
-    def export_note_json(self, note: NoteDB) -> str:
+    def export_note_json(self, note: NoteDB | NoteDTO) -> str:
         """Export a single note as JSON."""
         data = self._note_db_to_export(note)
         return data.model_dump_json(indent=2)
 
-    def export_note_pdf(self, note: NoteDB) -> bytes:
+    def export_note_pdf(self, note: NoteDB | NoteDTO) -> bytes:
         """Export a single note as PDF."""
         from fpdf import FPDF
 
@@ -124,8 +161,11 @@ class ExportService:
         pdf.multi_cell(0, 7, note.content)
         pdf.ln(10)
 
-        # Sources
-        sources = self._parse_sources(note.sources_json)
+        # Handle both NoteDB (with sources_json) and NoteDTO (with sources list)
+        if hasattr(note, 'sources_json'):
+            sources = self._parse_sources(note.sources_json)
+        else:
+            sources = self._sources_from_list(note.sources)
         if sources:
             pdf.set_font("NanumGothic", size=12)
             pdf.cell(0, 10, "Sources", ln=True)
@@ -146,7 +186,7 @@ class ExportService:
 
     def export_chat_markdown(self, channel: ChannelMetadata) -> str:
         """Export chat history as Markdown."""
-        messages = self.chat_repo.get_history(channel, limit=1000)
+        messages = self.chat_repo.get_history(channel.id, limit=1000)
 
         lines = [
             f"# Chat History - {channel.name}",
@@ -165,7 +205,11 @@ class ExportService:
             lines.append(msg.content)
             lines.append("")
 
-            sources = self._parse_sources(msg.sources_json)
+            # Handle both ChatMessageDB (with sources_json) and ChatMessageDTO (with sources list)
+            if hasattr(msg, 'sources_json'):
+                sources = self._parse_sources(msg.sources_json)
+            else:
+                sources = self._sources_from_list(msg.sources)
             if sources:
                 lines.append("**Sources:**")
                 for src in sources:
@@ -180,7 +224,7 @@ class ExportService:
 
     def export_chat_json(self, channel: ChannelMetadata) -> str:
         """Export chat history as JSON."""
-        messages = self.chat_repo.get_history(channel, limit=1000)
+        messages = self.chat_repo.get_history(channel.id, limit=1000)
         data = ChatExportData(
             channel_id=channel.gemini_store_id,
             messages=[self._message_db_to_chat(m) for m in messages],
@@ -192,8 +236,8 @@ class ExportService:
 
     def export_channel_markdown(self, channel: ChannelMetadata) -> str:
         """Export full channel as Markdown."""
-        notes = self.note_repo.get_by_channel(channel, limit=1000)
-        messages = self.chat_repo.get_history(channel, limit=1000)
+        notes = self.note_repo.get_by_channel(channel.id, limit=1000)
+        messages = self.chat_repo.get_history(channel.id, limit=1000)
 
         lines = [
             f"# {channel.name}",
@@ -240,8 +284,8 @@ class ExportService:
 
     def export_channel_json(self, channel: ChannelMetadata) -> str:
         """Export full channel as JSON."""
-        notes = self.note_repo.get_by_channel(channel, limit=1000)
-        messages = self.chat_repo.get_history(channel, limit=1000)
+        notes = self.note_repo.get_by_channel(channel.id, limit=1000)
+        messages = self.chat_repo.get_history(channel.id, limit=1000)
 
         data = ChannelFullExport(
             metadata=self._channel_to_metadata(channel),
@@ -261,7 +305,7 @@ class ExportService:
             zf.writestr("metadata.json", metadata.model_dump_json(indent=2))
 
             # Notes as individual markdown files
-            notes = self.note_repo.get_by_channel(channel, limit=1000)
+            notes = self.note_repo.get_by_channel(channel.id, limit=1000)
             for note in notes:
                 safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in note.title)
                 filename = f"notes/{note.id}_{safe_title[:50]}.md"

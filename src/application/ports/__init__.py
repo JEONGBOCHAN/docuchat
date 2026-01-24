@@ -23,6 +23,26 @@ Available Ports:
 - PodcastScriptPort: Podcast script generation
 - ChannelPort: Channel (File Search Store) CRUD operations
 - DocumentPort: Document operations within channels
+
+Persistence Ports (Repository abstractions):
+- ChannelRepositoryPort: Channel metadata CRUD
+- ChatHistoryRepositoryPort: Chat message persistence
+- ChatSessionRepositoryPort: Chat session management
+- NoteRepositoryPort: Note CRUD
+- FavoriteRepositoryPort: Favorites management
+- SearchHistoryRepositoryPort: Search history
+- TrashRepositoryPort: Soft delete / trash operations
+- AudioRepositoryPort: Audio overview persistence
+
+External Service Ports:
+- YouTubePort: YouTube transcript extraction
+- CrawlerPort: URL content crawling
+- TTSPort: Text-to-Speech synthesis
+
+Infrastructure Ports:
+- CachePort: Caching operations
+- ApiMetricsPort: API metrics tracking
+- SchedulerPort: Background task scheduling
 """
 
 from src.application.ports.observability import AgentEventSinkPort
@@ -66,6 +86,56 @@ from src.application.ports.podcast import (
 )
 from src.application.ports.channel import ChannelPort, ChannelDTO
 from src.application.ports.document import DocumentPort, DocumentDTO, UploadResultDTO
+
+# Persistence Ports
+from src.application.ports.persistence import (
+    # DTOs
+    ChannelMetadataDTO,
+    ChatMessageDTO,
+    ChatSessionDTO,
+    NoteDTO,
+    FavoriteDTO,
+    SearchHistoryDTO,
+    TrashItemDTO,
+    AudioOverviewDTO,
+    # Ports
+    ChannelRepositoryPort,
+    ChatHistoryRepositoryPort,
+    ChatSessionRepositoryPort,
+    NoteRepositoryPort,
+    FavoriteRepositoryPort,
+    SearchHistoryRepositoryPort,
+    TrashRepositoryPort,
+    AudioRepositoryPort,
+)
+
+# External Service Ports
+from src.application.ports.external_services import (
+    # DTOs
+    YouTubeTranscriptDTO,
+    YouTubeMetadataDTO,
+    CrawlResultDTO,
+    TTSResultDTO,
+    # Ports
+    YouTubePort,
+    CrawlerPort,
+    TTSPort,
+)
+
+# Cache Port
+from src.application.ports.cache import CachePort
+
+# Infrastructure Ports
+from src.application.ports.infrastructure import (
+    # DTOs
+    EndpointMetricsDTO,
+    ApiStatsDTO,
+    ScheduledJobDTO,
+    JobHistoryDTO,
+    # Ports
+    ApiMetricsPort,
+    SchedulerPort,
+)
 
 __all__ = [
     # Observability
@@ -123,4 +193,38 @@ __all__ = [
     "DocumentPort",
     "DocumentDTO",
     "UploadResultDTO",
+    # Persistence Ports
+    "ChannelMetadataDTO",
+    "ChatMessageDTO",
+    "ChatSessionDTO",
+    "NoteDTO",
+    "FavoriteDTO",
+    "SearchHistoryDTO",
+    "TrashItemDTO",
+    "AudioOverviewDTO",
+    "ChannelRepositoryPort",
+    "ChatHistoryRepositoryPort",
+    "ChatSessionRepositoryPort",
+    "NoteRepositoryPort",
+    "FavoriteRepositoryPort",
+    "SearchHistoryRepositoryPort",
+    "TrashRepositoryPort",
+    "AudioRepositoryPort",
+    # External Service Ports
+    "YouTubeTranscriptDTO",
+    "YouTubeMetadataDTO",
+    "CrawlResultDTO",
+    "TTSResultDTO",
+    "YouTubePort",
+    "CrawlerPort",
+    "TTSPort",
+    # Cache Port
+    "CachePort",
+    # Infrastructure Ports
+    "EndpointMetricsDTO",
+    "ApiStatsDTO",
+    "ScheduledJobDTO",
+    "JobHistoryDTO",
+    "ApiMetricsPort",
+    "SchedulerPort",
 ]

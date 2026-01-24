@@ -20,13 +20,21 @@ from src.models.audio import (
     ScriptOnlyResponse,
 )
 from src.application.ports.channel import ChannelPort
-from src.infrastructure.di.container import create_channel_port, create_generate_podcast_script_use_case
-from src.infrastructure.external.tts.tts_service import TTSService, get_tts_service
-from src.infrastructure.persistence.audio_repository import AudioRepository, to_response
+from src.application.ports.persistence import (
+    AudioRepositoryPort,
+    ChannelRepositoryPort,
+)
+from src.application.ports.external_services import TTSPort
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.application.use_cases.podcast import GeneratePodcastScriptRequest
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_generate_podcast_script_use_case,
+    create_audio_repository_port,
+    create_channel_repository_port,
+    create_tts_port,
+)
 
 router = APIRouter(prefix="/channels", tags=["audio"])
 
@@ -34,6 +42,67 @@ router = APIRouter(prefix="/channels", tags=["audio"])
 def get_channel_port() -> ChannelPort:
     """Get channel port instance."""
     return create_channel_port()
+
+
+def get_audio_repo_port(db: Session = Depends(get_db)) -> AudioRepositoryPort:
+    """Get audio repository port instance."""
+    return create_audio_repository_port(db)
+
+
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
+
+
+def get_tts_port() -> TTSPort:
+    """Get TTS port instance."""
+    return create_tts_port()
+
+
+def _audio_dto_to_response(audio_dto, channel_id: str) -> AudioOverviewResponse:
+    """Convert AudioDTO to AudioOverviewResponse."""
+    # Parse script_json if available
+    import json
+    script = None
+    if audio_dto.script_json:
+        try:
+            script_data = json.loads(audio_dto.script_json)
+            # Convert to PodcastScript model
+            dialogue = [
+                DialogueLine(
+                    speaker=line.get("speaker", ""),
+                    text=line.get("text", ""),
+                    voice=VoiceType(line.get("voice", "female")),
+                )
+                for line in script_data.get("dialogue", [])
+            ]
+            script = PodcastScript(
+                title=script_data.get("title", ""),
+                introduction=script_data.get("introduction", ""),
+                dialogue=dialogue,
+                conclusion=script_data.get("conclusion", ""),
+                estimated_duration_seconds=script_data.get("estimated_duration_seconds", 0),
+            )
+        except (json.JSONDecodeError, KeyError, ValueError):
+            pass
+
+    # Generate stream URL if audio is available
+    audio_url = None
+    if audio_dto.audio_path:
+        audio_url = f"/api/v1/channels/{channel_id}/audio/{audio_dto.audio_id}/stream"
+
+    return AudioOverviewResponse(
+        id=audio_dto.audio_id,
+        channel_id=channel_id,
+        title=audio_dto.title,
+        status=AudioStatus(audio_dto.status),
+        script=script,
+        duration_seconds=audio_dto.audio_duration_seconds,
+        audio_url=audio_url,
+        error=audio_dto.error_message,
+        created_at=audio_dto.created_at,
+        completed_at=audio_dto.completed_at,
+    )
 
 
 async def generate_audio_task(
@@ -156,7 +225,8 @@ def generate_audio_overview(
     body: GenerateAudioRequest,
     background_tasks: BackgroundTasks,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    audio_repo: Annotated[AudioRepositoryPort, Depends(get_audio_repo_port)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
 ) -> AudioOverviewResponse:
     """Start audio overview generation for a channel.
 
@@ -175,21 +245,19 @@ def generate_audio_overview(
         )
 
     # Get channel from database
-    repo = AudioRepository(db)
-    channel = repo.get_channel_by_store_id(channel_id)
-    if not channel:
+    channel_dto = audio_repo.get_channel_by_store_id(channel_id)
+    if not channel_dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel metadata not found: {channel_id}",
         )
 
     # Update last accessed time
-    channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
     # Create audio overview record
-    audio = repo.create_audio_overview(
-        channel_id=channel.id,
+    audio_dto = audio_repo.create_audio_overview(
+        channel_id=channel_dto.id,
         language=body.language,
         style=body.style,
     )
@@ -204,7 +272,7 @@ def generate_audio_overview(
         target=run_async_task,
         args=(
             generate_audio_task(
-                audio_id=audio.audio_id,
+                audio_id=audio_dto.audio_id,
                 store_name=channel_id,
                 duration_minutes=body.duration_minutes,
                 style=body.style,
@@ -217,7 +285,7 @@ def generate_audio_overview(
     )
     thread.start()
 
-    return to_response(audio, channel_id)
+    return _audio_dto_to_response(audio_dto, channel_id)
 
 
 @router.get(
@@ -229,25 +297,24 @@ def generate_audio_overview(
 def list_audio_overviews(
     request: Request,
     channel_id: str,
+    audio_repo: Annotated[AudioRepositoryPort, Depends(get_audio_repo_port)],
     limit: int = 20,
     offset: int = 0,
-    db: Annotated[Session, Depends(get_db)] = None,
 ) -> AudioOverviewListResponse:
     """List all audio overviews for a channel."""
     # Get channel from database
-    repo = AudioRepository(db)
-    channel = repo.get_channel_by_store_id(channel_id)
-    if not channel:
+    channel_dto = audio_repo.get_channel_by_store_id(channel_id)
+    if not channel_dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
 
-    audios = repo.get_audios_by_channel(channel.id, limit=limit, offset=offset)
-    total = repo.count_audios_by_channel(channel.id)
+    audios = audio_repo.get_audios_by_channel(channel_dto.id, limit=limit, offset=offset)
+    total = audio_repo.count_audios_by_channel(channel_dto.id)
 
     return AudioOverviewListResponse(
-        items=[to_response(a, channel_id) for a in audios],
+        items=[_audio_dto_to_response(a, channel_id) for a in audios],
         total=total,
     )
 
@@ -262,27 +329,26 @@ def get_audio_overview(
     request: Request,
     channel_id: str,
     audio_id: str,
-    db: Annotated[Session, Depends(get_db)],
+    audio_repo: Annotated[AudioRepositoryPort, Depends(get_audio_repo_port)],
 ) -> AudioOverviewResponse:
     """Get a specific audio overview by ID."""
-    repo = AudioRepository(db)
-    audio = repo.get_audio_by_id(audio_id)
+    audio_dto = audio_repo.get_audio_by_id(audio_id)
 
-    if not audio:
+    if not audio_dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Audio overview not found: {audio_id}",
         )
 
     # Verify channel matches
-    channel = repo.get_channel_by_store_id(channel_id)
-    if not channel or audio.channel_id != channel.id:
+    channel_dto = audio_repo.get_channel_by_store_id(channel_id)
+    if not channel_dto or audio_dto.channel_id != channel_dto.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Audio overview not found in channel: {channel_id}",
         )
 
-    return to_response(audio, channel_id)
+    return _audio_dto_to_response(audio_dto, channel_id)
 
 
 @router.get(
@@ -294,34 +360,33 @@ def stream_audio(
     request: Request,
     channel_id: str,
     audio_id: str,
-    db: Annotated[Session, Depends(get_db)],
+    audio_repo: Annotated[AudioRepositoryPort, Depends(get_audio_repo_port)],
 ):
     """Stream the generated audio file."""
-    repo = AudioRepository(db)
-    audio = repo.get_audio_by_id(audio_id)
+    audio_dto = audio_repo.get_audio_by_id(audio_id)
 
-    if not audio:
+    if not audio_dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Audio overview not found: {audio_id}",
         )
 
-    if audio.status != AudioStatus.COMPLETED.value:
+    if audio_dto.status != AudioStatus.COMPLETED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Audio is not ready. Current status: {audio.status}",
+            detail=f"Audio is not ready. Current status: {audio_dto.status}",
         )
 
-    if not audio.audio_path:
+    if not audio_dto.audio_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Audio file not found",
         )
 
     return FileResponse(
-        audio.audio_path,
+        audio_dto.audio_path,
         media_type="audio/mpeg",
-        filename=f"{audio.title or 'audio_overview'}.mp3",
+        filename=f"{audio_dto.title or 'audio_overview'}.mp3",
     )
 
 
@@ -335,33 +400,32 @@ def delete_audio_overview(
     request: Request,
     channel_id: str,
     audio_id: str,
-    db: Annotated[Session, Depends(get_db)],
+    audio_repo: Annotated[AudioRepositoryPort, Depends(get_audio_repo_port)],
+    tts_port: Annotated[TTSPort, Depends(get_tts_port)],
 ):
     """Delete an audio overview and its audio file."""
-    repo = AudioRepository(db)
-    audio = repo.get_audio_by_id(audio_id)
+    audio_dto = audio_repo.get_audio_by_id(audio_id)
 
-    if not audio:
+    if not audio_dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Audio overview not found: {audio_id}",
         )
 
     # Verify channel matches
-    channel = repo.get_channel_by_store_id(channel_id)
-    if not channel or audio.channel_id != channel.id:
+    channel_dto = audio_repo.get_channel_by_store_id(channel_id)
+    if not channel_dto or audio_dto.channel_id != channel_dto.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Audio overview not found in channel: {channel_id}",
         )
 
     # Delete audio file
-    if audio.audio_path:
-        tts = get_tts_service()
-        tts.delete_audio(audio.audio_id)
+    if audio_dto.audio_path:
+        tts_port.delete_audio(audio_dto.audio_id)
 
     # Delete database record
-    repo.delete_audio(audio_id)
+    audio_repo.delete_audio(audio_id)
 
 
 @router.post(
@@ -375,7 +439,7 @@ def preview_script(
     channel_id: str,
     body: GenerateAudioRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
 ) -> ScriptOnlyResponse:
     """Generate and preview podcast script without creating audio.
 
@@ -391,8 +455,7 @@ def preview_script(
         )
 
     # Update last accessed time
-    repo = ChannelRepository(db)
-    repo.touch(channel_id)
+    channel_repo.touch(channel_id)
 
     # Generate script using UseCase
     use_case = create_generate_podcast_script_use_case()

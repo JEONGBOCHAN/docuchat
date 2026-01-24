@@ -11,12 +11,17 @@ from src.models.channel import ChannelCreate, ChannelUpdate, ChannelResponse, Ch
 from src.models.favorite import TargetType
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
-from src.infrastructure.di.container import create_channel_port, create_document_port
+from src.application.ports.persistence import ChannelRepositoryPort, FavoriteRepositoryPort
+from src.application.ports.cache import CachePort
 from src.core.database import get_db
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_document_port,
+    create_channel_repository_port,
+    create_favorite_repository_port,
+    create_cache_port,
+)
 from src.core.rate_limiter import limiter, RateLimits
-from src.infrastructure.persistence.channel_repository import ChannelRepository
-from src.infrastructure.persistence.favorite_repository import FavoriteRepository
-from src.infrastructure.cache.cache_service import CacheService, get_cache_service
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 
@@ -31,6 +36,21 @@ def get_document_port() -> DocumentPort:
     return create_document_port()
 
 
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
+
+
+def get_favorite_repo_port(db: Session = Depends(get_db)) -> FavoriteRepositoryPort:
+    """Get favorite repository port instance."""
+    return create_favorite_repository_port(db)
+
+
+def get_cache_port() -> CachePort:
+    """Get cache port instance."""
+    return create_cache_port()
+
+
 @router.post(
     "",
     response_model=ChannelResponse,
@@ -42,8 +62,8 @@ def create_channel(
     request: Request,
     data: ChannelCreate,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
-    cache: Annotated[CacheService, Depends(get_cache_service)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    cache: Annotated[CachePort, Depends(get_cache_port)],
 ) -> ChannelResponse:
     """Create a new channel (Gemini File Search Store).
 
@@ -54,8 +74,7 @@ def create_channel(
         store_id = channel.name
 
         # Save to local metadata DB
-        repo = ChannelRepository(db)
-        local_channel = repo.create(
+        local_channel = channel_repo.create(
             gemini_store_id=store_id,
             name=data.name,
             description=data.description,
@@ -67,8 +86,8 @@ def create_channel(
         return ChannelResponse(
             id=store_id,
             name=data.name,
-            description=local_channel.description,
-            created_at=local_channel.created_at,
+            description=local_channel.description if local_channel else data.description,
+            created_at=local_channel.created_at if local_channel else datetime.now(UTC),
             file_count=0,
         )
     except Exception as e:
@@ -88,8 +107,9 @@ def list_channels(
     request: Request,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    db: Annotated[Session, Depends(get_db)],
-    cache: Annotated[CacheService, Depends(get_cache_service)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
+    cache: Annotated[CachePort, Depends(get_cache_port)],
     limit: Annotated[int | None, Query(description="Maximum number of channels", ge=1, le=100)] = None,
     offset: Annotated[int, Query(description="Number of channels to skip", ge=0)] = 0,
     sort_by: Annotated[str, Query(description="Sort by field: created_at or name")] = "created_at",
@@ -107,13 +127,11 @@ def list_channels(
         else:
             stores = stores_cache
 
-        repo = ChannelRepository(db)
-        fav_repo = FavoriteRepository(db)
-        favorited_ids = fav_repo.get_favorited_ids(TargetType.CHANNEL)
+        favorited_ids = fav_repo.get_favorited_ids(TargetType.CHANNEL.value)
 
         # Get all deleted channel IDs to filter them out
         # This prevents "resurrection" of deleted channels when DB doesn't have metadata
-        deleted_store_ids = repo.get_deleted_store_ids()
+        deleted_store_ids = channel_repo.get_deleted_store_ids()
 
         channels = []
         for store in stores:
@@ -124,7 +142,7 @@ def list_channels(
                 continue
 
             # Get local metadata if exists
-            local_meta = repo.get_by_gemini_id(store_id)
+            local_meta = channel_repo.get_by_gemini_id(store_id)
             # Skip if channel is soft-deleted (redundant check but kept for safety)
             if local_meta and local_meta.is_deleted:
                 continue
@@ -135,7 +153,7 @@ def list_channels(
 
             # Sync file_count if different
             if local_meta and local_meta.file_count != actual_file_count:
-                repo.update_stats(store_id, file_count=actual_file_count)
+                channel_repo.update_stats(store_id, file_count=actual_file_count)
 
             channels.append(
                 ChannelResponse(
@@ -193,18 +211,16 @@ def get_channel(
     channel_id: str,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    db: Annotated[Session, Depends(get_db)],
-    cache: Annotated[CacheService, Depends(get_cache_service)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
+    cache: Annotated[CachePort, Depends(get_cache_port)],
 ) -> ChannelResponse:
     """Get a specific channel by its ID.
 
     Note: channel_id should be the full store name (e.g., "fileSearchStores/xxx")
     """
-    repo = ChannelRepository(db)
-    fav_repo = FavoriteRepository(db)
-
     # Check if channel is soft-deleted
-    local_meta = repo.get_by_gemini_id(channel_id)
+    local_meta = channel_repo.get_by_gemini_id(channel_id)
     if local_meta and local_meta.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -212,13 +228,13 @@ def get_channel(
         )
 
     # Check if favorited (not cached as it can change frequently)
-    is_favorited = fav_repo.is_favorited(TargetType.CHANNEL, channel_id)
+    is_favorited = fav_repo.is_favorited(TargetType.CHANNEL.value, channel_id)
 
     # Try to get from cache first
     cached_info = cache.get_channel_info(channel_id)
     if cached_info:
         # Update last accessed time in local DB
-        repo.touch(channel_id)
+        channel_repo.touch(channel_id)
         cached_info["is_favorited"] = is_favorited
         return ChannelResponse(**cached_info)
 
@@ -234,10 +250,10 @@ def get_channel(
     actual_file_count = len(files)
 
     # Update last accessed time and sync file_count in local DB
-    local_meta = repo.touch(channel_id)
+    local_meta = channel_repo.touch(channel_id)
     if local_meta and local_meta.file_count != actual_file_count:
-        repo.update_stats(channel_id, file_count=actual_file_count)
-        local_meta = repo.get_by_gemini_id(channel_id)
+        channel_repo.update_stats(channel_id, file_count=actual_file_count)
+        local_meta = channel_repo.get_by_gemini_id(channel_id)
 
     response = ChannelResponse(
         id=channel.name,
@@ -265,8 +281,8 @@ def update_channel(
     channel_id: str,
     data: ChannelUpdate,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
-    cache: Annotated[CacheService, Depends(get_cache_service)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    cache: Annotated[CachePort, Depends(get_cache_port)],
 ) -> ChannelResponse:
     """Update a channel's name and/or description.
 
@@ -288,19 +304,18 @@ def update_channel(
         )
 
     # Update local metadata
-    repo = ChannelRepository(db)
-    local_meta = repo.get_by_gemini_id(channel_id)
+    local_meta = channel_repo.get_by_gemini_id(channel_id)
 
     if not local_meta:
         # Create local metadata if not exists
-        local_meta = repo.create(
+        local_meta = channel_repo.create(
             gemini_store_id=channel_id,
             name=data.name or channel.display_name,
             description=data.description,
         )
     else:
         # Update existing metadata
-        local_meta = repo.update(
+        local_meta = channel_repo.update(
             gemini_store_id=channel_id,
             name=data.name,
             description=data.description,
@@ -312,10 +327,10 @@ def update_channel(
 
     return ChannelResponse(
         id=channel_id,
-        name=local_meta.name,
-        description=local_meta.description,
-        created_at=local_meta.created_at,
-        file_count=local_meta.file_count,
+        name=local_meta.name if local_meta else data.name or "",
+        description=local_meta.description if local_meta else data.description,
+        created_at=local_meta.created_at if local_meta else datetime.now(UTC),
+        file_count=local_meta.file_count if local_meta else 0,
     )
 
 
@@ -329,8 +344,8 @@ def delete_channel(
     request: Request,
     channel_id: str,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
-    cache: Annotated[CacheService, Depends(get_cache_service)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    cache: Annotated[CachePort, Depends(get_cache_port)],
 ):
     """Delete a channel permanently.
 
@@ -362,8 +377,7 @@ def delete_channel(
         )
 
     # Delete from local DB
-    repo = ChannelRepository(db)
-    repo.delete(channel_id)
+    channel_repo.delete(channel_id)
 
     # Invalidate all caches related to this channel
     cache.invalidate_channel(channel_id)

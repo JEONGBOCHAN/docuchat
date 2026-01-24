@@ -6,11 +6,9 @@ It enforces file count and size limits to prevent resource exhaustion.
 """
 
 from dataclasses import dataclass
-from sqlalchemy.orm import Session
 
 from src.core.config import get_settings
-from src.models.db_models import ChannelMetadata
-from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.application.ports.persistence import ChannelRepositoryPort, ChannelMetadataDTO
 
 
 class CapacityExceededError(Exception):
@@ -56,7 +54,7 @@ class CapacityService:
 
     Example:
         ```python
-        service = CapacityService(db)
+        service = CapacityService(channel_repo=channel_repo_port)
 
         # Check if upload is allowed
         service.validate_upload(channel_id, file_size=1024*1024)  # 1MB
@@ -67,14 +65,13 @@ class CapacityService:
         ```
     """
 
-    def __init__(self, db: Session):
-        """Initialize service with database session.
+    def __init__(self, channel_repo: ChannelRepositoryPort):
+        """Initialize service with channel repository port.
 
         Args:
-            db: SQLAlchemy database session
+            channel_repo: Channel repository port
         """
-        self.db = db
-        self.repo = ChannelRepository(db)
+        self.repo = channel_repo
         settings = get_settings()
         self.max_files = settings.max_files_per_channel
         self.max_size_bytes = settings.max_channel_size_mb * 1024 * 1024
@@ -94,7 +91,7 @@ class CapacityService:
 
         return self._calculate_usage(channel)
 
-    def _calculate_usage(self, channel: ChannelMetadata) -> CapacityUsage:
+    def _calculate_usage(self, channel: ChannelMetadataDTO) -> CapacityUsage:
         """Calculate capacity usage from channel metadata."""
         file_usage = (channel.file_count / self.max_files) * 100
         size_usage = (channel.total_size_bytes / self.max_size_bytes) * 100
@@ -238,13 +235,13 @@ class CapacityService:
         return self._calculate_usage(channel)
 
 
-def get_capacity_service(db: Session) -> CapacityService:
+def get_capacity_service(channel_repo: ChannelRepositoryPort) -> CapacityService:
     """Get a CapacityService instance.
 
     Args:
-        db: SQLAlchemy database session
+        channel_repo: Channel repository port
 
     Returns:
         CapacityService instance
     """
-    return CapacityService(db)
+    return CapacityService(channel_repo)

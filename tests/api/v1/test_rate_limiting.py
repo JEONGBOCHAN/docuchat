@@ -61,35 +61,26 @@ class TestRateLimiting429Response:
         """Test that exceeding rate limit returns 429 status code."""
         # This test verifies the rate limiter is properly configured
         # by checking the endpoint responds with proper rate limit handling
-        with patch("src.services.channel_repository.ChannelRepository") as mock_repo:
-            mock_repo.return_value.get_by_gemini_id.return_value = None
-            mock_repo.return_value.create.return_value = MagicMock(
-                id=1,
-                gemini_store_id="test-store",
-                name="Test",
+        with patch("src.infrastructure.di.container.create_process_query_use_case") as mock_uc:
+            mock_uc.return_value.execute.return_value = MagicMock(
+                response="Test response",
+                sources=[],
+                iterations=1,
+                session_id="test-session",
+                error=None,
             )
 
-            with patch("src.services.channel_repository.ChatHistoryRepository"):
-                with patch("src.infrastructure.di.create_process_query_use_case") as mock_uc:
-                    mock_uc.return_value.execute.return_value = MagicMock(
-                        response="Test response",
-                        sources=[],
-                        iterations=1,
-                        session_id="test-session",
-                        error=None,
-                    )
+            # Make multiple requests to trigger rate limit
+            # Note: In real test, you'd need to configure slowapi to use
+            # a lower limit for testing, or use time manipulation
+            response = client.post(
+                "/api/v1/chat?channel_id=test-store",
+                json={"query": "test question"},
+            )
 
-                    # Make multiple requests to trigger rate limit
-                    # Note: In real test, you'd need to configure slowapi to use
-                    # a lower limit for testing, or use time manipulation
-                    response = client.post(
-                        "/api/v1/chat?channel_id=test-store",
-                        json={"query": "test question"},
-                    )
-
-                    # First request should succeed (status 200 or 404/500 depending on mock)
-                    # The important thing is it's not 429 on first request
-                    assert response.status_code != 429 or "Retry-After" in response.headers
+            # First request should succeed (status 200 or 404/500 depending on mock)
+            # The important thing is it's not 429 on first request
+            assert response.status_code != 429 or "Retry-After" in response.headers
 
 
 class TestRateLimitHeaders:

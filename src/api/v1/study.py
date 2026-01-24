@@ -24,14 +24,15 @@ from src.models.study import (
     StudyGuideResponse,
     StudySection,
 )
-from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
+from src.application.ports.persistence import ChannelRepositoryPort
 from src.infrastructure.di.container import (
     create_channel_port,
     create_document_port,
     create_generate_study_guide_use_case,
     create_generate_quiz_use_case,
+    create_channel_repository_port,
 )
 
 router = APIRouter(prefix="/channels", tags=["study"])
@@ -49,6 +50,11 @@ def get_document_port() -> DocumentPort:
     return create_document_port()
 
 
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
+
+
 @router.post(
     "/{channel_id:path}/generate-study-guide",
     response_model=StudyGuideResponse,
@@ -61,7 +67,7 @@ async def generate_study_guide(
     channel_id: str,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
     body: StudyGuideGenerateRequest | None = None,
 ):
     """Generate a study guide from channel documents.
@@ -96,7 +102,6 @@ async def generate_study_guide(
         )
 
     # Update last accessed time
-    channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
     # Generate study guide using Clean Architecture use case
@@ -157,7 +162,7 @@ async def generate_quiz(
     channel_id: str,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
     body: QuizGenerateRequest | None = None,
 ):
     """Generate a quiz from channel documents.
@@ -192,7 +197,6 @@ async def generate_quiz(
         )
 
     # Update last accessed time
-    channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
     # Generate quiz using Clean Architecture use case

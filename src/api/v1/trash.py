@@ -8,10 +8,13 @@ from sqlalchemy.orm import Session
 
 from src.models.trash import TrashList, TrashItemType, RestoreResponse, EmptyTrashResponse
 from src.application.ports.channel import ChannelPort
-from src.infrastructure.di.container import create_channel_port
+from src.application.ports.persistence import TrashRepositoryPort
 from src.core.database import get_db
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_trash_repository_port,
+)
 from src.core.rate_limiter import limiter, RateLimits
-from src.infrastructure.persistence.trash_repository import TrashRepository
 
 router = APIRouter(prefix="/trash", tags=["trash"])
 
@@ -19,6 +22,11 @@ router = APIRouter(prefix="/trash", tags=["trash"])
 def get_channel_port() -> ChannelPort:
     """Get channel port instance."""
     return create_channel_port()
+
+
+def get_trash_repo_port(db: Session = Depends(get_db)) -> TrashRepositoryPort:
+    """Get trash repository port instance."""
+    return create_trash_repository_port(db)
 
 
 @router.get(
@@ -29,11 +37,22 @@ def get_channel_port() -> ChannelPort:
 @limiter.limit(RateLimits.DEFAULT)
 def list_trash(
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
+    trash_repo: Annotated[TrashRepositoryPort, Depends(get_trash_repo_port)],
 ) -> TrashList:
     """List all items in the trash (soft-deleted channels and notes)."""
-    trash_repo = TrashRepository(db)
-    items = trash_repo.get_all_trashed_items()
+    from src.models.trash import TrashItem
+    items_dto = trash_repo.get_all_trashed_items()
+
+    # Convert DTOs to Pydantic models
+    items = [
+        TrashItem(
+            id=dto.id,
+            type=TrashItemType(dto.type),
+            name=dto.name,
+            deleted_at=dto.deleted_at,
+        )
+        for dto in items_dto
+    ]
 
     return TrashList(items=items, total=len(items))
 
@@ -48,7 +67,7 @@ def restore_item(
     request: Request,
     item_type: TrashItemType,
     item_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    trash_repo: Annotated[TrashRepositoryPort, Depends(get_trash_repo_port)],
 ) -> RestoreResponse:
     """Restore a soft-deleted item from the trash.
 
@@ -56,8 +75,6 @@ def restore_item(
         item_type: Type of item ('channel' or 'note')
         item_id: The item's database ID
     """
-    trash_repo = TrashRepository(db)
-
     if item_type == TrashItemType.CHANNEL:
         channel = trash_repo.restore_channel(item_id)
         if not channel:
@@ -100,7 +117,7 @@ def delete_item_permanently(
     request: Request,
     item_type: TrashItemType,
     item_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    trash_repo: Annotated[TrashRepositoryPort, Depends(get_trash_repo_port)],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
 ):
     """Permanently delete a trashed item. This cannot be undone.
@@ -111,25 +128,18 @@ def delete_item_permanently(
         item_type: Type of item ('channel' or 'note')
         item_id: The item's database ID
     """
-    from src.models.db_models import ChannelMetadata
-
-    trash_repo = TrashRepository(db)
-
     if item_type == TrashItemType.CHANNEL:
         # Get channel info before deleting for Gemini cleanup
-        channel = db.query(ChannelMetadata).filter(
-            ChannelMetadata.id == item_id,
-            ChannelMetadata.deleted_at.isnot(None),
-        ).first()
+        channel_dto = trash_repo.get_trashed_channel_by_db_id(item_id)
 
-        if not channel:
+        if not channel_dto:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Trashed channel not found: {item_id}",
             )
 
         # Delete from Gemini
-        channel_port.delete_channel(channel.gemini_store_id, force=True)
+        channel_port.delete_channel(channel_dto.gemini_store_id, force=True)
 
         # Delete from DB
         if not trash_repo.permanent_delete_channel(item_id):
@@ -161,7 +171,7 @@ def delete_item_permanently(
 @limiter.limit(RateLimits.DEFAULT)
 def empty_trash(
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
+    trash_repo: Annotated[TrashRepositoryPort, Depends(get_trash_repo_port)],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     confirm: Annotated[bool, Query(description="Confirm permanent deletion")] = False,
 ) -> EmptyTrashResponse:
@@ -175,16 +185,11 @@ def empty_trash(
             detail="Please confirm by setting confirm=true",
         )
 
-    trash_repo = TrashRepository(db)
-
     # First, delete all trashed channels from Gemini
-    from src.models.db_models import ChannelMetadata
-    trashed_channels = db.query(ChannelMetadata).filter(
-        ChannelMetadata.deleted_at.isnot(None)
-    ).all()
+    trashed_channel_dtos = trash_repo.get_all_trashed_channels()
 
-    for channel in trashed_channels:
-        channel_port.delete_channel(channel.gemini_store_id, force=True)
+    for channel_dto in trashed_channel_dtos:
+        channel_port.delete_channel(channel_dto.gemini_store_id, force=True)
 
     # Then delete from DB
     deleted_channels, deleted_notes = trash_repo.empty_trash()
@@ -203,8 +208,7 @@ def empty_trash(
 @limiter.limit(RateLimits.DEFAULT)
 def get_trash_stats(
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
+    trash_repo: Annotated[TrashRepositoryPort, Depends(get_trash_repo_port)],
 ) -> dict:
     """Get statistics about items in the trash."""
-    trash_repo = TrashRepository(db)
     return trash_repo.get_trash_stats()

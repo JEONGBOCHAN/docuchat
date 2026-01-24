@@ -6,16 +6,20 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 from sqlalchemy.orm import Session
 
-from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
+from src.core.database import get_db
 from src.models.preview import (
     DocumentPreviewResponse,
     SourceLocationResponse,
 )
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
-from src.infrastructure.di.container import create_channel_port, create_document_port
-from src.application.services.preview_service import PreviewService, get_preview_service, DEFAULT_PAGE_SIZE
+from src.application.services.preview_service import PreviewService, DEFAULT_PAGE_SIZE
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_document_port,
+    create_preview_service,
+)
 
 router = APIRouter(prefix="/channels", tags=["preview"])
 
@@ -28,6 +32,11 @@ def get_channel_port() -> ChannelPort:
 def get_document_port() -> DocumentPort:
     """Get document port instance."""
     return create_document_port()
+
+
+def get_preview_service_dep(db: Session = Depends(get_db)) -> PreviewService:
+    """Get preview service instance."""
+    return create_preview_service(db)
 
 
 def _get_document_info(
@@ -89,9 +98,9 @@ def get_document_preview(
     page: Annotated[int, Query(description="Page number (1-based)", ge=1)] = 1,
     page_size: Annotated[int, Query(description="Characters per page", ge=100, le=10000)] = DEFAULT_PAGE_SIZE,
     search_term: Annotated[str | None, Query(description="Optional search term to highlight")] = None,
-    channel_port: ChannelPort = Depends(get_channel_port),
-    document_port: DocumentPort = Depends(get_document_port),
-    db: Session = Depends(get_db),
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
+    document_port: Annotated[DocumentPort, Depends(get_document_port)] = None,
+    preview_service: Annotated[PreviewService, Depends(get_preview_service_dep)] = None,
 ) -> DocumentPreviewResponse:
     """Get document preview with pagination and optional text highlighting.
 
@@ -104,7 +113,6 @@ def get_document_preview(
     doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
-        preview_service = get_preview_service(db)
         return preview_service.get_preview(
             channel_id=channel_id,
             document_id=doc_id,
@@ -133,9 +141,9 @@ def get_document_page(
     page_num: int,
     page_size: Annotated[int, Query(description="Characters per page", ge=100, le=10000)] = DEFAULT_PAGE_SIZE,
     search_term: Annotated[str | None, Query(description="Optional search term to highlight")] = None,
-    channel_port: ChannelPort = Depends(get_channel_port),
-    document_port: DocumentPort = Depends(get_document_port),
-    db: Session = Depends(get_db),
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
+    document_port: Annotated[DocumentPort, Depends(get_document_port)] = None,
+    preview_service: Annotated[PreviewService, Depends(get_preview_service_dep)] = None,
 ) -> DocumentPreviewResponse:
     """Get a specific page of the document.
 
@@ -150,7 +158,6 @@ def get_document_page(
     doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
-        preview_service = get_preview_service(db)
         return preview_service.get_preview(
             channel_id=channel_id,
             document_id=doc_id,
@@ -178,9 +185,9 @@ def find_source_in_document(
     document_id: str,
     source_text: Annotated[str, Query(description="Source text to find in the document")],
     page_size: Annotated[int, Query(description="Characters per page for page calculation", ge=100, le=10000)] = DEFAULT_PAGE_SIZE,
-    channel_port: ChannelPort = Depends(get_channel_port),
-    document_port: DocumentPort = Depends(get_document_port),
-    db: Session = Depends(get_db),
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
+    document_port: Annotated[DocumentPort, Depends(get_document_port)] = None,
+    preview_service: Annotated[PreviewService, Depends(get_preview_service_dep)] = None,
 ) -> SourceLocationResponse:
     """Find the location of a source citation in a document.
 
@@ -193,7 +200,6 @@ def find_source_in_document(
     doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
-        preview_service = get_preview_service(db)
         return preview_service.find_source_location(
             channel_id=channel_id,
             document_id=doc_id,
@@ -218,9 +224,9 @@ def clear_document_preview_cache(
     request: Request,
     channel_id: str,
     document_id: str,
-    channel_port: ChannelPort = Depends(get_channel_port),
-    document_port: DocumentPort = Depends(get_document_port),
-    db: Session = Depends(get_db),
+    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
+    document_port: Annotated[DocumentPort, Depends(get_document_port)] = None,
+    preview_service: Annotated[PreviewService, Depends(get_preview_service_dep)] = None,
 ):
     """Clear the cached preview for a document.
 
@@ -229,7 +235,5 @@ def clear_document_preview_cache(
     """
     # Validate channel and document exist
     _get_document_info(channel_port, document_port, channel_id, document_id)
-
-    preview_service = get_preview_service(db)
     preview_service.invalidate_cache(document_id)
     return None

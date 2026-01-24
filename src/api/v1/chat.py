@@ -20,19 +20,24 @@ from src.models.chat import (
     GroundingSource,
 )
 from src.application.ports.channel import ChannelPort
-from src.infrastructure.di.container import create_channel_port
-from src.core.database import get_db
-from src.core.rate_limiter import limiter, RateLimits
-from src.infrastructure.persistence.channel_repository import (
-    ChannelRepository,
-    ChatHistoryRepository,
-    ChatSessionRepository,
+from src.application.ports.persistence import (
+    ChannelRepositoryPort,
+    ChatHistoryRepositoryPort,
+    ChatSessionRepositoryPort,
+    SearchHistoryRepositoryPort,
 )
-from src.infrastructure.cache.cache_service import CacheService, get_cache_service
-from src.infrastructure.persistence.search_repository import SearchHistoryRepository
-
-# Clean Architecture imports
-from src.infrastructure.di import create_process_query_use_case
+from src.application.ports.cache import CachePort
+from src.core.database import get_db
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_channel_repository_port,
+    create_chat_history_repository_port,
+    create_chat_session_repository_port,
+    create_search_history_repository_port,
+    create_cache_port,
+    create_process_query_use_case,
+)
+from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/channels", tags=["chat"])
 
@@ -40,6 +45,31 @@ router = APIRouter(prefix="/channels", tags=["chat"])
 def get_channel_port() -> ChannelPort:
     """Get channel port instance."""
     return create_channel_port()
+
+
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
+
+
+def get_chat_history_port(db: Session = Depends(get_db)) -> ChatHistoryRepositoryPort:
+    """Get chat history repository port instance."""
+    return create_chat_history_repository_port(db)
+
+
+def get_chat_session_port(db: Session = Depends(get_db)) -> ChatSessionRepositoryPort:
+    """Get chat session repository port instance."""
+    return create_chat_session_repository_port(db)
+
+
+def get_search_history_port(db: Session = Depends(get_db)) -> SearchHistoryRepositoryPort:
+    """Get search history repository port instance."""
+    return create_search_history_repository_port(db)
+
+
+def get_cache_port() -> CachePort:
+    """Get cache port instance."""
+    return create_cache_port()
 
 
 # =============================================================================
@@ -240,14 +270,14 @@ def _format_sse_event(data: dict | str) -> str:
 
 
 def _get_conversation_history(
-    chat_repo: ChatHistoryRepository,
-    session,
+    chat_history_port: ChatHistoryRepositoryPort,
+    session_id: str | None,
 ) -> list[dict[str, str]]:
     """Get conversation history from session for context."""
-    if not session:
+    if not session_id:
         return []
 
-    messages = chat_repo.get_session_history(session)
+    messages = chat_history_port.get_session_history(session_id)
     return [{"role": msg.role, "content": msg.content} for msg in messages]
 
 
@@ -262,8 +292,11 @@ def send_message(
     channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
-    cache: Annotated[CacheService, Depends(get_cache_service)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
+    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
+    search_history: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
+    cache: Annotated[CachePort, Depends(get_cache_port)],
 ) -> ChatResponse:
     """Send a question and get an AI-generated answer.
 
@@ -280,7 +313,6 @@ def send_message(
         )
 
     # Get or create local channel metadata
-    channel_repo = ChannelRepository(db)
     channel_meta = channel_repo.get_by_gemini_id(channel_id)
     if not channel_meta:
         # Create if not exists (for channels created before DB integration)
@@ -293,20 +325,18 @@ def send_message(
         channel_repo.touch(channel_id)
 
     # Handle session for multi-turn conversation
-    session_repo = ChatSessionRepository(db)
-    chat_repo = ChatHistoryRepository(db)
-    session = None
+    session_dto = None
     session_id_response = None
 
     if body.session_id:
-        session, created = session_repo.get_or_create(
-            channel=channel_meta,
+        session_dto, _ = session_repo.get_or_create(
+            channel_id=channel_meta.id,
             session_id=body.session_id,
         )
-        session_id_response = session.session_id
+        session_id_response = session_dto.session_id if session_dto else body.session_id
 
     # Get conversation history for context
-    conversation_history = _get_conversation_history(chat_repo, session)
+    conversation_history = _get_conversation_history(chat_history, session_id_response)
 
     # Check cache for non-session queries
     cached_response = None
@@ -375,26 +405,25 @@ def send_message(
                 },
             )
 
-    # Save to search history
-    search_repo = SearchHistoryRepository(db)
-    search_repo.add_or_update(channel_meta, body.query)
+    # Save to search history (using database ID)
+    search_history.add_or_update(channel_meta.id, body.query)
 
     # Add user message
-    chat_repo.add_message(
-        channel=channel_meta,
+    chat_history.add_message(
+        channel_id=channel_meta.id,
         role="user",
         content=body.query,
         sources=None,
-        session=session,
+        session_id=session_id_response,
     )
 
     # Add assistant message
-    chat_repo.add_message(
-        channel=channel_meta,
+    chat_history.add_message(
+        channel_id=channel_meta.id,
         role="assistant",
         content=response.response,
         sources=[{"source": s.source, "content": s.content} for s in sources],
-        session=session,
+        session_id=session_id_response,
     )
 
     return response
@@ -410,7 +439,10 @@ def send_message_stream(
     channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
+    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
+    search_history: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
 ) -> StreamingResponse:
     """Send a question and get a streaming AI-generated answer.
 
@@ -430,7 +462,6 @@ def send_message_stream(
         )
 
     # Get or create local channel metadata
-    channel_repo = ChannelRepository(db)
     channel_meta = channel_repo.get_by_gemini_id(channel_id)
     if not channel_meta:
         channel_meta = channel_repo.create(
@@ -441,20 +472,18 @@ def send_message_stream(
         channel_repo.touch(channel_id)
 
     # Handle session for multi-turn conversation
-    session_repo = ChatSessionRepository(db)
-    chat_repo = ChatHistoryRepository(db)
-    session = None
+    session_dto = None
     session_id_response = None
 
     if body.session_id:
-        session, created = session_repo.get_or_create(
-            channel=channel_meta,
+        session_dto, _ = session_repo.get_or_create(
+            channel_id=channel_meta.id,
             session_id=body.session_id,
         )
-        session_id_response = session.session_id
+        session_id_response = session_dto.session_id if session_dto else body.session_id
 
     # Get conversation history for context
-    conversation_history = _get_conversation_history(chat_repo, session)
+    conversation_history = _get_conversation_history(chat_history, session_id_response)
 
     def generate_stream() -> Generator[str, None, None]:
         """Generate SSE events using Clean Architecture ProcessQueryUseCase.
@@ -494,26 +523,25 @@ def send_message_stream(
                     yield _format_sse_event({"sources": all_sources})
 
                 elif event_type == "done":
-                    # Store in DB before signaling done
-                    search_repo = SearchHistoryRepository(db)
-                    search_repo.add_or_update(channel_meta, body.query)
+                    # Store in DB before signaling done (using database ID)
+                    search_history.add_or_update(channel_meta.id, body.query)
 
                     # Add user message
-                    chat_repo.add_message(
-                        channel=channel_meta,
+                    chat_history.add_message(
+                        channel_id=channel_meta.id,
                         role="user",
                         content=body.query,
                         sources=None,
-                        session=session,
+                        session_id=session_id_response,
                     )
 
                     # Add assistant message
-                    chat_repo.add_message(
-                        channel=channel_meta,
+                    chat_history.add_message(
+                        channel_id=channel_meta.id,
                         role="assistant",
                         content=full_response,
                         sources=all_sources,
-                        session=session,
+                        session_id=session_id_response,
                     )
 
                     # Send done signal in format frontend expects: [DONE]
@@ -547,7 +575,8 @@ def get_chat_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
 ) -> ChatHistory:
     """Get the chat history for a channel."""
@@ -560,16 +589,14 @@ def get_chat_history(
         )
 
     # Get channel metadata
-    channel_repo = ChannelRepository(db)
     channel_meta = channel_repo.get_by_gemini_id(channel_id)
 
     if not channel_meta:
         # No local metadata means no chat history
         return ChatHistory(channel_id=channel_id, messages=[], total=0)
 
-    # Get messages from DB
-    chat_repo = ChatHistoryRepository(db)
-    db_messages = chat_repo.get_history(channel_meta, limit=limit)
+    # Get messages from DB (returns DTOs) - use database ID
+    msg_dtos = chat_history.get_history(channel_meta.id, limit=limit)
 
     # Convert to ChatMessage models
     messages = [
@@ -578,11 +605,11 @@ def get_chat_history(
             content=msg.content,
             sources=[
                 GroundingSource(source=s.get("source", ""), content=s.get("content", ""))
-                for s in json.loads(msg.sources_json)
+                for s in msg.sources
             ],
             created_at=msg.created_at,
         )
-        for msg in db_messages
+        for msg in msg_dtos
     ]
 
     return ChatHistory(
@@ -602,7 +629,8 @@ def clear_chat_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
 ):
     """Clear the chat history for a channel."""
     # Validate channel exists
@@ -614,13 +642,11 @@ def clear_chat_history(
         )
 
     # Get channel metadata
-    channel_repo = ChannelRepository(db)
     channel_meta = channel_repo.get_by_gemini_id(channel_id)
 
     if channel_meta:
-        # Clear chat history from DB
-        chat_repo = ChatHistoryRepository(db)
-        chat_repo.clear_history(channel_meta)
+        # Clear chat history from DB (use database ID)
+        chat_history.clear_history(channel_meta.id)
 
     return None
 
@@ -640,7 +666,8 @@ def create_session(
     channel_id: Annotated[str, Path(description="Channel ID")],
     body: CreateSessionRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
 ) -> ChatSession:
     """Create a new chat session for multi-turn conversation.
 
@@ -656,7 +683,6 @@ def create_session(
         )
 
     # Get or create local channel metadata
-    channel_repo = ChannelRepository(db)
     channel_meta = channel_repo.get_by_gemini_id(channel_id)
     if not channel_meta:
         channel_meta = channel_repo.create(
@@ -665,18 +691,17 @@ def create_session(
         )
 
     # Create new session
-    session_repo = ChatSessionRepository(db)
-    session = session_repo.create(
-        channel=channel_meta,
+    session_dto = session_repo.create(
+        channel_id=channel_meta.id,
         context_window=body.context_window,
     )
 
     return ChatSession(
-        session_id=session.session_id,
+        session_id=session_dto.session_id,
         channel_id=channel_id,
-        created_at=session.created_at,
-        last_activity_at=session.last_activity_at,
-        context_window=session.context_window,
+        created_at=session_dto.created_at,
+        last_activity_at=session_dto.last_activity_at,
+        context_window=session_dto.context_window,
     )
 
 
@@ -690,34 +715,30 @@ def get_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    db: Annotated[Session, Depends(get_db)],
+    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
 ) -> ChatSession:
     """Get information about a chat session."""
-    session_repo = ChatSessionRepository(db)
-    session = session_repo.get_by_session_id(session_id)
+    session_dto = session_repo.get_by_session_id(session_id)
 
-    if not session:
+    if not session_dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session not found: {session_id}",
         )
 
     # Check if expired
-    if session_repo.is_expired(session):
+    if session_repo.is_expired(session_id):
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail=f"Session has expired: {session_id}",
         )
 
-    # Get channel gemini_store_id
-    channel_id = session.channel.gemini_store_id
-
     return ChatSession(
-        session_id=session.session_id,
-        channel_id=channel_id,
-        created_at=session.created_at,
-        last_activity_at=session.last_activity_at,
-        context_window=session.context_window,
+        session_id=session_dto.session_id,
+        channel_id=channel_id,  # Use path param (gemini_store_id string), not DTO's database id
+        created_at=session_dto.created_at,
+        last_activity_at=session_dto.last_activity_at,
+        context_window=session_dto.context_window,
     )
 
 
@@ -731,25 +752,21 @@ def get_session_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    db: Annotated[Session, Depends(get_db)],
+    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
+    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
 ) -> ChatHistory:
     """Get the chat history for a specific session."""
-    session_repo = ChatSessionRepository(db)
-    session = session_repo.get_by_session_id(session_id)
+    session_dto = session_repo.get_by_session_id(session_id)
 
-    if not session:
+    if not session_dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session not found: {session_id}",
         )
 
-    # Get messages from DB
-    chat_repo = ChatHistoryRepository(db)
-    db_messages = chat_repo.get_session_history(session, limit=limit)
-
-    # Get channel gemini_store_id
-    channel_id = session.channel.gemini_store_id
+    # Get messages from DB (returns DTOs)
+    msg_dtos = chat_history.get_session_history(session_id, limit=limit)
 
     # Convert to ChatMessage models
     messages = [
@@ -758,15 +775,15 @@ def get_session_history(
             content=msg.content,
             sources=[
                 GroundingSource(source=s.get("source", ""), content=s.get("content", ""))
-                for s in json.loads(msg.sources_json)
+                for s in msg.sources
             ],
             created_at=msg.created_at,
         )
-        for msg in db_messages
+        for msg in msg_dtos
     ]
 
     return ChatHistory(
-        channel_id=channel_id,
+        channel_id=channel_id,  # Use path param (gemini_store_id string), not DTO's database id
         messages=messages,
         total=len(messages),
     )
@@ -782,11 +799,9 @@ def delete_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    db: Annotated[Session, Depends(get_db)],
+    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
 ):
     """Delete a chat session and its associated messages."""
-    session_repo = ChatSessionRepository(db)
-
     if not session_repo.delete(session_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

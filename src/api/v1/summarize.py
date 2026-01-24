@@ -9,15 +9,16 @@ from sqlalchemy.orm import Session
 from src.models.summarize import SummarizeRequest, SummarizeResponse, SummaryType
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
+from src.application.ports.persistence import ChannelRepositoryPort
+from src.core.database import get_db
 from src.infrastructure.di.container import (
     create_channel_port,
     create_document_port,
     create_summarize_channel_use_case,
     create_summarize_document_use_case,
+    create_channel_repository_port,
 )
-from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.infrastructure.persistence.channel_repository import ChannelRepository
 
 router = APIRouter(prefix="/channels", tags=["summarize"])
 
@@ -30,6 +31,11 @@ def get_channel_port() -> ChannelPort:
 def get_document_port() -> DocumentPort:
     """Get document port instance."""
     return create_document_port()
+
+
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
 
 
 # NOTE: Document summarize route must come BEFORE channel summarize route
@@ -49,7 +55,7 @@ def summarize_document(
     body: SummarizeRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
 ) -> SummarizeResponse:
     """Generate a summary of a specific document in the channel.
 
@@ -76,7 +82,6 @@ def summarize_document(
         )
 
     # Update last accessed time
-    channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
     # Get document display name for better summarization
@@ -119,7 +124,7 @@ def summarize_channel(
     body: SummarizeRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
 ) -> SummarizeResponse:
     """Generate a summary of all documents in the channel.
 
@@ -144,7 +149,6 @@ def summarize_channel(
         )
 
     # Update last accessed time
-    channel_repo = ChannelRepository(db)
     channel_repo.touch(channel_id)
 
     # Generate summary using Clean Architecture use case

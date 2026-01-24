@@ -13,10 +13,16 @@ from src.models.search import (
     SearchSuggestionList,
 )
 from src.application.ports.channel import ChannelPort
-from src.infrastructure.di.container import create_channel_port
+from src.application.ports.persistence import (
+    ChannelRepositoryPort,
+    SearchHistoryRepositoryPort,
+)
 from src.core.database import get_db
-from src.infrastructure.persistence.channel_repository import ChannelRepository
-from src.infrastructure.persistence.search_repository import SearchHistoryRepository
+from src.infrastructure.di.container import (
+    create_channel_port,
+    create_channel_repository_port,
+    create_search_history_repository_port,
+)
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -26,8 +32,20 @@ def get_channel_port() -> ChannelPort:
     return create_channel_port()
 
 
+def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
+    """Get channel repository port instance."""
+    return create_channel_repository_port(db)
+
+
+def get_search_history_port(db: Session = Depends(get_db)) -> SearchHistoryRepositoryPort:
+    """Get search history repository port instance."""
+    return create_search_history_repository_port(db)
+
+
 def _get_channel_or_404(
-    channel_id: str, channel_port: ChannelPort, db: Session
+    channel_id: str,
+    channel_port: ChannelPort,
+    channel_repo: ChannelRepositoryPort,
 ) -> tuple:
     """Get channel or raise 404."""
     channel = channel_port.get_channel(channel_id)
@@ -37,7 +55,6 @@ def _get_channel_or_404(
             detail=f"Channel not found: {channel_id}",
         )
 
-    channel_repo = ChannelRepository(db)
     channel_meta = channel_repo.get_by_gemini_id(channel_id)
     if not channel_meta:
         channel_meta = channel_repo.create(
@@ -48,15 +65,15 @@ def _get_channel_or_404(
     return channel, channel_meta
 
 
-def _history_to_response(history, gemini_store_id: str) -> SearchHistoryItem:
-    """Convert SearchHistoryDB to SearchHistoryItem."""
+def _history_dto_to_response(history_dto, gemini_store_id: str) -> SearchHistoryItem:
+    """Convert SearchHistoryDTO to SearchHistoryItem."""
     return SearchHistoryItem(
-        id=history.id,
+        id=history_dto.id,
         channel_id=gemini_store_id,
-        query=history.query,
-        search_count=history.search_count,
-        created_at=history.created_at,
-        last_searched_at=history.last_searched_at,
+        query=history_dto.query,
+        search_count=history_dto.search_count,
+        created_at=history_dto.created_at,
+        last_searched_at=history_dto.last_searched_at,
     )
 
 
@@ -68,7 +85,8 @@ def _history_to_response(history, gemini_store_id: str) -> SearchHistoryItem:
 def get_search_history(
     channel_id: Annotated[str, Query(description="Channel ID")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    search_history_repo: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
     limit: Annotated[int, Query(description="Maximum number of entries", ge=1, le=100)] = 50,
     offset: Annotated[int, Query(description="Number of entries to skip", ge=0)] = 0,
 ) -> SearchHistoryList:
@@ -76,14 +94,13 @@ def get_search_history(
 
     Returns search queries sorted by most recent first.
     """
-    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
 
-    search_repo = SearchHistoryRepository(db)
-    history = search_repo.get_history(channel_meta, limit=limit, offset=offset)
-    total = search_repo.count_history(channel_meta)
+    history = search_history_repo.get_history(channel_meta.id, limit=limit, offset=offset)
+    total = search_history_repo.count_history(channel_meta.id)
 
     return SearchHistoryList(
-        history=[_history_to_response(h, channel_id) for h in history],
+        history=[_history_dto_to_response(h, channel_id) for h in history],
         total=total,
     )
 
@@ -96,7 +113,8 @@ def get_search_history(
 def get_search_suggestions(
     channel_id: Annotated[str, Query(description="Channel ID")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    search_history_repo: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
     q: Annotated[str, Query(description="Query prefix for suggestions")] = "",
     limit: Annotated[int, Query(description="Maximum number of suggestions", ge=1, le=20)] = 10,
 ) -> SearchSuggestionList:
@@ -104,10 +122,9 @@ def get_search_suggestions(
 
     If no prefix is provided, returns popular searches.
     """
-    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
 
-    search_repo = SearchHistoryRepository(db)
-    suggestions = search_repo.get_suggestions(channel_meta, q, limit=limit)
+    suggestions = search_history_repo.get_suggestions(channel_meta.id, q, limit=limit)
 
     return SearchSuggestionList(
         suggestions=[
@@ -126,17 +143,17 @@ def get_search_suggestions(
 def get_popular_searches(
     channel_id: Annotated[str, Query(description="Channel ID")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    search_history_repo: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
     limit: Annotated[int, Query(description="Maximum number of entries", ge=1, le=20)] = 10,
 ) -> SearchSuggestionList:
     """Get popular searches for a channel.
 
     Returns searches sorted by search count (most searched first).
     """
-    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
 
-    search_repo = SearchHistoryRepository(db)
-    popular = search_repo.get_popular(channel_meta, limit=limit)
+    popular = search_history_repo.get_popular(channel_meta.id, limit=limit)
 
     return SearchSuggestionList(
         suggestions=[
@@ -156,13 +173,13 @@ def delete_search_history(
     history_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    search_history_repo: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
 ):
     """Delete a specific search history entry."""
-    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
 
-    search_repo = SearchHistoryRepository(db)
-    history = search_repo.get_by_id(history_id)
+    history = search_history_repo.get_by_id(history_id)
 
     if not history or history.channel_id != channel_meta.id:
         raise HTTPException(
@@ -170,7 +187,7 @@ def delete_search_history(
             detail=f"Search history not found: {history_id}",
         )
 
-    search_repo.delete(history)
+    search_history_repo.delete(history_id)
     return None
 
 
@@ -182,11 +199,11 @@ def delete_search_history(
 def clear_search_history(
     channel_id: Annotated[str, Query(description="Channel ID")],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    db: Annotated[Session, Depends(get_db)],
+    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    search_history_repo: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
 ):
     """Clear all search history for a channel."""
-    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, db)
+    channel, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
 
-    search_repo = SearchHistoryRepository(db)
-    search_repo.clear_channel_history(channel_meta)
+    search_history_repo.clear_channel_history(channel_meta.id)
     return None

@@ -8,12 +8,9 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, UTC
 
-from sqlalchemy.orm import Session
-
-from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.application.ports.persistence import ChannelRepositoryPort
+from src.application.ports.infrastructure import ApiMetricsPort, SchedulerPort
 from src.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
-from src.infrastructure.monitoring.api_metrics import get_api_metrics
-from src.infrastructure.scheduler.scheduler import get_scheduler
 from src.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -95,20 +92,32 @@ class AdminStatsService:
 
     Example:
         ```python
-        stats_service = AdminStatsService(db)
+        stats_service = AdminStatsService(
+            channel_repo=channel_repo_port,
+            api_metrics=api_metrics_port,
+            scheduler=scheduler_port,
+        )
         stats = stats_service.get_system_stats()
         print(f"Total channels: {stats.total_channels}")
         ```
     """
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        channel_repo: ChannelRepositoryPort,
+        api_metrics: ApiMetricsPort,
+        scheduler: SchedulerPort,
+    ):
         """Initialize the admin stats service.
 
         Args:
-            db: Database session
+            channel_repo: Channel repository port
+            api_metrics: API metrics port
+            scheduler: Scheduler port
         """
-        self.db = db
-        self.channel_repo = ChannelRepository(db)
+        self.channel_repo = channel_repo
+        self.api_metrics = api_metrics
+        self.scheduler = scheduler
         self.lifecycle_policy = LifecyclePolicy()
         self.settings = get_settings()
 
@@ -146,12 +155,10 @@ class AdminStatsService:
         avg_size_mb = total_size_mb / total_channels if total_channels > 0 else 0
 
         # Get API metrics
-        api_metrics = get_api_metrics()
-        api_stats = api_metrics.get_stats()
+        api_stats = self.api_metrics.get_stats()
 
         # Get scheduler info
-        scheduler = get_scheduler()
-        scheduler_jobs = scheduler.get_jobs()
+        scheduler_jobs = self.scheduler.get_jobs()
 
         return SystemStats(
             # Channel stats
@@ -167,12 +174,12 @@ class AdminStatsService:
             avg_files_per_channel=avg_files,
             avg_size_per_channel_mb=avg_size_mb,
             # API stats
-            uptime_seconds=api_stats["uptime_seconds"],
-            total_api_calls=api_stats["total_api_calls"],
-            gemini_api_calls=api_stats["gemini_api_calls"],
-            api_error_rate=api_stats["error_rate_percent"],
+            uptime_seconds=api_stats.uptime_seconds,
+            total_api_calls=api_stats.total_api_calls,
+            gemini_api_calls=api_stats.gemini_api_calls,
+            api_error_rate=api_stats.error_rate_percent,
             # Scheduler stats
-            scheduler_running=scheduler.is_running(),
+            scheduler_running=self.scheduler.is_running(),
             scheduled_jobs=len(scheduler_jobs),
             # Capacity limits
             max_files_per_channel=self.settings.max_files_per_channel,

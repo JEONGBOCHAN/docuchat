@@ -9,6 +9,7 @@ from src.application.services.capacity_service import (
     CapacityUsage,
 )
 from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.infrastructure.di.container import create_capacity_service
 
 
 class TestCapacityService:
@@ -17,7 +18,7 @@ class TestCapacityService:
     @pytest.fixture
     def service(self, test_db):
         """Create a capacity service."""
-        return CapacityService(test_db)
+        return create_capacity_service(test_db)
 
     @pytest.fixture
     def channel(self, test_db):
