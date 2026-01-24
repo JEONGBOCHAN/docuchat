@@ -14,8 +14,8 @@ from src.core.rate_limiter import limiter
 from src.core.sentry import setup_sentry
 from src.middleware.metrics import MetricsMiddleware
 from src.middleware.request_logging import RequestLoggingMiddleware
-from src.services.scheduler import get_scheduler
-from src.services.scheduler_jobs import (
+from src.infrastructure.scheduler.scheduler import get_scheduler
+from src.infrastructure.scheduler.scheduler_jobs import (
     scan_inactive_channels,
     update_channel_statistics,
     cleanup_expired_trash,

@@ -4,7 +4,7 @@
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
-from src.services.scheduler import get_scheduler
+from src.infrastructure.scheduler.scheduler import get_scheduler
 from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])

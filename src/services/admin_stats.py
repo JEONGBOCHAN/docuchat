@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
 from src.infrastructure.monitoring.api_metrics import get_api_metrics
-from src.services.scheduler import get_scheduler
+from src.infrastructure.scheduler.scheduler import get_scheduler
 from src.core.config import get_settings
 
 logger = logging.getLogger(__name__)

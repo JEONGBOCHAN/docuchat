@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 import time
 
-from src.services.scheduler import SchedulerService, get_scheduler
+from src.infrastructure.scheduler.scheduler import SchedulerService, get_scheduler
 
 
 class TestSchedulerService:
