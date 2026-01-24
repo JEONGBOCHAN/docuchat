@@ -94,7 +94,7 @@ class TestGetChannelBreakdown:
 
     def test_channel_breakdown_structure(self, client_with_db, test_db):
         """Test channel breakdown item structure."""
-        from src.services.channel_repository import ChannelRepository
+        from src.infrastructure.persistence.channel_repository import ChannelRepository
 
         # Create a sample channel
         repo = ChannelRepository(test_db)

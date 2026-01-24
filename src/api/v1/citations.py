@@ -20,7 +20,7 @@ from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import create_channel_port, create_search_with_citations_use_case
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
 from src.application.ports.citation_search import CitationDTO
 

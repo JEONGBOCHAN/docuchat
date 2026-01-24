@@ -8,7 +8,7 @@ from src.services.capacity_service import (
     CapacityExceededError,
     CapacityUsage,
 )
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 
 
 class TestCapacityService:

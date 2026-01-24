@@ -23,13 +23,13 @@ from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.services.channel_repository import (
+from src.infrastructure.persistence.channel_repository import (
     ChannelRepository,
     ChatHistoryRepository,
     ChatSessionRepository,
 )
 from src.services.cache_service import CacheService, get_cache_service
-from src.services.search_repository import SearchHistoryRepository
+from src.infrastructure.persistence.search_repository import SearchHistoryRepository
 
 # Clean Architecture imports
 from src.infrastructure.di import create_process_query_use_case

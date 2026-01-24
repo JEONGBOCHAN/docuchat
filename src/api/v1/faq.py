@@ -15,7 +15,7 @@ from src.infrastructure.di.container import (
     create_generate_faq_use_case,
 )
 from src.core.database import get_db
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 
 router = APIRouter(prefix="/channels", tags=["faq"])
 

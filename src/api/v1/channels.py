@@ -14,8 +14,8 @@ from src.application.ports.document import DocumentPort
 from src.infrastructure.di.container import create_channel_port, create_document_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.services.channel_repository import ChannelRepository
-from src.services.favorite_repository import FavoriteRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.infrastructure.persistence.favorite_repository import FavoriteRepository
 from src.services.cache_service import CacheService, get_cache_service
 
 router = APIRouter(prefix="/channels", tags=["channels"])

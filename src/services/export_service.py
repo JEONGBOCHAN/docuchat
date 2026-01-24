@@ -16,8 +16,8 @@ from src.models.export import (
     ChannelFullExport,
 )
 from src.models.chat import GroundingSource, ChatMessage
-from src.services.channel_repository import ChannelRepository, ChatHistoryRepository
-from src.services.note_repository import NoteRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository, ChatHistoryRepository
+from src.infrastructure.persistence.note_repository import NoteRepository
 
 
 class ExportService:

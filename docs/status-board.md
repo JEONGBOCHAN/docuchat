@@ -17,25 +17,26 @@
 
 ## 현재 미션
 
-> **원래 요청**: "Clean Architecture Phase 3 - Store/Document CRUD를 Port/Adapter 패턴으로 전환하여 완전한 Clean Architecture 달성"
+> **✅ 완료**: "Clean Architecture Phase 3 - Store/Document CRUD를 Port/Adapter 패턴으로 전환하여 완전한 Clean Architecture 달성"
 
-**핵심 의도**:
-- GeminiService에 남아있는 Store(Channel) CRUD, Document CRUD를 Clean Architecture로 마이그레이션
-- 모든 API 엔드포인트에서 `gemini.get_store()` 같은 직접 호출 제거
-- 완전한 Clean Architecture 달성 (GeminiService 레거시 완전 제거)
+**결과**:
+- GeminiService 완전 제거 (302줄 삭제)
+- 모든 기능이 Clean Architecture 어댑터로 마이그레이션 완료
+- 781개 테스트 통과
 
-**배경**:
-- Phase 1 완료 (CHA-84~86): Chat/Query 기능 마이그레이션
-- Phase 2 완료 (CHA-87~93): AI 컨텐츠 생성 기능 마이그레이션 (FAQ, Citation, Summary 등)
-- 남은 작업: Store/Document CRUD (581줄), 19개 API 파일에서 GeminiService 직접 사용 중
+**완료된 마이그레이션**:
+- Phase 1 (CHA-84~86): Chat/Query 기능 ✅
+- Phase 2 (CHA-87~93): AI 컨텐츠 생성 기능 ✅
+- Phase 3 (CHA-94~100): Store/Document CRUD ✅
+- Tavily MCP 마이그레이션: API → MCP 서버 ✅
 
-**남은 GeminiService 기능**:
-- Store CRUD: `create_store`, `get_store`, `list_stores`, `delete_store`
-- Document CRUD: `upload_file`, `list_store_files`, `delete_file`, `delete_store_document`
-- Search: `multi_store_search`, `multi_store_search_stream`, `search_documents`
-- Utility: `call_with_tools`, `generate`
+**Clean Architecture 어댑터 현황**:
+- `GeminiChannelAdapter`: Channel CRUD (create, get, list, delete)
+- `GeminiDocumentAdapter`: Document CRUD (upload, list, delete)
+- `GeminiDocumentSearchAdapter`: Document Search (search, search_with_answer)
+- `McpWebSearchAdapter`: Web Search via Tavily MCP
 
-**이슈 타입**: Feature (Refactoring)
+**이슈 타입**: Feature (Refactoring) - 완료
 
 ---
 
@@ -89,16 +90,16 @@
 | CHA-92 | Migrate Podcast Script generation to Clean Architecture | ✅ Done | 개발팀장 | Feature | Low |
 | CHA-93 | Clean up GeminiService after Phase 2 migration | ✅ Done | 개발팀장 | Feature | Low |
 
-### 진행 중인 이슈 (Clean Architecture Phase 3 - Store/Document CRUD)
+### 완료된 이슈 (Clean Architecture Phase 3 - Store/Document CRUD)
 | ID | 제목 | 상태 | 담당 | 라벨 | 우선순위 |
 |----|------|------|------|------|----------|
-| CHA-94 | Create ChannelPort and GeminiChannelAdapter for Store CRUD | ⏳ Backlog | - | Feature | High |
-| CHA-95 | Create DocumentPort and GeminiDocumentAdapter for Document CRUD | ⏳ Backlog | - | Feature | High |
-| CHA-96 | Migrate Channel API to Clean Architecture | ⏳ Backlog | - | Feature | High |
-| CHA-97 | Migrate Document API to Clean Architecture | ⏳ Backlog | - | Feature | High |
-| CHA-98 | Create channel validation dependency for API endpoints | ⏳ Backlog | - | Feature | Medium |
-| CHA-99 | Migrate remaining API files to use channel validation dependency | ⏳ Backlog | - | Feature | Medium |
-| CHA-100 | Clean up GeminiService after Phase 3 migration | ⏳ Backlog | - | Feature | Low |
+| CHA-94 | Create ChannelPort and GeminiChannelAdapter for Store CRUD | ✅ Done | 개발팀장 | Feature | High |
+| CHA-95 | Create DocumentPort and GeminiDocumentAdapter for Document CRUD | ✅ Done | 개발팀장 | Feature | High |
+| CHA-96 | Migrate Channel API to Clean Architecture | ✅ Done | 개발팀장 | Feature | High |
+| CHA-97 | Migrate Document API to Clean Architecture | ✅ Done | 개발팀장 | Feature | High |
+| CHA-98 | Create channel validation dependency for API endpoints | ✅ Done | 개발팀장 | Feature | Medium |
+| CHA-99 | Migrate remaining API files to use channel validation dependency | ✅ Done | 개발팀장 | Feature | Medium |
+| CHA-100 | Clean up GeminiService after Phase 3 migration | ✅ Done | 오케스트레이터 | Feature | Low |
 
 ### 완료된 이슈 (Streamable HTTP MCP 클라이언트) - 오케스트레이션 사이클 완료
 | ID | 제목 | 상태 | 담당 | 라벨 | 우선순위 |
@@ -160,6 +161,8 @@ CHA-95 DocumentPort ────▶ CHA-97 Document API Migration             �
 
 | 시간 | 결정자 | 내용 |
 |------|--------|------|
+| 2026-01-24 | 오케스트레이터 | GeminiService 완전 제거 완료 - 302줄 삭제, 781개 테스트 통과, Clean Architecture 완성 |
+| 2026-01-24 | 오케스트레이터 | Tavily MCP 마이그레이션 완료 - Direct API → MCP Server 전환 |
 | 2026-01-23 | 오케스트레이터 | Phase 3 이슈 등록 완료 (CHA-94~100) - Store/Document CRUD 마이그레이션 7개 이슈 |
 | 2026-01-23 | 개발팀장 | Step 1 완료 (CHA-87, CHA-88) - 병렬 실행, 58개 테스트 통과, 1차 검수 완료, 2차 검수 대기 |
 | 2026-01-23 | 오케스트레이터 | Clean Architecture Phase 2 오케스트레이션 시작 - 전체 GeminiService 기능 마이그레이션 |
@@ -233,17 +236,13 @@ CHA-95 DocumentPort ────▶ CHA-97 Document API Migration             �
 ## 테스트 상태
 
 ```
-마지막 실행: 2026-01-23 (CHA-87~88)
-Clean Architecture Phase 2 Step 1:
-  - CHA-87 (FAQ): 25 passed
-    - test_generate_faq.py (UseCase): 10 passed
-    - test_faq_adapter.py (Adapter): 9 passed
-    - test_faq.py (API): 6 passed
-  - CHA-88 (Citation): 33 passed
-    - test_search_with_citations.py (UseCase): 11 passed
-    - test_citation_adapter.py (Adapter): 11 passed
-    - test_citations.py (API): 11 passed
-  합계: 58 tests passed
+마지막 실행: 2026-01-24 (GeminiService 제거 후)
+전체 테스트: 781 passed, 1 skipped, 80 warnings
+
+Clean Architecture 완성:
+  - GeminiService 완전 제거 (302줄)
+  - 모든 어댑터 자체 Gemini API 클라이언트 사용
+  - 테스트 마이그레이션 완료 (GeminiChannelAdapter 사용)
 ```
 
 ---
@@ -252,6 +251,8 @@ Clean Architecture Phase 2 Step 1:
 
 | 시간 | 내용 |
 |------|------|
+| 2026-01-24 | 오케스트레이터: GeminiService 완전 제거 완료 (CHA-100) - 302줄 삭제, Clean Architecture 완성 |
+| 2026-01-24 | 오케스트레이터: Tavily MCP 마이그레이션 완료 - Direct API → MCP Server 전환 |
 | 2026-01-23 | 오케스트레이터: Phase 3 이슈 등록 완료 (CHA-94~100) - Store/Document CRUD 마이그레이션 |
 | 2026-01-23 | 개발팀장: Step 1 완료 (CHA-87, CHA-88) - FAQ/Citation Clean Architecture 마이그레이션, 58개 테스트 통과, 1차 검수 완료 |
 | 2026-01-23 | 오케스트레이터: Clean Architecture Phase 2 오케스트레이션 시작 |

@@ -15,11 +15,11 @@ from src.models.favorite import (
     FavoriteResponse,
     TargetType,
 )
-from src.services.favorite_repository import FavoriteRepository
+from src.infrastructure.persistence.favorite_repository import FavoriteRepository
 from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import create_channel_port
-from src.services.channel_repository import ChannelRepository
-from src.services.note_repository import NoteRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.infrastructure.persistence.note_repository import NoteRepository
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 

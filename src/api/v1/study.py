@@ -24,7 +24,7 @@ from src.models.study import (
     StudyGuideResponse,
     StudySection,
 )
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
 from src.infrastructure.di.container import (

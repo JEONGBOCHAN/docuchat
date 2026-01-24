@@ -17,7 +17,7 @@ from src.infrastructure.di.container import (
 )
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 
 router = APIRouter(prefix="/channels", tags=["summarize"])
 

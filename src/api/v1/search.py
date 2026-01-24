@@ -15,8 +15,8 @@ from src.models.search import (
 from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
-from src.services.channel_repository import ChannelRepository
-from src.services.search_repository import SearchHistoryRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.infrastructure.persistence.search_repository import SearchHistoryRepository
 
 router = APIRouter(prefix="/search", tags=["search"])
 

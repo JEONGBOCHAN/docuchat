@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, UTC
 from unittest.mock import MagicMock, patch, Mock
 
 from src.models.db_models import ChannelMetadata, NoteDB
-from src.services.trash_repository import TrashRepository
+from src.infrastructure.persistence.trash_repository import TrashRepository
 
 
 class TestCleanupExpiredTrash:

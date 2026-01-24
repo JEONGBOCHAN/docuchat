@@ -11,7 +11,7 @@ from src.services.lifecycle_policy import (
     LifecycleConfig,
     LifecyclePolicy,
 )
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 
 
 class TestLifecyclePolicy:

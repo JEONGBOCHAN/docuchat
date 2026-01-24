@@ -9,10 +9,10 @@ import logging
 from datetime import datetime, UTC
 
 from src.core.database import SessionLocal
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.services.lifecycle_policy import LifecyclePolicy, ChannelState
 from src.infrastructure.di import create_channel_port, create_document_port
-from src.services.trash_repository import TrashRepository
+from src.infrastructure.persistence.trash_repository import TrashRepository
 
 logger = logging.getLogger(__name__)
 

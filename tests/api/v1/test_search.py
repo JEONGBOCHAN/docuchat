@@ -9,8 +9,8 @@ from src.main import app
 from src.api.v1.search import get_channel_port
 from src.api.v1.chat import get_channel_port as get_chat_channel_port
 from src.application.ports.channel import ChannelDTO
-from src.services.channel_repository import ChannelRepository
-from src.services.search_repository import SearchHistoryRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.infrastructure.persistence.search_repository import SearchHistoryRepository
 
 
 class TestGetSearchHistory:

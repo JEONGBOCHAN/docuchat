@@ -22,10 +22,10 @@ from src.models.audio import (
 from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import create_channel_port, create_generate_podcast_script_use_case
 from src.services.tts_service import TTSService, get_tts_service
-from src.services.audio_repository import AudioRepository, to_response
+from src.infrastructure.persistence.audio_repository import AudioRepository, to_response
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.application.use_cases.podcast import GeneratePodcastScriptRequest
 
 router = APIRouter(prefix="/channels", tags=["audio"])

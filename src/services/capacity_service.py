@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from src.core.config import get_settings
 from src.models.db_models import ChannelMetadata
-from src.services.channel_repository import ChannelRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
 
 
 class CapacityExceededError(Exception):

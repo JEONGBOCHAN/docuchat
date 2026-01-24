@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, UTC
 
 import pytest
 
-from src.services.channel_repository import ChannelRepository, ChatHistoryRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository, ChatHistoryRepository
 
 
 class TestChannelRepository:

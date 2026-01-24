@@ -13,9 +13,9 @@ from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.services.channel_repository import ChannelRepository
-from src.services.note_repository import NoteRepository
-from src.services.trash_repository import TrashRepository
+from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.infrastructure.persistence.note_repository import NoteRepository
+from src.infrastructure.persistence.trash_repository import TrashRepository
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
