@@ -15,7 +15,7 @@ from src.models.preview import (
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
 from src.infrastructure.di.container import create_channel_port, create_document_port
-from src.services.preview_service import PreviewService, get_preview_service, DEFAULT_PAGE_SIZE
+from src.application.services.preview_service import PreviewService, get_preview_service, DEFAULT_PAGE_SIZE
 
 router = APIRouter(prefix="/channels", tags=["preview"])
 

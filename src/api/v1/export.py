@@ -13,7 +13,7 @@ from src.infrastructure.di.container import create_channel_port
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.infrastructure.persistence.channel_repository import ChannelRepository
-from src.services.export_service import ExportService
+from src.application.services.export_service import ExportService
 
 router = APIRouter(prefix="/export", tags=["export"])
 
