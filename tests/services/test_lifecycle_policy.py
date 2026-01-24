@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, UTC
 
 import pytest
 
-from src.services.lifecycle_policy import (
+from src.application.services.lifecycle_policy import (
     ChannelState,
     ChannelAction,
     LifecycleConfig,

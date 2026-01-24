@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from src.models.capacity import CapacityUsageResponse
 from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import create_channel_port
-from src.services.capacity_service import CapacityService
+from src.application.services.capacity_service import CapacityService
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 

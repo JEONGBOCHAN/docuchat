@@ -23,7 +23,7 @@ from src.services.youtube_service import (
     TranscriptNotAvailableError,
     InvalidVideoError,
 )
-from src.services.capacity_service import CapacityService, CapacityExceededError
+from src.application.services.capacity_service import CapacityService, CapacityExceededError
 
 router = APIRouter(prefix="/channels", tags=["youtube"])
 

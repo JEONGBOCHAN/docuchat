@@ -3,7 +3,7 @@
 
 import pytest
 
-from src.services.capacity_service import (
+from src.application.services.capacity_service import (
     CapacityService,
     CapacityExceededError,
     CapacityUsage,
