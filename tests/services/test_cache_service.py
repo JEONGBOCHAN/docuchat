@@ -4,7 +4,7 @@
 import time
 import pytest
 
-from src.services.cache_service import (
+from src.infrastructure.cache.cache_service import (
     CacheService,
     CacheTTL,
     get_cache_service,

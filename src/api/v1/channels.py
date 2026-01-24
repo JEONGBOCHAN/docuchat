@@ -16,7 +16,7 @@ from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.infrastructure.persistence.favorite_repository import FavoriteRepository
-from src.services.cache_service import CacheService, get_cache_service
+from src.infrastructure.cache.cache_service import CacheService, get_cache_service
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 

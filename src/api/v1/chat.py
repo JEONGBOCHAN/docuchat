@@ -28,7 +28,7 @@ from src.infrastructure.persistence.channel_repository import (
     ChatHistoryRepository,
     ChatSessionRepository,
 )
-from src.services.cache_service import CacheService, get_cache_service
+from src.infrastructure.cache.cache_service import CacheService, get_cache_service
 from src.infrastructure.persistence.search_repository import SearchHistoryRepository
 
 # Clean Architecture imports

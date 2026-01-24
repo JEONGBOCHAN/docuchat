@@ -10,7 +10,7 @@ from src.main import app
 from src.core.database import Base, get_db
 from src.core.rate_limiter import limiter
 from src.models.db_models import ChannelMetadata
-from src.services.cache_service import reset_cache_service
+from src.infrastructure.cache.cache_service import reset_cache_service
 
 
 # Disable rate limiting for all tests

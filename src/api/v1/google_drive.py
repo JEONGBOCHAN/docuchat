@@ -21,7 +21,7 @@ from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
 from src.infrastructure.di.container import create_channel_port, create_document_port
 from src.services.capacity_service import CapacityService, CapacityExceededError
-from src.services.cache_service import CacheService, get_cache_service
+from src.infrastructure.cache.cache_service import CacheService, get_cache_service
 
 logger = get_logger(__name__)
 settings = get_settings()
