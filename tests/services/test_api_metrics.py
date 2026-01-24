@@ -4,7 +4,7 @@
 import pytest
 from unittest.mock import patch
 
-from src.services.api_metrics import (
+from src.infrastructure.monitoring.api_metrics import (
     ApiMetricsService,
     EndpointMetrics,
     get_api_metrics,
@@ -227,7 +227,7 @@ class TestGetApiMetrics:
     def test_returns_singleton(self):
         """Test that get_api_metrics returns singleton."""
         # Reset singleton for test
-        import src.services.api_metrics as api_metrics_module
+        import src.infrastructure.monitoring.api_metrics as api_metrics_module
         api_metrics_module._metrics_instance = None
 
         metrics1 = get_api_metrics()

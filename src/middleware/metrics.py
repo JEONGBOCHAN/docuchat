@@ -10,7 +10,7 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from src.services.api_metrics import get_api_metrics
+from src.infrastructure.monitoring.api_metrics import get_api_metrics
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):

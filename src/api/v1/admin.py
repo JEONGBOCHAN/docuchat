@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.services.admin_stats import AdminStatsService
-from src.services.api_metrics import get_api_metrics
+from src.infrastructure.monitoring.api_metrics import get_api_metrics
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
