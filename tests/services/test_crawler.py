@@ -4,7 +4,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.services.crawler import CrawlerService, CrawlResult, get_crawler_service
+from src.infrastructure.external.crawler.crawler import CrawlerService, CrawlResult, get_crawler_service
 
 
 class TestCrawlerService:
@@ -24,7 +24,7 @@ class TestCrawlerService:
         with pytest.raises(ValueError, match="Unsupported URL scheme"):
             crawler.fetch_url("ftp://example.com")
 
-    @patch("src.services.crawler.requests.get")
+    @patch("src.infrastructure.external.crawler.crawler.requests.get")
     def test_fetch_url_success(self, mock_get):
         """Test successful URL fetch."""
         # Mock response
@@ -50,7 +50,7 @@ class TestCrawlerService:
         assert "Welcome" in result.content
         assert "test content" in result.content
 
-    @patch("src.services.crawler.requests.get")
+    @patch("src.infrastructure.external.crawler.crawler.requests.get")
     def test_fetch_url_extracts_main_content(self, mock_get):
         """Test that crawler extracts main content and ignores nav/footer."""
         mock_response = MagicMock()
@@ -80,7 +80,7 @@ class TestCrawlerService:
         assert "Navigation menu" not in result.content
         assert "Footer content" not in result.content
 
-    @patch("src.services.crawler.requests.get")
+    @patch("src.infrastructure.external.crawler.crawler.requests.get")
     def test_fetch_url_handles_korean(self, mock_get):
         """Test that crawler handles Korean content."""
         mock_response = MagicMock()
@@ -104,7 +104,7 @@ class TestCrawlerService:
         assert "안녕하세요" in result.content
         assert "테스트" in result.content
 
-    @patch("src.services.crawler.requests.get")
+    @patch("src.infrastructure.external.crawler.crawler.requests.get")
     def test_fetch_url_request_error(self, mock_get):
         """Test that request errors are raised."""
         import requests
@@ -116,7 +116,7 @@ class TestCrawlerService:
         with pytest.raises(requests.RequestException):
             crawler.fetch_url("https://example.com")
 
-    @patch("src.services.crawler.requests.get")
+    @patch("src.infrastructure.external.crawler.crawler.requests.get")
     def test_save_to_temp_file(self, mock_get):
         """Test saving crawl result to temp file."""
         import os

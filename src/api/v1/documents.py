@@ -23,7 +23,7 @@ from src.models.document import (
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
 from src.infrastructure.di.container import create_channel_port, create_document_port
-from src.services.crawler import CrawlerService, get_crawler_service
+from src.infrastructure.external.crawler.crawler import CrawlerService, get_crawler_service
 from src.application.services.capacity_service import CapacityService, CapacityExceededError
 from src.infrastructure.cache.cache_service import CacheService, get_cache_service
 

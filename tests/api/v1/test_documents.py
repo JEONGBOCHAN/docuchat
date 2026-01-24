@@ -9,7 +9,7 @@ from src.main import app
 from src.api.v1.documents import get_channel_port, get_document_port
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO, UploadResultDTO
-from src.services.crawler import get_crawler_service, CrawlResult
+from src.infrastructure.external.crawler.crawler import get_crawler_service, CrawlResult
 
 
 class TestUploadDocument:

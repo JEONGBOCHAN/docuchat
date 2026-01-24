@@ -16,7 +16,7 @@ from src.models.youtube import (
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
 from src.infrastructure.di.container import create_channel_port, create_document_port
-from src.services.youtube_service import (
+from src.infrastructure.external.youtube.youtube_service import (
     YouTubeService,
     get_youtube_service,
     YouTubeServiceError,

@@ -21,7 +21,7 @@ from src.models.audio import (
 )
 from src.application.ports.channel import ChannelPort
 from src.infrastructure.di.container import create_channel_port, create_generate_podcast_script_use_case
-from src.services.tts_service import TTSService, get_tts_service
+from src.infrastructure.external.tts.tts_service import TTSService, get_tts_service
 from src.infrastructure.persistence.audio_repository import AudioRepository, to_response
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
