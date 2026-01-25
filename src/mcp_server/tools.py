@@ -29,8 +29,11 @@ def _generate_session_id() -> str:
 # Agent Status Tools
 # ============================================================
 
-async def get_agent_status(state_store: AgentStateStore | None = None) -> dict[str, Any]:
-    """Get the current agent execution status.
+async def get_agent_status(
+    channel_id: str | None = None,
+    state_store: AgentStateStore | None = None,
+) -> dict[str, Any]:
+    """Get the current agent execution status for a specific channel.
 
     Returns the complete state including:
     - Overall status (idle/running/complete/error)
@@ -40,29 +43,34 @@ async def get_agent_status(state_store: AgentStateStore | None = None) -> dict[s
     - Pipeline node statuses
 
     Args:
+        channel_id: The channel ID to get status for. Returns idle if not specified.
         state_store: Optional state store to use. Uses global store if not provided.
 
     Returns:
-        Dictionary containing the current agent state.
+        Dictionary containing the current agent state for the channel.
     """
     store = state_store or get_global_state_store()
-    return store.get_state()
+    return store.get_state(channel_id)
 
 
-async def reset_agent_state(state_store: AgentStateStore | None = None) -> dict[str, Any]:
-    """Reset the agent state to idle.
+async def reset_agent_state(
+    channel_id: str | None = None,
+    state_store: AgentStateStore | None = None,
+) -> dict[str, Any]:
+    """Reset the agent state to idle for a specific channel.
 
     Args:
+        channel_id: The channel ID to reset. Resets all channels if not specified.
         state_store: Optional state store to use. Uses global store if not provided.
 
     Returns:
         Dictionary confirming the reset with the new state.
     """
     store = state_store or get_global_state_store()
-    store.reset()
+    store.reset(channel_id)
     return {
-        "message": "Agent state reset to idle",
-        "state": store.get_state(),
+        "message": f"Agent state reset to idle{f' for channel {channel_id}' if channel_id else ''}",
+        "state": store.get_state(channel_id),
     }
 
 
@@ -314,7 +322,7 @@ async def run_rag_query(
         Dictionary with response, sources, and execution metadata.
     """
     store = state_store or get_global_state_store()
-    store.reset()
+    store.reset(channel_id)
 
     # Get conversation history if session exists
     conversation_history = []
@@ -344,7 +352,7 @@ async def run_rag_query(
             "sources": result.sources,
             "iterations": result.iterations,
             "error": result.error,
-            "state": store.get_state(),
+            "state": store.get_state(channel_id),
         }
 
         # Save to chat history if session exists
@@ -364,6 +372,7 @@ async def run_rag_query(
     except Exception as e:
         store.update({
             "event": "agent_error",
+            "channel_id": channel_id,
             "error": str(e),
         })
         return {
@@ -371,7 +380,7 @@ async def run_rag_query(
             "sources": [],
             "iterations": 0,
             "error": str(e),
-            "state": store.get_state(),
+            "state": store.get_state(channel_id),
         }
 
 
@@ -441,7 +450,7 @@ async def run_rag_with_web_search(
         Dictionary with response, sources, and execution metadata.
     """
     store = state_store or get_global_state_store()
-    store.reset()
+    store.reset(channel_id)
 
     conversation_history = []
     if session_id and session_id in _chat_histories:
@@ -470,7 +479,7 @@ async def run_rag_with_web_search(
             "iterations": result.iterations,
             "tools_used": result.tools_used,
             "error": result.error,
-            "state": store.get_state(),
+            "state": store.get_state(channel_id),
         }
 
         if session_id and session_id in _chat_histories:
@@ -489,6 +498,7 @@ async def run_rag_with_web_search(
     except Exception as e:
         store.update({
             "event": "agent_error",
+            "channel_id": channel_id,
             "error": str(e),
         })
         return {
@@ -496,5 +506,5 @@ async def run_rag_with_web_search(
             "sources": [],
             "iterations": 0,
             "error": str(e),
-            "state": store.get_state(),
+            "state": store.get_state(channel_id),
         }

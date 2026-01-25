@@ -53,6 +53,8 @@ class StateStoreAdapter(AgentEventSinkPort):
         """
         self._state_store = state_store
         self._events: dict[str, list[AgentEvent]] = {}
+        # Track channel_id per session for events that don't include it
+        self._session_channels: dict[str, str] = {}
 
     def emit(self, event: AgentEvent) -> None:
         """Emit an event by converting it to legacy format and updating state store.
@@ -64,6 +66,12 @@ class StateStoreAdapter(AgentEventSinkPort):
         if event.session_id not in self._events:
             self._events[event.session_id] = []
         self._events[event.session_id].append(event)
+
+        # Track channel_id from AGENT_STARTED event
+        if event.event_type == EventType.AGENT_STARTED:
+            channel_id = event.data.get("channel_id")
+            if channel_id:
+                self._session_channels[event.session_id] = channel_id
 
         # Convert to legacy event format and update state store
         legacy_event = self._convert_to_legacy_event(event)
@@ -98,10 +106,17 @@ class StateStoreAdapter(AgentEventSinkPort):
         Args:
             session_id: The session identifier
         """
+        # Get channel_id before clearing
+        channel_id = self._session_channels.get(session_id)
+
         if session_id in self._events:
             del self._events[session_id]
-        # Also reset the state store
-        self._state_store.reset()
+        if session_id in self._session_channels:
+            del self._session_channels[session_id]
+
+        # Reset the state store for this channel
+        if channel_id:
+            self._state_store.reset(channel_id)
 
     def _convert_to_legacy_event(self, event: AgentEvent) -> dict:
         """Convert AgentEvent to legacy event dictionary format.
@@ -114,10 +129,16 @@ class StateStoreAdapter(AgentEventSinkPort):
         """
         timestamp = event.timestamp.isoformat()
 
+        # Get channel_id from event data or tracked sessions
+        channel_id = event.data.get("channel_id") or self._session_channels.get(
+            event.session_id
+        )
+
         if event.event_type == EventType.AGENT_STARTED:
             return {
                 "event": "agent_start",
                 "timestamp": timestamp,
+                "channel_id": channel_id,
                 "data": event.data,
             }
 
@@ -125,6 +146,7 @@ class StateStoreAdapter(AgentEventSinkPort):
             return {
                 "event": "agent_complete",
                 "timestamp": timestamp,
+                "channel_id": channel_id,
                 "data": event.data,
             }
 
@@ -132,6 +154,7 @@ class StateStoreAdapter(AgentEventSinkPort):
             return {
                 "event": "agent_error",
                 "timestamp": timestamp,
+                "channel_id": channel_id,
                 "error": event.data.get("error", "Unknown error"),
                 "data": event.data,
             }
@@ -140,6 +163,7 @@ class StateStoreAdapter(AgentEventSinkPort):
             return {
                 "event": "tool_start",
                 "timestamp": timestamp,
+                "channel_id": channel_id,
                 "node": event.data.get("tool_name", "unknown"),
                 "data": event.data,
             }
@@ -148,6 +172,7 @@ class StateStoreAdapter(AgentEventSinkPort):
             return {
                 "event": "tool_complete",
                 "timestamp": timestamp,
+                "channel_id": channel_id,
                 "node": event.data.get("tool_name", "unknown"),
                 "data": {
                     "duration_ms": event.data.get("duration_ms"),
@@ -159,6 +184,7 @@ class StateStoreAdapter(AgentEventSinkPort):
         return {
             "event": event.event_type.value,
             "timestamp": timestamp,
+            "channel_id": channel_id,
             "data": event.data,
         }
 

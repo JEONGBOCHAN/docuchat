@@ -329,10 +329,11 @@ export class MCPClient {
   }
 
   /**
-   * Get current agent execution status.
+   * Get current agent execution status for a specific channel.
+   * @param channelId Channel ID to get status for
    */
-  async getAgentStatus(): Promise<AgentState> {
-    const result = await this.callTool('get_agent_status');
+  async getAgentStatus(channelId: string): Promise<AgentState> {
+    const result = await this.callTool('get_agent_status', { channel_id: channelId });
     const textContent = result.content.find((c) => c.type === 'text');
     if (textContent?.text) {
       return JSON.parse(textContent.text) as AgentState;
@@ -355,10 +356,11 @@ export class MCPClient {
   }
 
   /**
-   * Reset agent state to idle.
+   * Reset agent state to idle for a specific channel.
+   * @param channelId Channel ID to reset (optional, resets all if not specified)
    */
-  async resetAgentState(): Promise<void> {
-    await this.callTool('reset_agent_state');
+  async resetAgentState(channelId?: string): Promise<void> {
+    await this.callTool('reset_agent_state', channelId ? { channel_id: channelId } : {});
   }
 
   // ---------------------------------------------------------------------------

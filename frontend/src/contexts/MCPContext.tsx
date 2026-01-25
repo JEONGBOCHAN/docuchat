@@ -51,10 +51,10 @@ export interface MCPContextValue {
   tools: MCPTool[];
   callTool: (name: string, args?: Record<string, unknown>) => Promise<ToolsCallResult>;
 
-  // Dashboard-specific
-  getAgentStatus: () => Promise<AgentState>;
+  // Dashboard-specific (channel-scoped)
+  getAgentStatus: (channelId: string) => Promise<AgentState>;
   runRagQuery: (channelId: string, query: string) => Promise<AgentState>;
-  resetAgentState: () => Promise<void>;
+  resetAgentState: (channelId?: string) => Promise<void>;
 }
 
 // =============================================================================
@@ -223,10 +223,10 @@ export function MCPProvider({
     []
   );
 
-  const getAgentStatus = useCallback(async (): Promise<AgentState> => {
+  const getAgentStatus = useCallback(async (channelId: string): Promise<AgentState> => {
     const client = clientRef.current;
     if (!client) throw new Error('MCP client not initialized');
-    return client.getAgentStatus();
+    return client.getAgentStatus(channelId);
   }, []);
 
   const runRagQuery = useCallback(
@@ -238,10 +238,10 @@ export function MCPProvider({
     []
   );
 
-  const resetAgentState = useCallback(async (): Promise<void> => {
+  const resetAgentState = useCallback(async (channelId?: string): Promise<void> => {
     const client = clientRef.current;
     if (!client) throw new Error('MCP client not initialized');
-    return client.resetAgentState();
+    return client.resetAgentState(channelId);
   }, []);
 
   // ---------------------------------------------------------------------------

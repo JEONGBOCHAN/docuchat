@@ -456,7 +456,7 @@ export default function ChannelDetailPage() {
 
             {/* Agent Dashboard Toggle */}
             <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700">
-              <AgentStatusBadge />
+              <AgentStatusBadge channelId={channelId} />
               <button
                 onClick={() => setShowDashboard(!showDashboard)}
                 className={`p-2 rounded-md transition-colors ${
@@ -554,6 +554,7 @@ export default function ChannelDetailPage() {
               </div>
               <div className="flex-1 overflow-hidden">
                 <AgentDashboard
+                  channelId={channelId}
                   pollingInterval={2000}
                   renderMode="iframe"
                   className="h-full"

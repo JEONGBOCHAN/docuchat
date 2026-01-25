@@ -155,11 +155,16 @@ async def handle_tools_list() -> dict[str, Any]:
         "tools": [
             {
                 "name": "get_agent_status",
-                "description": "Get the current agent execution status including pipeline state, metrics, and execution history.",
+                "description": "Get the current agent execution status for a specific channel.",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {},
-                    "required": [],
+                    "properties": {
+                        "channel_id": {
+                            "type": "string",
+                            "description": "The channel ID to get status for.",
+                        },
+                    },
+                    "required": ["channel_id"],
                 },
             },
             {
@@ -182,10 +187,15 @@ async def handle_tools_list() -> dict[str, Any]:
             },
             {
                 "name": "reset_agent_state",
-                "description": "Reset the agent execution state to idle. Use before starting a new conversation.",
+                "description": "Reset the agent execution state to idle for a specific channel.",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {},
+                    "properties": {
+                        "channel_id": {
+                            "type": "string",
+                            "description": "The channel ID to reset. Resets all if not specified.",
+                        },
+                    },
                     "required": [],
                 },
             },
@@ -207,7 +217,8 @@ async def handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
 
     if tool_name == "get_agent_status":
         from src.mcp_server.server import get_agent_status_tool
-        result = await get_agent_status_tool()
+        channel_id = arguments.get("channel_id")
+        result = await get_agent_status_tool(channel_id=channel_id)
         return {
             "content": [
                 {
@@ -235,7 +246,8 @@ async def handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
 
     elif tool_name == "reset_agent_state":
         from src.mcp_server.server import reset_agent_state_tool
-        result = await reset_agent_state_tool()
+        channel_id = arguments.get("channel_id")
+        result = await reset_agent_state_tool(channel_id=channel_id)
         return {
             "content": [
                 {
@@ -416,10 +428,13 @@ async def mcp_message_delete(request: Request):
 
 
 @router.get("/state")
-async def get_mcp_state():
+async def get_mcp_state(channel_id: str | None = None):
     """Get current agent state as JSON (convenience endpoint).
 
     This is not part of MCP protocol but useful for debugging.
+
+    Args:
+        channel_id: Optional channel ID to get state for.
     """
     state_store = get_global_state_store()
-    return JSONResponse(content=state_store.get_state())
+    return JSONResponse(content=state_store.get_state(channel_id))

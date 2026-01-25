@@ -17,6 +17,10 @@ import type { AgentState } from '@/lib/mcp';
 
 export interface AgentDashboardProps {
   /**
+   * Channel ID for channel-specific dashboard state. Required.
+   */
+  channelId: string;
+  /**
    * Polling interval in ms for status updates. Default: 2000
    */
   pollingInterval?: number;
@@ -39,6 +43,7 @@ export interface AgentDashboardProps {
 // =============================================================================
 
 export function AgentDashboard({
+  channelId,
   pollingInterval = 2000,
   renderMode = 'iframe',
   className = '',
@@ -87,8 +92,8 @@ export function AgentDashboard({
       const html = await readDashboard();
       setDashboardHtml(html);
 
-      // Also get initial agent state
-      const state = await getAgentStatus();
+      // Also get initial agent state for this channel
+      const state = await getAgentStatus(channelId);
       setAgentState(state);
       onStateChange?.(state);
     } catch (err) {
@@ -97,7 +102,7 @@ export function AgentDashboard({
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected, readDashboard, getAgentStatus, onStateChange]);
+  }, [isConnected, readDashboard, getAgentStatus, channelId, onStateChange]);
 
   useEffect(() => {
     if (isConnected) {
@@ -113,7 +118,7 @@ export function AgentDashboard({
     if (!isConnected) return;
 
     try {
-      const state = await getAgentStatus();
+      const state = await getAgentStatus(channelId);
       setAgentState(state);
       onStateChange?.(state);
 
@@ -125,7 +130,7 @@ export function AgentDashboard({
     } catch (err) {
       console.error('Failed to poll agent status:', err);
     }
-  }, [isConnected, getAgentStatus, readDashboard, onStateChange]);
+  }, [isConnected, getAgentStatus, channelId, readDashboard, onStateChange]);
 
   useEffect(() => {
     if (isConnected && pollingInterval > 0) {
@@ -270,10 +275,14 @@ export function AgentDashboard({
 // =============================================================================
 
 export interface AgentStatusBadgeProps {
+  /**
+   * Channel ID for channel-specific status. Required.
+   */
+  channelId: string;
   className?: string;
 }
 
-export function AgentStatusBadge({ className = '' }: AgentStatusBadgeProps) {
+export function AgentStatusBadge({ channelId, className = '' }: AgentStatusBadgeProps) {
   const { isConnected, isConnecting, error, connect, getAgentStatus } = useMCP();
   const [status, setStatus] = useState<AgentState['status'] | null>(null);
 
@@ -288,7 +297,7 @@ export function AgentStatusBadge({ className = '' }: AgentStatusBadgeProps) {
 
     const fetchStatus = async () => {
       try {
-        const state = await getAgentStatus();
+        const state = await getAgentStatus(channelId);
         setStatus(state.status);
       } catch {
         // Ignore errors
@@ -298,7 +307,7 @@ export function AgentStatusBadge({ className = '' }: AgentStatusBadgeProps) {
     fetchStatus();
     const interval = setInterval(fetchStatus, 3000);
     return () => clearInterval(interval);
-  }, [isConnected, getAgentStatus]);
+  }, [isConnected, getAgentStatus, channelId]);
 
   const getStatusColor = () => {
     switch (status) {

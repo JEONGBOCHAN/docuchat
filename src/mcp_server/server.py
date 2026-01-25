@@ -296,22 +296,30 @@ async def web_search_tool(
 @mcp_server.tool(
     name="get_agent_status",
     title="Get Agent Status",
-    description="Get the current agent execution status including pipeline state and metrics.",
+    description="Get the current agent execution status for a specific channel.",
     meta={"ui/resourceUri": "ui://dashboard/agent-status"},
 )
-async def get_agent_status_tool() -> dict[str, Any]:
-    """Get the current agent execution status."""
-    return await tools.get_agent_status()
+async def get_agent_status_tool(channel_id: str | None = None) -> dict[str, Any]:
+    """Get the current agent execution status.
+
+    Args:
+        channel_id: The channel ID to get status for. Required for per-channel status.
+    """
+    return await tools.get_agent_status(channel_id=channel_id)
 
 
 @mcp_server.tool(
     name="reset_agent_state",
     title="Reset Agent State",
-    description="Reset the agent execution state to idle.",
+    description="Reset the agent execution state to idle for a specific channel.",
 )
-async def reset_agent_state_tool() -> dict[str, Any]:
-    """Reset agent state to idle."""
-    return await tools.reset_agent_state()
+async def reset_agent_state_tool(channel_id: str | None = None) -> dict[str, Any]:
+    """Reset agent state to idle.
+
+    Args:
+        channel_id: The channel ID to reset. Resets all channels if not specified.
+    """
+    return await tools.reset_agent_state(channel_id=channel_id)
 
 
 # ============================================================
