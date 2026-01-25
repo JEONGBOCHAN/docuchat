@@ -36,6 +36,23 @@ class NoteContentError(NoteValidationError):
 
 
 # =============================================================================
+# Channel Exceptions
+# =============================================================================
+
+
+class ChannelValidationError(DomainException):
+    """Raised when channel validation fails."""
+
+    pass
+
+
+class ChannelNameError(ChannelValidationError):
+    """Raised when channel name is invalid."""
+
+    pass
+
+
+# =============================================================================
 # YouTube Exceptions
 # =============================================================================
 
