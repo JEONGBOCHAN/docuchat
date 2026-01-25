@@ -150,6 +150,14 @@ export class MCPClient {
 
     if (!response.ok) {
       const errorText = await response.text();
+
+      // Detect session expiration (404 = session not found)
+      // Reset connection state to trigger auto-reconnect
+      if (response.status === 404 && errorText.includes('Session not found')) {
+        this.sessionId = null;
+        this.setConnectionState('error', 'Session expired. Reconnecting...');
+      }
+
       throw new Error(`MCP request failed: ${response.status} ${errorText}`);
     }
 
