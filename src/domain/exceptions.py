@@ -53,6 +53,29 @@ class ChannelNameError(ChannelValidationError):
 
 
 # =============================================================================
+# ChatMessage Exceptions
+# =============================================================================
+
+
+class ChatMessageValidationError(DomainException):
+    """Raised when chat message validation fails."""
+
+    pass
+
+
+class InvalidRoleError(ChatMessageValidationError):
+    """Raised when message role is invalid."""
+
+    pass
+
+
+class MessageContentError(ChatMessageValidationError):
+    """Raised when message content is invalid."""
+
+    pass
+
+
+# =============================================================================
 # YouTube Exceptions
 # =============================================================================
 
