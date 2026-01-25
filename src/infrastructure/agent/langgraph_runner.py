@@ -214,31 +214,33 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             messages.append(("user", query))
 
-            # Emit: Tool Started
-            tool_start_time = datetime.now()
-            if self._event_sink:
-                self._event_sink.emit(ToolStartedEvent(
-                    session_id=session_id,
-                    tool_name="search_documents",
-                    tool_input={"query": query},
-                ))
-
             # Run agent
+            agent_start_time = datetime.now()
             result = agent.invoke(
                 {"messages": messages},
                 config={"recursion_limit": config.max_iterations * 2 + 1}
             )
+            agent_duration_ms = (datetime.now() - agent_start_time).total_seconds() * 1000
 
-            # Calculate tool duration
-            tool_duration_ms = (datetime.now() - tool_start_time).total_seconds() * 1000
-
-            # Emit: Tool Completed
+            # Emit tool events based on actual tool calls in result
             if self._event_sink:
-                self._event_sink.emit(ToolCompletedEvent(
-                    session_id=session_id,
-                    tool_name="search_documents",
-                    duration_ms=tool_duration_ms,
-                ))
+                for msg in result.get("messages", []):
+                    # AIMessage with tool_calls indicates tool usage
+                    if hasattr(msg, "tool_calls") and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            tool_name = tc.get("name", "")
+                            tool_args = tc.get("args", {})
+                            self._event_sink.emit(ToolStartedEvent(
+                                session_id=session_id,
+                                tool_name=tool_name,
+                                tool_input=tool_args,
+                            ))
+                            # Immediately emit completed (since invoke is synchronous)
+                            self._event_sink.emit(ToolCompletedEvent(
+                                session_id=session_id,
+                                tool_name=tool_name,
+                                duration_ms=agent_duration_ms / max(1, len(msg.tool_calls)),
+                            ))
 
             # Extract response
             final_message = result.get("messages", [])[-1] if result.get("messages") else None
@@ -333,16 +335,9 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             messages.append(("user", query))
 
-            # Emit: Tool Started
-            tool_start_time = datetime.now()
-            if self._event_sink:
-                self._event_sink.emit(ToolStartedEvent(
-                    session_id=session_id,
-                    tool_name="search_documents",
-                    tool_input={"query": query},
-                ))
-
-            yield {"event": "tool_started", "tool": "search_documents"}
+            # Track tool calls dynamically
+            tool_start_times: dict[str, datetime] = {}
+            active_tools: set[str] = set()
 
             # Use stream mode "messages" for token-by-token streaming
             final_response = ""
@@ -361,11 +356,43 @@ class LangGraphAgentRunner(AgentRunnerPort):
                 if "human" in str(msg_type).lower():
                     continue
 
-                # Skip ToolMessage from search_documents (only show final answer)
+                # Detect tool calls from AIMessage (agent deciding to use a tool)
+                if "ai" in str(msg_type).lower():
+                    tool_calls = getattr(msg, "tool_calls", None)
+                    if tool_calls:
+                        for tc in tool_calls:
+                            tool_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
+                            if tool_name and tool_name not in active_tools:
+                                active_tools.add(tool_name)
+                                tool_start_times[tool_name] = datetime.now()
+
+                                # Emit: Tool Started
+                                if self._event_sink:
+                                    tool_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {})
+                                    self._event_sink.emit(ToolStartedEvent(
+                                        session_id=session_id,
+                                        tool_name=tool_name,
+                                        tool_input=tool_args,
+                                    ))
+                                yield {"event": "tool_started", "tool": tool_name}
+
+                # Detect ToolMessage (tool execution completed)
                 if "tool" in str(msg_type).lower():
                     tool_name = getattr(msg, "name", "")
-                    if tool_name == "search_documents":
-                        continue
+                    if tool_name and tool_name in active_tools:
+                        active_tools.discard(tool_name)
+                        start_time = tool_start_times.pop(tool_name, datetime.now())
+                        duration_ms = (datetime.now() - start_time).total_seconds() * 1000
+
+                        # Emit: Tool Completed
+                        if self._event_sink:
+                            self._event_sink.emit(ToolCompletedEvent(
+                                session_id=session_id,
+                                tool_name=tool_name,
+                                duration_ms=duration_ms,
+                            ))
+                        yield {"event": "tool_completed", "tool": tool_name}
+                    continue  # Skip tool message content from final response
 
                 # Get content from the message chunk
                 content = getattr(msg, "content", "")
@@ -387,19 +414,6 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             # Build result from collected messages
             result = {"messages": final_messages, "response": final_response}
-
-            # Calculate tool duration
-            tool_duration_ms = (datetime.now() - tool_start_time).total_seconds() * 1000
-
-            # Emit: Tool Completed
-            if self._event_sink:
-                self._event_sink.emit(ToolCompletedEvent(
-                    session_id=session_id,
-                    tool_name="search_documents",
-                    duration_ms=tool_duration_ms,
-                ))
-
-            yield {"event": "tool_completed", "tool": "search_documents"}
 
             # Use accumulated response from streaming
             response_text = result.get("response", "") or "No response generated."
