@@ -36,7 +36,7 @@ export interface StreamCallbacks {
 }
 
 export interface StreamOptions {
-  timeout?: number; // Timeout in milliseconds (default: 60000)
+  timeout?: number; // Timeout in milliseconds (default: 300000 = 5 minutes)
   signal?: AbortSignal; // External abort signal
 }
 
@@ -59,7 +59,7 @@ export const chatApi = {
     callbacks: StreamCallbacks,
     options: StreamOptions = {}
   ): StreamController => {
-    const { timeout = 60000 } = options;
+    const { timeout = 300000 } = options; // 5 minutes default
 
     // Create internal AbortController
     const abortController = new AbortController();

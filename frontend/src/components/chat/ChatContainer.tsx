@@ -87,11 +87,34 @@ export default function ChatContainer({ channelId, onSaveAsNote }: ChatContainer
         },
         onError: (err) => {
           console.error('Streaming error:', err.message);
-          setError(err.message);
+
+          // Preserve partial content if any (like manual cancel)
+          const partialContent = streamingContentRef.current;
+          const partialSources = [...streamingSourcesRef.current];
+
+          if (partialContent) {
+            // Save partial content with error indicator
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: generateMessageId(),
+                role: 'assistant',
+                content: partialContent + '\n\n*[Response interrupted: ' + err.message + ']*',
+                sources: partialSources,
+                created_at: new Date().toISOString(),
+              },
+            ]);
+          } else {
+            // No content yet, show error
+            setError(err.message);
+          }
+
           setIsStreaming(false);
+          setStreamingContent('');
+          setStreamingSources([]);
+          streamingContentRef.current = '';
+          streamingSourcesRef.current = [];
           streamControllerRef.current = null;
-          // Fetch history in case the backend saved a partial response
-          fetchHistory();
         },
         onComplete: () => {
           // Capture values before resetting to avoid race conditions
@@ -124,7 +147,7 @@ export default function ChatContainer({ channelId, onSaveAsNote }: ChatContainer
           streamControllerRef.current = null;
         },
       },
-      { timeout: 60000 } // 60 second timeout
+      { timeout: 300000 } // 5 minute timeout for long agent operations
     );
   };
 
