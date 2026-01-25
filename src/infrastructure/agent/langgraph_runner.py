@@ -77,7 +77,50 @@ RAG_SYSTEM_PROMPT = """You are an intelligent assistant with access to multiple 
 - Include citations in your answer (e.g., [Source 1] for documents, [Web 1] for web results, [Paper 1] for arXiv)
 - If no relevant information is found, inform the user honestly
 - Do not make up information - only use what you find from the tools
+- Be efficient: gather what you need and provide your answer. Do not keep searching endlessly.
 """
+
+# Iteration limit warning threshold
+ITERATION_WARNING_THRESHOLD = 10
+
+
+def _create_state_modifier(system_prompt: str):
+    """Create a state modifier that adds iteration warnings.
+
+    Args:
+        system_prompt: The base system prompt.
+
+    Returns:
+        A function that modifies state based on iteration count.
+    """
+    from langchain_core.messages import SystemMessage
+
+    def state_modifier(state):
+        """Modify state to add iteration awareness."""
+        messages = state.get("messages", [])
+
+        # Count tool calls to determine iteration count
+        iteration_count = sum(
+            1 for msg in messages
+            if hasattr(msg, "tool_calls") and msg.tool_calls
+        )
+
+        # Build the prompt with optional warning
+        prompt = system_prompt
+
+        if iteration_count >= ITERATION_WARNING_THRESHOLD:
+            remaining = 15 - iteration_count  # Assuming max 15
+            prompt += f"""
+
+## ⚠️ ITERATION WARNING
+You have made {iteration_count} tool calls. You have approximately {remaining} iterations remaining.
+**You MUST start wrapping up now.** Synthesize the information you have gathered and provide your final answer.
+Do NOT make additional tool calls unless absolutely critical. Provide your best answer with the information collected so far.
+"""
+
+        return [SystemMessage(content=prompt)] + messages
+
+    return state_modifier
 
 
 class LangGraphAgentRunner(AgentRunnerPort):
@@ -160,12 +203,14 @@ class LangGraphAgentRunner(AgentRunnerPort):
         # Use custom system prompt if provided
         system_prompt = config.system_prompt or RAG_SYSTEM_PROMPT
 
-        # Create the agent
-        # LangGraph 1.x uses 'prompt' parameter instead of deprecated 'state_modifier'
+        # Create state modifier for iteration awareness
+        state_modifier = _create_state_modifier(system_prompt)
+
+        # Create the agent with state modifier for dynamic iteration warnings
         agent = create_react_agent(
             model=llm,
             tools=tools,
-            prompt=system_prompt,
+            state_modifier=state_modifier,
         )
 
         return agent

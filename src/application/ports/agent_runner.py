@@ -62,7 +62,7 @@ class AgentConfig:
         system_prompt: Custom system prompt
     """
 
-    max_iterations: int = 5
+    max_iterations: int = 15
     temperature: float = 0.0
     tools: list[str] = field(default_factory=list)
     system_prompt: str | None = None
