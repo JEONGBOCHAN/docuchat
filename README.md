@@ -52,8 +52,10 @@
 ### AI Capabilities
 
 - **RAG (Retrieval-Augmented Generation)** - Answers grounded in actual documents
-- **Agentic Workflows** - LangGraph-powered ReAct loop for complex reasoning
+- **Agentic Workflows** - LangGraph-powered ReAct loop with up to 15 iterations
 - **Gemini File Search** - Powered by Google's Gemini File Search API
+- **Web Search** - Real-time web search for up-to-date information
+- **arXiv Search** - Search academic papers from arXiv
 - **Multi-turn Conversations** - Context-aware chat with conversation history
 
 ### Additional Features
@@ -119,7 +121,7 @@
 │         ▲                                 │                     │
 │         │         ┌──────────────┐        │                     │
 │         └─────────│   Continue?  │◀───────┘                     │
-│                   │  (max 3x)    │                              │
+│                   │  (max 15x)   │                              │
 │                   └──────┬───────┘                              │
 │                          │ Done                                 │
 │                          ▼                                      │
@@ -128,7 +130,7 @@
 │                   │ Final answer│                               │
 │                   └─────────────┘                               │
 │                                                                 │
-│    Tools: [search_documents] [finish]                           │
+│    Tools: [search_documents] [web_search] [arxiv_search]        │
 └─────────────────────────────────────────────────────────────────┘
                               │
               ┌───────────────┴───────────────┐
