@@ -33,10 +33,7 @@ from src.application.dto.agent_event import (
     ToolCompletedEvent,
     generate_session_id,
 )
-from src.agents.tools.search_tools import (
-    create_search_documents_tool,
-    create_finish_tool,
-)
+from src.agents.tools.search_tools import create_search_documents_tool
 from src.core.config import get_settings, GeminiModels
 from src.application.ports.document_search import DocumentSearchPort
 
@@ -45,19 +42,18 @@ from src.application.ports.document_search import DocumentSearchPort
 RAG_SYSTEM_PROMPT = """You are a document analysis assistant. Your task is to answer user questions based on uploaded documents.
 
 ## Available Tools
-You have access to the following tools:
-1. **search_documents**: Search for relevant information in the uploaded documents
-2. **finish**: Complete the task and provide the final answer
+You have access to the following tool:
+- **search_documents**: Search for relevant information in the uploaded documents
 
 ## Instructions
 1. When the user asks a question, use the search_documents tool to find relevant information
 2. If the search results are insufficient, try searching with different keywords
-3. Once you have enough information, use the finish tool to provide a complete answer
-4. Always cite your sources in the answer
+3. Once you have enough information, respond directly to the user with a complete answer
+4. Always cite your sources in the answer (e.g., [Source 1], [Source 2])
 
 ## Important Rules
-- You MUST use the finish tool to complete the task
-- Include citations from the documents in your final answer
+- After searching, respond directly to the user - do NOT call any other tools
+- Include citations from the documents in your answer
 - If no relevant information is found after searching, inform the user honestly
 - Do not make up information - only use what you find in the documents
 """
@@ -123,14 +119,13 @@ class LangGraphAgentRunner(AgentRunnerPort):
             streaming=streaming,
         )
 
-        # Create tools
+        # Create tools (only search - LLM responds directly for streaming)
         search_tool = create_search_documents_tool(
             channel_id=channel_id,
             document_search=self._document_search,
         )
-        finish_tool = create_finish_tool()
 
-        tools = [search_tool, finish_tool]
+        tools = [search_tool]
 
         # Use custom system prompt if provided
         system_prompt = config.system_prompt or RAG_SYSTEM_PROMPT
@@ -353,22 +348,13 @@ class LangGraphAgentRunner(AgentRunnerPort):
                         for part in content
                     )
 
-                # For AIMessageChunk, yield the content token
+                # For AIMessageChunk, yield the content token (direct LLM response)
                 if content and "ai" in str(msg_type).lower():
                     final_response += content
                     yield {
                         "event": "content",
                         "content": content,
                     }
-                # For finish tool result (ToolMessage), yield the content
-                elif content and "tool" in str(msg_type).lower():
-                    tool_name = getattr(msg, "name", "")
-                    if tool_name == "finish":
-                        final_response = content
-                        yield {
-                            "event": "content",
-                            "content": content,
-                        }
 
             # Build result from collected messages
             result = {"messages": final_messages, "response": final_response}
@@ -491,16 +477,6 @@ class LangGraphAgentRunner(AgentRunnerPort):
                     "query": {
                         "type": "string",
                         "description": "The search query",
-                    }
-                },
-            ),
-            AgentTool(
-                name="finish",
-                description="Complete the task and provide the final answer",
-                parameters={
-                    "answer": {
-                        "type": "string",
-                        "description": "The final answer to the user's question",
                     }
                 },
             ),

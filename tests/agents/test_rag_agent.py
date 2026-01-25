@@ -143,7 +143,8 @@ class TestCreateRAGAgent:
         mock_create_react_agent.assert_called_once()
         call_kwargs = mock_create_react_agent.call_args[1]
         assert len(call_kwargs["tools"]) == 2  # search and finish tools
-        assert call_kwargs["state_modifier"] == RAG_AGENT_SYSTEM_PROMPT
+        # LangGraph 1.x uses 'prompt' parameter instead of deprecated 'state_modifier'
+        assert call_kwargs["prompt"] == RAG_AGENT_SYSTEM_PROMPT
 
     @patch("src.agents.rag_agent.get_settings")
     @patch("src.infrastructure.di.create_document_search")
@@ -169,7 +170,8 @@ class TestCreateRAGAgent:
         create_rag_agent(config)
 
         call_kwargs = mock_create_react_agent.call_args[1]
-        assert call_kwargs["state_modifier"] == custom_prompt
+        # LangGraph 1.x uses 'prompt' parameter instead of deprecated 'state_modifier'
+        assert call_kwargs["prompt"] == custom_prompt
 
     @patch("src.agents.rag_agent.get_settings")
     @patch("src.infrastructure.di.create_document_search")
