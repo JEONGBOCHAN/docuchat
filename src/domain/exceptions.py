@@ -13,6 +13,29 @@ class DomainException(Exception):
 
 
 # =============================================================================
+# Note Exceptions
+# =============================================================================
+
+
+class NoteValidationError(DomainException):
+    """Raised when note validation fails."""
+
+    pass
+
+
+class NoteTitleError(NoteValidationError):
+    """Raised when note title is invalid."""
+
+    pass
+
+
+class NoteContentError(NoteValidationError):
+    """Raised when note content is invalid."""
+
+    pass
+
+
+# =============================================================================
 # YouTube Exceptions
 # =============================================================================
 
