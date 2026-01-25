@@ -22,6 +22,23 @@ class AgentStatus(str, Enum):
     ERROR = "error"
 
 
+class NodeStatus(str, Enum):
+    """Status of a single execution step/node."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETE = "complete"
+    ERROR = "error"
+
+
+# Pipeline node definitions (for backward compatibility)
+PIPELINE_NODES: list[dict[str, str]] = [
+    {"id": "retrieve", "label": "Retrieve"},
+    {"id": "generate", "label": "Generate"},
+    {"id": "review", "label": "Review"},
+]
+
+
 @dataclass
 class StepRecord:
     """Record of a single execution step."""
@@ -242,7 +259,7 @@ class AgentStateStore:
                 state.steps.append(
                     StepRecord(
                         node=node,
-                        status=NodeStatus.RUNNING.value,
+                        status="running",
                         timestamp=event.get("timestamp", datetime.now().isoformat()),
                         data=event.get("data", {}),
                     )
@@ -253,8 +270,8 @@ class AgentStateStore:
                 duration = event.get("data", {}).get("duration_ms")
                 # Update the last step for this node
                 for step in reversed(state.steps):
-                    if step.node == node and step.status == NodeStatus.RUNNING.value:
-                        step.status = NodeStatus.COMPLETE.value
+                    if step.node == node and step.status == "running":
+                        step.status = "complete"
                         step.duration_ms = duration
                         break
 
@@ -267,7 +284,7 @@ class AgentStateStore:
                 state.steps.append(
                     StepRecord(
                         node=node,
-                        status=NodeStatus.RUNNING.value,
+                        status="running",
                         timestamp=event.get("timestamp", datetime.now().isoformat()),
                         data=event.get("data", {}),
                     )
@@ -278,8 +295,8 @@ class AgentStateStore:
                 duration = event.get("data", {}).get("duration_ms")
                 # Update the last step for this node
                 for step in reversed(state.steps):
-                    if step.node == node and step.status == NodeStatus.RUNNING.value:
-                        step.status = NodeStatus.COMPLETE.value
+                    if step.node == node and step.status == "running":
+                        step.status = "complete"
                         step.duration_ms = duration
                         if event.get("data", {}).get("result_preview"):
                             step.data["result_preview"] = event["data"]["result_preview"]
@@ -291,8 +308,8 @@ class AgentStateStore:
                 duration = event.get("data", {}).get("duration_ms")
                 # Update the last step for this node
                 for step in reversed(state.steps):
-                    if step.node == node and step.status == NodeStatus.RUNNING.value:
-                        step.status = NodeStatus.ERROR.value
+                    if step.node == node and step.status == "running":
+                        step.status = "error"
                         step.duration_ms = duration
                         step.data["error"] = error
                         break
