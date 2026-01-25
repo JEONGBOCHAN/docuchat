@@ -217,7 +217,7 @@ Return the extracted text content now:"""
         result = self._document_search.search_with_answer(
             query=prompt,
             channel_id=channel_id,
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
         )
 
         if result.get("error"):

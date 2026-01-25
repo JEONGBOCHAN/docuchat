@@ -83,7 +83,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self,
         event_sink: AgentEventSinkPort | None = None,
         document_search: DocumentSearchPort | None = None,
-        model: str = "gemini-2.5-flash-preview-05-20",
+        model: str = "gemini-3-flash-preview",
     ):
         """Initialize the LangGraph runner.
 

@@ -68,7 +68,7 @@ def test_korean_document():
         # 한글로 질문
         print("\n[한글 질문] 이 프로젝트의 기술 스택은 무엇인가요?")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="이 프로젝트의 기술 스택은 무엇인가요? 한글로 답변해주세요.",
             config=types.GenerateContentConfig(
                 tools=[
@@ -133,7 +133,7 @@ def test_multi_turn_conversation():
         conversation_history.append({"role": "user", "parts": [{"text": "What is deep learning?"}]})
 
         response1 = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents=conversation_history,
             config=types.GenerateContentConfig(
                 tools=[
@@ -153,7 +153,7 @@ def test_multi_turn_conversation():
         conversation_history.append({"role": "user", "parts": [{"text": "What are its main components?"}]})
 
         response2 = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents=conversation_history,
             config=types.GenerateContentConfig(
                 tools=[
@@ -173,7 +173,7 @@ def test_multi_turn_conversation():
         conversation_history.append({"role": "user", "parts": [{"text": "Can you give me an example?"}]})
 
         response3 = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents=conversation_history,
             config=types.GenerateContentConfig(
                 tools=[
@@ -242,7 +242,7 @@ def test_channel_isolation():
         # Store A에서 Python 질문 (없어야 함)
         print("\n[테스트 1] Store A (AI 문서)에서 'Python 함수 정의 방법' 질문")
         response_a = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="How do you define a function in Python? Show me the syntax.",
             config=types.GenerateContentConfig(
                 tools=[
@@ -270,7 +270,7 @@ def test_channel_isolation():
         # Store B에서 딥러닝 질문 (없어야 함)
         print("\n[테스트 2] Store B (Python 문서)에서 '딥러닝이란' 질문")
         response_b = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="What is deep learning? Explain in detail.",
             config=types.GenerateContentConfig(
                 tools=[
@@ -385,7 +385,7 @@ def test_various_outputs():
         # 1. Timeline
         print("\n[1] Timeline 생성")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="""Based on the documents, create a timeline of the project phases.
             Format:
             [Date/Phase] - [Event/Milestone]
@@ -400,7 +400,7 @@ def test_various_outputs():
         # 2. FAQ
         print("\n[2] FAQ 생성")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="""Based on the documents, create a FAQ (Frequently Asked Questions) with 3 questions and answers.
             Format:
             Q: [Question]
@@ -416,7 +416,7 @@ def test_various_outputs():
         # 3. Study Guide
         print("\n[3] Study Guide 생성")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="""Based on the documents, create a study guide with key concepts and learning objectives.
             Include:
             - Main topics
@@ -433,7 +433,7 @@ def test_various_outputs():
         # 4. Mind Map (텍스트 형태)
         print("\n[4] Mind Map 생성 (텍스트)")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="""Based on the documents, create a mind map in text format.
             Use indentation to show hierarchy:
             - Main Topic
@@ -451,7 +451,7 @@ def test_various_outputs():
         # 5. Briefing Doc
         print("\n[5] Briefing Doc 생성")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="""Based on the documents, create a brief executive summary.
             Include:
             - Overview (1-2 sentences)

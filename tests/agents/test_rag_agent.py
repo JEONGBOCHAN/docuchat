@@ -25,7 +25,7 @@ class TestRAGAgentConfig:
 
         assert config.channel_id == "test-channel"
         assert config.max_iterations == 3
-        assert config.model == "gemini-2.5-flash-preview-05-20"
+        assert config.model == "gemini-3-flash-preview"
         assert config.temperature == 0.0
         assert config.system_prompt is None
         assert config.middleware == []
@@ -134,7 +134,7 @@ class TestCreateRAGAgent:
         # Verify ChatGoogleGenerativeAI was created with correct params
         mock_chat_model.assert_called_once()
         call_kwargs = mock_chat_model.call_args[1]
-        assert call_kwargs["model"] == "gemini-2.5-flash-preview-05-20"
+        assert call_kwargs["model"] == "gemini-3-flash-preview"
         assert call_kwargs["google_api_key"] == "test-key"
         assert call_kwargs["temperature"] == 0.0
 

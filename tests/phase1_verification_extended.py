@@ -61,7 +61,7 @@ def upload_file(client, store, file_path: str):
 def search(client, store, question: str):
     print(f"\n[질문] {question}")
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         contents=question,
         config=types.GenerateContentConfig(
             tools=[

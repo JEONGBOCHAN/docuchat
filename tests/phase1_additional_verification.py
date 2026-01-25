@@ -128,7 +128,7 @@ def test_streaming():
 
         # 스트리밍으로 긴 응답 생성
         response_stream = client.models.generate_content_stream(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="Explain machine learning in 5 paragraphs."
         )
 
@@ -175,7 +175,7 @@ def test_flashcards_quiz():
         # Flashcards 생성
         print("\n[Flashcards 생성]")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="""Based on the uploaded documents, create 3 flashcards.
             Format each flashcard as:
             Q: [question]
@@ -196,7 +196,7 @@ def test_flashcards_quiz():
         # Quiz 생성
         print("\n[Quiz 생성]")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="""Based on the uploaded documents, create a 3-question multiple choice quiz.
             Format:
             1. [Question]

@@ -74,7 +74,7 @@ class RAGAgentConfig:
     """
     channel_id: str
     max_iterations: int = 3
-    model: str = "gemini-2.5-flash-preview-05-20"
+    model: str = "gemini-3-flash-preview"
     temperature: float = 0.0
     system_prompt: str | None = None
     middleware: list[Any] = field(default_factory=list)

@@ -142,7 +142,7 @@ def test_pdf_rag_chunk():
         # 검색
         print("\n[질문] What is discussed on Page 2?")
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents="What is on Page 2? Please mention the page number in your answer.",
             config=types.GenerateContentConfig(
                 tools=[

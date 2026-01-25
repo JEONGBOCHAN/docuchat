@@ -74,7 +74,7 @@ def search_and_answer(client, store, question: str):
     print(f"[3/4] 질문: {question}")
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         contents=question,
         config=types.GenerateContentConfig(
             tools=[
