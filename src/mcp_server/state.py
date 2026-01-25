@@ -22,27 +22,6 @@ class AgentStatus(str, Enum):
     ERROR = "error"
 
 
-class NodeStatus(str, Enum):
-    """Status of a pipeline node."""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETE = "complete"
-    ERROR = "error"
-
-
-# Pipeline node definitions for visualization
-PIPELINE_NODES = [
-    {"id": "retrieve", "name": "Retrieve", "type": "tool"},
-    {"id": "rerank", "name": "Rerank", "type": "tool"},
-    {"id": "cite_map", "name": "Cite Map", "type": "tool"},
-    {"id": "draft", "name": "Draft", "type": "model"},
-    {"id": "reflect", "name": "Reflect", "type": "model"},
-    {"id": "revise", "name": "Revise", "type": "model"},
-    {"id": "verify", "name": "Verify", "type": "tool"},
-]
-
-
 @dataclass
 class StepRecord:
     """Record of a single execution step."""
@@ -81,15 +60,9 @@ class AgentState:
     steps: list[StepRecord] = field(default_factory=list)
     metrics: AgentMetrics = field(default_factory=AgentMetrics)
     last_error: str | None = None
-    pipeline_nodes: list[dict] = field(default_factory=lambda: PIPELINE_NODES.copy())
 
     def to_dict(self) -> dict[str, Any]:
         """Convert state to dictionary for JSON serialization."""
-        # Calculate node statuses based on steps
-        node_statuses = {}
-        for step in self.steps:
-            node_statuses[step.node.lower()] = step.status
-
         return {
             "status": self.status.value,
             "channel_id": self.channel_id,
@@ -114,13 +87,6 @@ class AgentState:
                 "total_duration_ms": self.metrics.total_duration_ms,
             },
             "last_error": self.last_error,
-            "pipeline_nodes": [
-                {
-                    **node,
-                    "status": node_statuses.get(node["id"], "pending"),
-                }
-                for node in self.pipeline_nodes
-            ],
         }
 
 

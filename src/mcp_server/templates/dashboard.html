@@ -118,106 +118,6 @@
             color: #e4e4e7;
         }
 
-        /* Pipeline visualization */
-        .pipeline-section {
-            margin-bottom: 24px;
-        }
-
-        .pipeline-section h2 {
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #9ca3af;
-            margin-bottom: 12px;
-        }
-
-        .pipeline-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-        }
-
-        .pipeline-node {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 10px 14px;
-            border-radius: 8px;
-            background: #2d2d44;
-            border: 2px solid #3d3d5c;
-            min-width: 80px;
-            transition: all 0.2s ease;
-        }
-
-        .pipeline-node .node-name {
-            font-size: 12px;
-            font-weight: 500;
-            margin-bottom: 4px;
-        }
-
-        .pipeline-node .node-status {
-            font-size: 16px;
-        }
-
-        .pipeline-node .node-duration {
-            font-size: 10px;
-            color: #9ca3af;
-            margin-top: 2px;
-        }
-
-        .pipeline-node.pending {
-            opacity: 0.5;
-        }
-
-        .pipeline-node.running {
-            border-color: #4ade80;
-            box-shadow: 0 0 12px rgba(74, 222, 128, 0.3);
-            animation: glow 1.5s ease-in-out infinite;
-        }
-
-        .pipeline-node.complete {
-            border-color: #60a5fa;
-            background: #1e3a5f;
-        }
-
-        .pipeline-node.error {
-            border-color: #f87171;
-            background: #3f1d1d;
-        }
-
-        @keyframes glow {
-            0%, 100% { box-shadow: 0 0 8px rgba(74, 222, 128, 0.3); }
-            50% { box-shadow: 0 0 16px rgba(74, 222, 128, 0.5); }
-        }
-
-        .pipeline-arrow {
-            color: #6b7280;
-            font-size: 18px;
-        }
-
-        .pipeline-divider {
-            width: 100%;
-            height: 1px;
-            background: #3d3d5c;
-            margin: 8px 0;
-            position: relative;
-        }
-
-        .pipeline-divider::after {
-            content: '';
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            width: 0;
-            height: 0;
-            border-left: 6px solid transparent;
-            border-right: 6px solid transparent;
-            border-top: 6px solid #6b7280;
-        }
-
         /* Info panel */
         .info-panel {
             background: #2d2d44;
@@ -346,66 +246,6 @@
         <!-- Error message -->
         <div class="error-message" id="errorMessage" style="display: none;"></div>
 
-        <!-- Pipeline visualization -->
-        <div class="pipeline-section">
-            <h2>Pipeline</h2>
-
-            <!-- Row 1: Tool nodes -->
-            <div class="pipeline-row" id="toolNodesRow">
-                <div class="pipeline-node pending" data-node="retrieve">
-                    <span class="node-name">Retrieve</span>
-                    <span class="node-status"></span>
-                    <span class="node-duration"></span>
-                </div>
-                <span class="pipeline-arrow">&rarr;</span>
-                <div class="pipeline-node pending" data-node="rerank">
-                    <span class="node-name">Rerank</span>
-                    <span class="node-status"></span>
-                    <span class="node-duration"></span>
-                </div>
-                <span class="pipeline-arrow">&rarr;</span>
-                <div class="pipeline-node pending" data-node="cite_map">
-                    <span class="node-name">Cite Map</span>
-                    <span class="node-status"></span>
-                    <span class="node-duration"></span>
-                </div>
-            </div>
-
-            <div class="pipeline-divider"></div>
-
-            <!-- Row 2: Model nodes -->
-            <div class="pipeline-row" id="modelNodesRow">
-                <div class="pipeline-node pending" data-node="draft">
-                    <span class="node-name">Draft</span>
-                    <span class="node-status"></span>
-                    <span class="node-duration"></span>
-                </div>
-                <span class="pipeline-arrow">&rarr;</span>
-                <div class="pipeline-node pending" data-node="reflect">
-                    <span class="node-name">Reflect</span>
-                    <span class="node-status"></span>
-                    <span class="node-duration"></span>
-                </div>
-                <span class="pipeline-arrow">&rarr;</span>
-                <div class="pipeline-node pending" data-node="revise">
-                    <span class="node-name">Revise</span>
-                    <span class="node-status"></span>
-                    <span class="node-duration"></span>
-                </div>
-            </div>
-
-            <div class="pipeline-divider"></div>
-
-            <!-- Row 3: Verify -->
-            <div class="pipeline-row" style="justify-content: center;">
-                <div class="pipeline-node pending" data-node="verify">
-                    <span class="node-name">Verify</span>
-                    <span class="node-status"></span>
-                    <span class="node-duration"></span>
-                </div>
-            </div>
-        </div>
-
         <!-- Metrics panel -->
         <div class="info-panel">
             <h2>Metrics</h2>
@@ -450,14 +290,6 @@
             'error': 'Error'
         };
 
-        // Status icons for nodes
-        const statusIcons = {
-            'pending': '',
-            'running': '',
-            'complete': '',
-            'error': ''
-        };
-
         // Step icons
         const stepIcons = {
             'running': '',
@@ -494,9 +326,6 @@
                 errorMessage.style.display = 'none';
             }
 
-            // Update pipeline nodes
-            updatePipelineNodes(state);
-
             // Update metrics
             document.getElementById('currentNode').textContent = state.current_node || '-';
             document.getElementById('totalSteps').textContent = state.metrics?.total_steps || 0;
@@ -517,49 +346,6 @@
 
             // Update steps list
             updateStepsList(state.steps || []);
-        }
-
-        function updatePipelineNodes(state) {
-            // Build a map of node statuses from steps
-            const nodeStatuses = {};
-            const nodeDurations = {};
-
-            (state.steps || []).forEach(step => {
-                const nodeId = step.node.toLowerCase().replace(/\s+/g, '_');
-                nodeStatuses[nodeId] = step.status;
-                if (step.duration_ms) {
-                    nodeDurations[nodeId] = step.duration_ms;
-                }
-            });
-
-            // Also use pipeline_nodes if available
-            (state.pipeline_nodes || []).forEach(node => {
-                if (node.status && node.status !== 'pending') {
-                    nodeStatuses[node.id] = node.status;
-                }
-            });
-
-            // Update all pipeline node elements
-            document.querySelectorAll('.pipeline-node').forEach(nodeEl => {
-                const nodeId = nodeEl.dataset.node;
-                const status = nodeStatuses[nodeId] || 'pending';
-                const duration = nodeDurations[nodeId];
-
-                // Update class
-                nodeEl.className = 'pipeline-node ' + status;
-
-                // Update status icon
-                const statusEl = nodeEl.querySelector('.node-status');
-                statusEl.textContent = statusIcons[status] || '';
-
-                // Update duration
-                const durationEl = nodeEl.querySelector('.node-duration');
-                if (duration) {
-                    durationEl.textContent = (duration / 1000).toFixed(2) + 's';
-                } else {
-                    durationEl.textContent = '';
-                }
-            });
         }
 
         function updateStepsList(steps) {
