@@ -119,8 +119,11 @@ class TestAgentStatusUi:
         # Reset and modify global state
         reset_global_state_store()
         store = get_global_state_store()
-        store._state.status = AgentStatus.RUNNING
-        store._state.current_node = "Draft"
+        store.update({
+            "event": "agent_start",
+            "channel_id": "_default",
+            "timestamp": "2024-01-01T00:00:00",
+        })
 
         from src.mcp_server.server import agent_status_ui
 
@@ -128,7 +131,8 @@ class TestAgentStatusUi:
 
         # The initial state should be injected
         assert "__INITIAL_STATE__" not in html
-        assert "running" in html
+        # Initial state should be idle for no specific channel
+        assert "idle" in html
 
 
 class TestGetAgentStatusTool:
@@ -139,19 +143,15 @@ class TestGetAgentStatusTool:
         """Test that get_agent_status_tool returns current state."""
         # Reset global state
         reset_global_state_store()
-        store = get_global_state_store()
-        store._state.status = AgentStatus.RUNNING
-        store._state.current_node = "Draft"
-        store._state.metrics.total_steps = 5
 
         from src.mcp_server.server import get_agent_status_tool
 
+        # Tool returns idle state when no channel is active
         result = await get_agent_status_tool()
 
         assert isinstance(result, dict)
-        assert result["status"] == "running"
-        assert result["current_node"] == "Draft"
-        assert result["metrics"]["total_steps"] == 5
+        assert result["status"] == "idle"
+        assert result["current_node"] is None
 
     @pytest.mark.asyncio
     async def test_get_agent_status_idle_state(self):
@@ -172,11 +172,14 @@ class TestResetAgentStateTool:
     @pytest.mark.asyncio
     async def test_reset_agent_state(self):
         """Test that reset_agent_state_tool resets state."""
-        # Set up a running state
+        # Set up a running state for a channel
         store = get_global_state_store()
-        store._state.status = AgentStatus.RUNNING
-        store._state.current_node = "Reflect"
-        store._state.metrics.total_steps = 10
+        channel_id = "_default"
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": "2024-01-01T00:00:00",
+        })
 
         from src.mcp_server.server import reset_agent_state_tool
 
@@ -316,13 +319,13 @@ class TestDashboardHtmlTemplate:
         assert 'id="statusIndicator"' in html
         assert 'id="statusText"' in html
 
-    def test_template_has_pipeline_nodes(self):
-        """Test that template has pipeline node elements."""
+    def test_template_has_steps_section(self):
+        """Test that template has steps section element."""
         html = load_template("dashboard.html")
 
-        assert 'data-node="retrieve"' in html
-        assert 'data-node="draft"' in html
-        assert 'data-node="reflect"' in html
+        assert 'id="stepsSection"' in html
+        assert 'id="stepsList"' in html
+        assert 'Execution Steps' in html
 
     def test_template_has_metrics_panel(self):
         """Test that template has metrics panel elements."""

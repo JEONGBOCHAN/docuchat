@@ -12,7 +12,6 @@ from src.mcp_server.state import (
     NodeStatus,
     StepRecord,
     AgentMetrics,
-    PIPELINE_NODES,
     get_global_state_store,
     reset_global_state_store,
 )
@@ -93,12 +92,12 @@ class TestAgentState:
         state = AgentState()
 
         assert state.status == AgentStatus.IDLE
+        assert state.channel_id is None
         assert state.current_node is None
         assert state.current_query is None
         assert state.steps == []
         assert isinstance(state.metrics, AgentMetrics)
         assert state.last_error is None
-        assert len(state.pipeline_nodes) > 0
 
     def test_to_dict(self):
         """Test AgentState serialization to dict."""
@@ -127,33 +126,12 @@ class TestAgentState:
         assert result["steps"][0]["status"] == "complete"
         assert result["metrics"]["total_steps"] == 1
         assert result["metrics"]["model_calls"] == 1
-        assert "pipeline_nodes" in result
 
-    def test_to_dict_pipeline_node_statuses(self):
-        """Test that to_dict correctly maps step statuses to pipeline nodes."""
-        state = AgentState()
-        state.steps.append(StepRecord(node="retrieve", status="complete"))
-        state.steps.append(StepRecord(node="draft", status="running"))
-
+    def test_to_dict_with_channel_id(self):
+        """Test that to_dict includes channel_id."""
+        state = AgentState(channel_id="test-channel-123")
         result = state.to_dict()
-
-        # Find the pipeline nodes in result
-        retrieve_node = next(
-            (n for n in result["pipeline_nodes"] if n["id"] == "retrieve"), None
-        )
-        draft_node = next(
-            (n for n in result["pipeline_nodes"] if n["id"] == "draft"), None
-        )
-        rerank_node = next(
-            (n for n in result["pipeline_nodes"] if n["id"] == "rerank"), None
-        )
-
-        assert retrieve_node is not None
-        assert retrieve_node["status"] == "complete"
-        assert draft_node is not None
-        assert draft_node["status"] == "running"
-        assert rerank_node is not None
-        assert rerank_node["status"] == "pending"
+        assert result["channel_id"] == "test-channel-123"
 
 
 class TestAgentStateStore:
@@ -163,26 +141,40 @@ class TestAgentStateStore:
         """Test AgentStateStore initialization."""
         store = AgentStateStore()
 
-        assert store.state.status == AgentStatus.IDLE
-        assert store.get_state()["status"] == "idle"
+        # New store should return idle state for any channel
+        state = store.get_state("test-channel")
+        assert state["status"] == "idle"
 
     def test_reset(self):
         """Test state reset functionality."""
         store = AgentStateStore()
-        store._state.status = AgentStatus.RUNNING
-        store._state.steps.append(StepRecord(node="test", status="complete"))
+        channel_id = "test-channel"
 
-        store.reset()
+        # Add some state
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": datetime.now().isoformat(),
+        })
 
-        assert store.state.status == AgentStatus.IDLE
-        assert store.state.steps == []
+        # Reset the channel
+        store.reset(channel_id)
+
+        state = store.get_state(channel_id)
+        assert state["status"] == "idle"
 
     def test_get_state_returns_dict(self):
         """Test get_state returns a dictionary."""
         store = AgentStateStore()
-        store._state.status = AgentStatus.RUNNING
+        channel_id = "test-channel"
 
-        result = store.get_state()
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+        result = store.get_state(channel_id)
 
         assert isinstance(result, dict)
         assert result["status"] == "running"
@@ -198,7 +190,11 @@ class TestAgentStateStore:
         store.subscribe(callback)
 
         # Trigger an update that notifies subscribers
-        store.update({"event": "agent_start", "timestamp": datetime.now().isoformat()})
+        store.update({
+            "event": "agent_start",
+            "channel_id": "test-channel",
+            "timestamp": datetime.now().isoformat(),
+        })
 
         assert len(received_events) == 1
         assert received_events[0]["status"] == "running"
@@ -214,7 +210,11 @@ class TestAgentStateStore:
         store.subscribe(callback)
         store.unsubscribe(callback)
 
-        store.update({"event": "agent_start", "timestamp": datetime.now().isoformat()})
+        store.update({
+            "event": "agent_start",
+            "channel_id": "test-channel",
+            "timestamp": datetime.now().isoformat(),
+        })
 
         assert len(received_events) == 0
 
@@ -243,7 +243,11 @@ class TestAgentStateStore:
         store.subscribe(good_callback)
 
         # Should not raise, and good callback should still receive
-        store.update({"event": "agent_start", "timestamp": datetime.now().isoformat()})
+        store.update({
+            "event": "agent_start",
+            "channel_id": "test-channel",
+            "timestamp": datetime.now().isoformat(),
+        })
 
         assert len(good_events) == 1
 
@@ -254,73 +258,98 @@ class TestAgentStateStoreUpdate:
     def test_update_agent_start(self):
         """Test handling agent_start event."""
         store = AgentStateStore()
+        channel_id = "test-channel"
 
         store.update({
             "event": "agent_start",
+            "channel_id": channel_id,
             "timestamp": "2024-01-01T00:00:00",
             "data": {"query": "Test query"},
         })
 
-        assert store.state.status == AgentStatus.RUNNING
-        assert store.state.metrics.start_time == "2024-01-01T00:00:00"
-        assert store.state.current_query == "Test query"
+        state = store.get_state(channel_id)
+        assert state["status"] == "running"
+        assert state["metrics"]["start_time"] == "2024-01-01T00:00:00"
+        assert state["current_query"] == "Test query"
 
     def test_update_agent_complete(self):
         """Test handling agent_complete event."""
         store = AgentStateStore()
-        store._state.status = AgentStatus.RUNNING
-        store._state.metrics.start_time = "2024-01-01T00:00:00"
+        channel_id = "test-channel"
+
+        # First start the agent
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": "2024-01-01T00:00:00",
+        })
 
         store.update({
             "event": "agent_complete",
+            "channel_id": channel_id,
             "timestamp": "2024-01-01T00:00:10",
         })
 
-        assert store.state.status == AgentStatus.COMPLETE
-        assert store.state.metrics.end_time == "2024-01-01T00:00:10"
-        assert store.state.current_node is None
-        assert store.state.metrics.total_duration_ms is not None
+        state = store.get_state(channel_id)
+        assert state["status"] == "complete"
+        assert state["metrics"]["end_time"] == "2024-01-01T00:00:10"
+        assert state["current_node"] is None
+        assert state["metrics"]["total_duration_ms"] is not None
 
     def test_update_agent_error(self):
         """Test handling agent_error event."""
         store = AgentStateStore()
-        store._state.status = AgentStatus.RUNNING
+        channel_id = "test-channel"
+
+        # First start the agent
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": "2024-01-01T00:00:00",
+        })
 
         store.update({
             "event": "agent_error",
+            "channel_id": channel_id,
             "timestamp": "2024-01-01T00:00:05",
             "error": "Something went wrong",
         })
 
-        assert store.state.status == AgentStatus.ERROR
-        assert store.state.last_error == "Something went wrong"
-        assert store.state.current_node is None
+        state = store.get_state(channel_id)
+        assert state["status"] == "error"
+        assert state["last_error"] == "Something went wrong"
+        assert state["current_node"] is None
 
     def test_update_model_start(self):
         """Test handling model_start event."""
         store = AgentStateStore()
+        channel_id = "test-channel"
 
         store.update({
             "event": "model_start",
+            "channel_id": channel_id,
             "node": "Draft",
             "timestamp": "2024-01-01T00:00:01",
             "data": {"type": "model"},
         })
 
-        assert store.state.current_node == "Draft"
-        assert store.state.metrics.model_calls == 1
-        assert store.state.metrics.total_steps == 1
-        assert len(store.state.steps) == 1
-        assert store.state.steps[0].node == "Draft"
-        assert store.state.steps[0].status == NodeStatus.RUNNING.value
+        state = store.get_state(channel_id)
+        assert state["current_node"] == "Draft"
+        assert state["metrics"]["model_calls"] == 1
+        assert state["metrics"]["total_steps"] == 1
+        assert len(state["steps"]) == 1
+        assert state["steps"][0]["node"] == "Draft"
+        assert state["steps"][0]["status"] == "running"
 
     def test_update_model_complete(self):
         """Test handling model_complete event."""
         store = AgentStateStore()
+        channel_id = "test-channel"
 
         # First, start a model
         store.update({
             "event": "model_start",
+            "channel_id": channel_id,
             "node": "Draft",
             "timestamp": "2024-01-01T00:00:01",
         })
@@ -328,68 +357,81 @@ class TestAgentStateStoreUpdate:
         # Then complete it
         store.update({
             "event": "model_complete",
+            "channel_id": channel_id,
             "node": "Draft",
             "data": {"duration_ms": 500},
         })
 
-        assert len(store.state.steps) == 1
-        assert store.state.steps[0].status == NodeStatus.COMPLETE.value
-        assert store.state.steps[0].duration_ms == 500
+        state = store.get_state(channel_id)
+        assert len(state["steps"]) == 1
+        assert state["steps"][0]["status"] == "complete"
+        assert state["steps"][0]["duration_ms"] == 500
 
     def test_update_tool_start(self):
         """Test handling tool_start event."""
         store = AgentStateStore()
+        channel_id = "test-channel"
 
         store.update({
             "event": "tool_start",
+            "channel_id": channel_id,
             "node": "search_documents",
             "timestamp": "2024-01-01T00:00:01",
             "data": {"type": "tool", "input_preview": "test query"},
         })
 
-        assert store.state.current_node == "search_documents"
-        assert store.state.metrics.tool_calls == 1
-        assert store.state.metrics.total_steps == 1
-        assert len(store.state.steps) == 1
-        assert store.state.steps[0].node == "search_documents"
+        state = store.get_state(channel_id)
+        assert state["current_node"] == "search_documents"
+        assert state["metrics"]["tool_calls"] == 1
+        assert state["metrics"]["total_steps"] == 1
+        assert len(state["steps"]) == 1
+        assert state["steps"][0]["node"] == "search_documents"
 
     def test_update_tool_complete(self):
         """Test handling tool_complete event."""
         store = AgentStateStore()
+        channel_id = "test-channel"
 
         store.update({
             "event": "tool_start",
+            "channel_id": channel_id,
             "node": "search_documents",
             "timestamp": "2024-01-01T00:00:01",
         })
         store.update({
             "event": "tool_complete",
+            "channel_id": channel_id,
             "node": "search_documents",
             "data": {"duration_ms": 200, "result_preview": "Found 5 results"},
         })
 
-        assert store.state.steps[0].status == NodeStatus.COMPLETE.value
-        assert store.state.steps[0].duration_ms == 200
-        assert store.state.steps[0].data.get("result_preview") == "Found 5 results"
+        state = store.get_state(channel_id)
+        assert state["steps"][0]["status"] == "complete"
+        assert state["steps"][0]["duration_ms"] == 200
+        assert state["steps"][0]["data"].get("result_preview") == "Found 5 results"
 
     def test_update_tool_error(self):
         """Test handling tool_error event."""
         store = AgentStateStore()
+        channel_id = "test-channel"
 
         store.update({
             "event": "tool_start",
+            "channel_id": channel_id,
             "node": "search_documents",
             "timestamp": "2024-01-01T00:00:01",
         })
         store.update({
             "event": "tool_error",
+            "channel_id": channel_id,
             "node": "search_documents",
             "error": "API timeout",
             "data": {"duration_ms": 5000},
         })
 
-        assert store.state.steps[0].status == NodeStatus.ERROR.value
-        assert store.state.steps[0].data.get("error") == "API timeout"
+        state = store.get_state(channel_id)
+        assert state["steps"][0]["status"] == "error"
+        assert state["steps"][0]["data"].get("error") == "API timeout"
 
 
 class TestAgentStateStoreThreadSafety:
@@ -400,6 +442,7 @@ class TestAgentStateStoreThreadSafety:
         import threading
 
         store = AgentStateStore()
+        channel_id = "test-channel"
         errors = []
 
         def update_worker(worker_id):
@@ -407,11 +450,13 @@ class TestAgentStateStoreThreadSafety:
                 for i in range(10):
                     store.update({
                         "event": "tool_start",
+                        "channel_id": channel_id,
                         "node": f"tool_{worker_id}_{i}",
                         "timestamp": datetime.now().isoformat(),
                     })
                     store.update({
                         "event": "tool_complete",
+                        "channel_id": channel_id,
                         "node": f"tool_{worker_id}_{i}",
                         "data": {"duration_ms": 10},
                     })
@@ -428,7 +473,8 @@ class TestAgentStateStoreThreadSafety:
         assert len(errors) == 0
 
         # Should have 30 tool calls (3 workers * 10 calls each)
-        assert store.state.metrics.tool_calls == 30
+        state = store.get_state(channel_id)
+        assert state["metrics"]["tool_calls"] == 30
 
 
 class TestGlobalStateStore:
@@ -444,33 +490,17 @@ class TestGlobalStateStore:
     def test_reset_global_state_store(self):
         """Test that reset_global_state_store resets the state."""
         store = get_global_state_store()
-        store._state.status = AgentStatus.RUNNING
-        store._state.steps.append(StepRecord(node="test", status="complete"))
+        channel_id = "test-channel"
 
-        reset_global_state_store()
+        # Add some state
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": datetime.now().isoformat(),
+        })
 
-        assert store.state.status == AgentStatus.IDLE
-        assert store.state.steps == []
+        reset_global_state_store(channel_id)
 
-
-class TestPipelineNodes:
-    """Tests for PIPELINE_NODES constant."""
-
-    def test_pipeline_nodes_defined(self):
-        """Test that PIPELINE_NODES is defined correctly."""
-        assert len(PIPELINE_NODES) > 0
-
-        # Check required nodes exist
-        node_ids = [n["id"] for n in PIPELINE_NODES]
-        expected_ids = ["retrieve", "rerank", "cite_map", "draft", "reflect", "revise", "verify"]
-
-        for expected in expected_ids:
-            assert expected in node_ids, f"Expected node '{expected}' not found"
-
-    def test_pipeline_nodes_have_required_fields(self):
-        """Test that each pipeline node has required fields."""
-        for node in PIPELINE_NODES:
-            assert "id" in node
-            assert "name" in node
-            assert "type" in node
-            assert node["type"] in ["tool", "model"]
+        state = store.get_state(channel_id)
+        assert state["status"] == "idle"
+        assert state["steps"] == []

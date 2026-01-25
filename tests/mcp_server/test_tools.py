@@ -37,10 +37,20 @@ class TestGetAgentStatus:
     async def test_with_custom_store(self):
         """Test get_agent_status with custom state store."""
         store = AgentStateStore()
-        store._state.status = AgentStatus.RUNNING
-        store._state.current_node = "Draft"
+        channel_id = "test-channel"
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": "2024-01-01T00:00:00",
+        })
+        store.update({
+            "event": "model_start",
+            "channel_id": channel_id,
+            "node": "Draft",
+            "timestamp": "2024-01-01T00:00:01",
+        })
 
-        result = await get_agent_status(state_store=store)
+        result = await get_agent_status(state_store=store, channel_id=channel_id)
 
         assert result["status"] == "running"
         assert result["current_node"] == "Draft"
@@ -49,43 +59,78 @@ class TestGetAgentStatus:
     async def test_with_global_store(self):
         """Test get_agent_status with global state store."""
         reset_global_state_store()
-        store = get_global_state_store()
-        store._state.status = AgentStatus.COMPLETE
 
         result = await get_agent_status()
 
-        assert result["status"] == "complete"
+        # Without any events, should return idle state
+        assert result["status"] == "idle"
 
     @pytest.mark.asyncio
     async def test_returns_metrics(self):
         """Test that get_agent_status returns metrics."""
         store = AgentStateStore()
-        store._state.metrics.total_steps = 5
-        store._state.metrics.model_calls = 2
-        store._state.metrics.tool_calls = 3
+        channel_id = "test-channel"
 
-        result = await get_agent_status(state_store=store)
+        # Add some events to populate metrics
+        for i in range(5):
+            store.update({
+                "event": "tool_start",
+                "channel_id": channel_id,
+                "node": f"tool_{i}",
+                "timestamp": f"2024-01-01T00:00:0{i}",
+            })
+            store.update({
+                "event": "tool_complete",
+                "channel_id": channel_id,
+                "node": f"tool_{i}",
+                "data": {"duration_ms": 100},
+            })
+        # Add model calls
+        for i in range(2):
+            store.update({
+                "event": "model_start",
+                "channel_id": channel_id,
+                "node": f"model_{i}",
+                "timestamp": f"2024-01-01T00:01:0{i}",
+            })
+            store.update({
+                "event": "model_complete",
+                "channel_id": channel_id,
+                "node": f"model_{i}",
+                "data": {"duration_ms": 200},
+            })
 
-        assert result["metrics"]["total_steps"] == 5
+        result = await get_agent_status(state_store=store, channel_id=channel_id)
+
+        assert result["metrics"]["total_steps"] == 7  # 5 tool calls + 2 model calls
         assert result["metrics"]["model_calls"] == 2
-        assert result["metrics"]["tool_calls"] == 3
+        assert result["metrics"]["tool_calls"] == 5
 
     @pytest.mark.asyncio
-    async def test_returns_pipeline_nodes(self):
-        """Test that get_agent_status returns pipeline nodes."""
+    async def test_returns_steps(self):
+        """Test that get_agent_status returns steps."""
         store = AgentStateStore()
+        channel_id = "test-channel"
 
-        result = await get_agent_status(state_store=store)
+        store.update({
+            "event": "tool_start",
+            "channel_id": channel_id,
+            "node": "search_documents",
+            "timestamp": "2024-01-01T00:00:00",
+        })
+        store.update({
+            "event": "tool_complete",
+            "channel_id": channel_id,
+            "node": "search_documents",
+            "data": {"duration_ms": 100},
+        })
 
-        assert "pipeline_nodes" in result
-        assert len(result["pipeline_nodes"]) > 0
+        result = await get_agent_status(state_store=store, channel_id=channel_id)
 
-        # Check that nodes have expected structure
-        node = result["pipeline_nodes"][0]
-        assert "id" in node
-        assert "name" in node
-        assert "type" in node
-        assert "status" in node
+        assert "steps" in result
+        assert len(result["steps"]) == 1
+        assert result["steps"][0]["node"] == "search_documents"
+        assert result["steps"][0]["status"] == "complete"
 
 
 class TestResetAgentState:
@@ -95,11 +140,23 @@ class TestResetAgentState:
     async def test_with_custom_store(self):
         """Test reset_agent_state with custom state store."""
         store = AgentStateStore()
-        store._state.status = AgentStatus.ERROR
-        store._state.current_node = "Reflect"
-        store._state.metrics.total_steps = 10
+        channel_id = "test-channel"
 
-        result = await reset_agent_state(state_store=store)
+        # Add some events
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": "2024-01-01T00:00:00",
+        })
+        for i in range(10):
+            store.update({
+                "event": "tool_start",
+                "channel_id": channel_id,
+                "node": f"tool_{i}",
+                "timestamp": f"2024-01-01T00:00:0{i}",
+            })
+
+        result = await reset_agent_state(state_store=store, channel_id=channel_id)
 
         assert "message" in result
         assert "state" in result
@@ -110,8 +167,14 @@ class TestResetAgentState:
     @pytest.mark.asyncio
     async def test_with_global_store(self):
         """Test reset_agent_state with global state store."""
+        reset_global_state_store()
         store = get_global_state_store()
-        store._state.status = AgentStatus.RUNNING
+        channel_id = "_default"
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": "2024-01-01T00:00:00",
+        })
 
         result = await reset_agent_state()
 

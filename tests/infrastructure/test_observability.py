@@ -222,10 +222,18 @@ class TestStateStoreAdapter:
         assert len(events) == 1
 
     def test_clear_session_resets_state_store(self):
-        """Test that clear_session calls reset on state store."""
+        """Test that clear_session calls reset on state store when channel is associated."""
         mock_state_store = Mock()
         adapter = StateStoreAdapter(mock_state_store)
 
+        # First emit an event to associate a channel with the session
+        event = AgentStartedEvent(
+            session_id="test-session",
+            channel_id="test-channel",
+            query="test query",
+        )
+        adapter.emit(event)
+
         adapter.clear_session("test-session")
 
-        mock_state_store.reset.assert_called_once()
+        mock_state_store.reset.assert_called_once_with("test-channel")

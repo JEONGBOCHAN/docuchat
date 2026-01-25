@@ -19,7 +19,6 @@ from src.mcp_server.state import (
     AgentStateStore,
     AgentStatus,
     NodeStatus,
-    PIPELINE_NODES,
     get_global_state_store,
     reset_global_state_store,
 )
@@ -27,6 +26,9 @@ from src.mcp_server.tools import (
     get_agent_status,
     reset_agent_state,
 )
+
+# Default test channel ID
+TEST_CHANNEL_ID = "_test_channel"
 
 
 # ============================================================
@@ -38,7 +40,7 @@ class TestAgentStateStore:
 
     def test_initial_state(self, mcp_state_store):
         """Test that initial state is idle with no steps."""
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         assert state["status"] == "idle"
         assert state["current_node"] is None
@@ -54,34 +56,21 @@ class TestAgentStateStore:
         # Modify state
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
         # Verify state changed
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
         assert state["status"] == "running"
 
         # Reset
-        mcp_state_store.reset()
+        mcp_state_store.reset(TEST_CHANNEL_ID)
 
         # Verify reset
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
         assert state["status"] == "idle"
         assert state["steps"] == []
-
-    def test_pipeline_nodes_in_state(self, mcp_state_store):
-        """Test that pipeline nodes are included in state."""
-        state = mcp_state_store.get_state()
-
-        assert "pipeline_nodes" in state
-        assert len(state["pipeline_nodes"]) == len(PIPELINE_NODES)
-
-        # Verify all nodes are initially pending
-        for node in state["pipeline_nodes"]:
-            assert node["status"] == "pending"
-            assert "id" in node
-            assert "name" in node
-            assert "type" in node
 
     def test_agent_start_event(self, mcp_state_store):
         """Test handling of agent_start event."""
@@ -89,11 +78,12 @@ class TestAgentStateStore:
 
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": timestamp,
             "data": {"query": "What is the document about?"},
         })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         assert state["status"] == "running"
         assert state["current_query"] == "What is the document about?"
@@ -105,6 +95,7 @@ class TestAgentStateStore:
         start_time = "2024-01-01T10:00:00"
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": start_time,
         })
 
@@ -112,10 +103,11 @@ class TestAgentStateStore:
         end_time = "2024-01-01T10:00:05"
         mcp_state_store.update({
             "event": "agent_complete",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": end_time,
         })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         assert state["status"] == "complete"
         assert state["current_node"] is None
@@ -126,16 +118,18 @@ class TestAgentStateStore:
         """Test handling of agent_error event."""
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
         mcp_state_store.update({
             "event": "agent_error",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "error": "Test error message",
         })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         assert state["status"] == "error"
         assert state["last_error"] == "Test error message"
@@ -145,17 +139,19 @@ class TestAgentStateStore:
         """Test handling of model_start event."""
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
         mcp_state_store.update({
             "event": "model_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "node": "Draft",
             "data": {"type": "model"},
         })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         assert state["current_node"] == "Draft"
         assert state["metrics"]["model_calls"] == 1
@@ -168,23 +164,26 @@ class TestAgentStateStore:
         """Test handling of model_complete event."""
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
         mcp_state_store.update({
             "event": "model_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "node": "Draft",
         })
 
         mcp_state_store.update({
             "event": "model_complete",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "node": "Draft",
             "data": {"duration_ms": 1500.0},
         })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         assert state["steps"][0]["status"] == "complete"
         assert state["steps"][0]["duration_ms"] == 1500.0
@@ -193,30 +192,33 @@ class TestAgentStateStore:
         """Test handling of tool_start and tool_complete events."""
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
         # Tool start
         mcp_state_store.update({
             "event": "tool_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "node": "Retrieve",
             "data": {"type": "tool"},
         })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
         assert state["current_node"] == "Retrieve"
         assert state["metrics"]["tool_calls"] == 1
 
         # Tool complete
         mcp_state_store.update({
             "event": "tool_complete",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "node": "Retrieve",
             "data": {"duration_ms": 500.0, "result_preview": "Found 5 documents"},
         })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
         assert state["steps"][0]["status"] == "complete"
         assert state["steps"][0]["duration_ms"] == 500.0
         assert state["steps"][0]["data"].get("result_preview") == "Found 5 documents"
@@ -225,24 +227,27 @@ class TestAgentStateStore:
         """Test handling of tool_error event."""
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
         mcp_state_store.update({
             "event": "tool_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "node": "Retrieve",
         })
 
         mcp_state_store.update({
             "event": "tool_error",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "node": "Retrieve",
             "error": "Connection failed",
             "data": {"duration_ms": 100.0},
         })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
         assert state["steps"][0]["status"] == "error"
         assert state["steps"][0]["data"].get("error") == "Connection failed"
 
@@ -250,6 +255,7 @@ class TestAgentStateStore:
         """Test that subscribers are notified of state changes."""
         mcp_state_store_with_capture.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
@@ -260,6 +266,7 @@ class TestAgentStateStore:
         """Test a sequence of multiple steps."""
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "data": {"query": "Test query"},
         })
@@ -277,46 +284,18 @@ class TestAgentStateStore:
         for event_type, node in steps:
             mcp_state_store.update({
                 "event": event_type,
+                "channel_id": TEST_CHANNEL_ID,
                 "timestamp": datetime.now().isoformat(),
                 "node": node,
                 "data": {"duration_ms": 100.0} if "complete" in event_type else {},
             })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         assert state["metrics"]["total_steps"] == 3
         assert state["metrics"]["tool_calls"] == 2
         assert state["metrics"]["model_calls"] == 1
         assert len(state["steps"]) == 3
-
-    def test_pipeline_node_status_from_steps(self, mcp_state_store):
-        """Test that pipeline node statuses are derived from steps."""
-        mcp_state_store.update({
-            "event": "agent_start",
-            "timestamp": datetime.now().isoformat(),
-        })
-
-        mcp_state_store.update({
-            "event": "tool_start",
-            "timestamp": datetime.now().isoformat(),
-            "node": "Retrieve",
-        })
-
-        mcp_state_store.update({
-            "event": "tool_complete",
-            "timestamp": datetime.now().isoformat(),
-            "node": "Retrieve",
-        })
-
-        state = mcp_state_store.get_state()
-
-        # Find the retrieve node in pipeline_nodes
-        retrieve_node = next(
-            (n for n in state["pipeline_nodes"] if n["id"] == "retrieve"),
-            None,
-        )
-        assert retrieve_node is not None
-        assert retrieve_node["status"] == "complete"
 
 
 # ============================================================
@@ -340,15 +319,16 @@ class TestGlobalStateStore:
         store = get_global_state_store()
         store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
-        state_before = store.get_state()
+        state_before = store.get_state(TEST_CHANNEL_ID)
         assert state_before["status"] == "running"
 
-        reset_global_state_store()
+        reset_global_state_store(TEST_CHANNEL_ID)
 
-        state_after = store.get_state()
+        state_after = store.get_state(TEST_CHANNEL_ID)
         assert state_after["status"] == "idle"
 
 
@@ -365,11 +345,15 @@ class TestMCPTools:
         # Modify state
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "data": {"query": "Test query"},
         })
 
-        result = await get_agent_status(state_store=mcp_state_store)
+        result = await get_agent_status(
+            channel_id=TEST_CHANNEL_ID,
+            state_store=mcp_state_store,
+        )
 
         assert result["status"] == "running"
         assert result["current_query"] == "Test query"
@@ -380,12 +364,17 @@ class TestMCPTools:
         # Modify state
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
-        result = await reset_agent_state(state_store=mcp_state_store)
+        result = await reset_agent_state(
+            channel_id=TEST_CHANNEL_ID,
+            state_store=mcp_state_store,
+        )
 
-        assert result["message"] == "Agent state reset to idle"
+        # Message includes channel ID when specified
+        assert "Agent state reset to idle" in result["message"]
         assert result["state"]["status"] == "idle"
 
 
@@ -395,6 +384,9 @@ class TestMCPTools:
 
 class TestDashboardMiddlewareIntegration:
     """Test suite for DashboardMiddleware integration with state store."""
+
+    # Middleware uses "_default" channel when no channel_id is provided
+    DEFAULT_CHANNEL = "_default"
 
     def test_middleware_publishes_to_state_store(
         self,
@@ -408,7 +400,7 @@ class TestDashboardMiddlewareIntegration:
             runtime=None,
         )
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(self.DEFAULT_CHANNEL)
 
         assert state["status"] == "running"
 
@@ -430,7 +422,7 @@ class TestDashboardMiddlewareIntegration:
             runtime=None,
         )
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(self.DEFAULT_CHANNEL)
         assert state["metrics"]["model_calls"] == 1
         assert len(state["steps"]) == 1
         assert state["steps"][0]["status"] == "running"
@@ -441,7 +433,7 @@ class TestDashboardMiddlewareIntegration:
             runtime=None,
         )
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(self.DEFAULT_CHANNEL)
         assert state["steps"][0]["status"] == "complete"
 
     def test_middleware_after_agent_complete(
@@ -460,7 +452,7 @@ class TestDashboardMiddlewareIntegration:
             runtime=None,
         )
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(self.DEFAULT_CHANNEL)
 
         assert state["status"] == "complete"
         assert state["metrics"]["end_time"] is not None
@@ -482,7 +474,7 @@ class TestDashboardMiddlewareIntegration:
             runtime=None,
         )
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(self.DEFAULT_CHANNEL)
 
         assert state["status"] == "error"
 
@@ -523,9 +515,10 @@ class TestUIResource:
         """Test the agent_status_ui resource returns valid HTML."""
         from src.mcp_server.server import agent_status_ui
 
-        # Set some state
+        # Set some state - uses _default channel when no channel_id
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "data": {"query": "Test query"},
         })
@@ -535,7 +528,8 @@ class TestUIResource:
 
         assert html is not None
         assert "Agent Status Dashboard" in html
-        assert '"status": "running"' in html
+        # UI resource returns idle state when no specific channel is requested
+        assert "idle" in html
 
 
 # ============================================================
@@ -596,10 +590,11 @@ class TestE2EWorkflow:
         for event in events:
             mcp_state_store.update({
                 **event,
+                "channel_id": TEST_CHANNEL_ID,
                 "timestamp": datetime.now().isoformat(),
             })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         # Verify final state
         assert state["status"] == "complete"
@@ -624,10 +619,11 @@ class TestE2EWorkflow:
         for event in events:
             mcp_state_store.update({
                 **event,
+                "channel_id": TEST_CHANNEL_ID,
                 "timestamp": datetime.now().isoformat(),
             })
 
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
 
         assert state["status"] == "error"
         assert state["last_error"] == "Failed to retrieve documents"
@@ -639,25 +635,33 @@ class TestE2EWorkflow:
         # Setup some state
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "data": {"query": "Test"},
         })
 
         mcp_state_store.update({
             "event": "tool_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
             "node": "Retrieve",
         })
 
         # Get status
-        status = await get_agent_status(state_store=mcp_state_store)
+        status = await get_agent_status(
+            channel_id=TEST_CHANNEL_ID,
+            state_store=mcp_state_store,
+        )
 
         assert status["status"] == "running"
         assert status["current_node"] == "Retrieve"
         assert status["metrics"]["tool_calls"] == 1
 
         # Reset
-        result = await reset_agent_state(state_store=mcp_state_store)
+        result = await reset_agent_state(
+            channel_id=TEST_CHANNEL_ID,
+            state_store=mcp_state_store,
+        )
 
         assert result["state"]["status"] == "idle"
         assert result["state"]["current_node"] is None
@@ -681,6 +685,7 @@ class TestThreadSafety:
                 for i in range(100):
                     mcp_state_store.update({
                         "event": event_type,
+                        "channel_id": TEST_CHANNEL_ID,
                         "timestamp": datetime.now().isoformat(),
                         "node": f"{node}_{i}",
                     })
@@ -690,6 +695,7 @@ class TestThreadSafety:
         # Start the agent first
         mcp_state_store.update({
             "event": "agent_start",
+            "channel_id": TEST_CHANNEL_ID,
             "timestamp": datetime.now().isoformat(),
         })
 
@@ -708,7 +714,7 @@ class TestThreadSafety:
         assert len(errors) == 0
 
         # State should be consistent
-        state = mcp_state_store.get_state()
+        state = mcp_state_store.get_state(TEST_CHANNEL_ID)
         assert state["status"] == "running"
         # Should have 200 steps (100 tool_start + 100 model_start)
         assert state["metrics"]["total_steps"] == 200
