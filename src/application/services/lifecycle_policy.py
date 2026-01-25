@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass
 
 from src.core.config import get_settings
-from src.models.db_models import ChannelMetadata
+from src.application.ports.persistence import ChannelMetadataDTO
 
 
 class ChannelState(str, Enum):
@@ -104,7 +104,7 @@ class LifecyclePolicy:
         """
         self.config = config or LifecycleConfig.from_settings()
 
-    def get_status(self, channel: ChannelMetadata) -> LifecycleStatus:
+    def get_status(self, channel: ChannelMetadataDTO) -> LifecycleStatus:
         """Get the lifecycle status for a channel.
 
         Args:
@@ -201,8 +201,8 @@ class LifecyclePolicy:
 
     def get_inactive_channels(
         self,
-        channels: list[ChannelMetadata],
-    ) -> list[tuple[ChannelMetadata, LifecycleStatus]]:
+        channels: list[ChannelMetadataDTO],
+    ) -> list[tuple[ChannelMetadataDTO, LifecycleStatus]]:
         """Get all inactive channels with their status.
 
         Args:
@@ -220,9 +220,9 @@ class LifecyclePolicy:
 
     def get_channels_by_state(
         self,
-        channels: list[ChannelMetadata],
+        channels: list[ChannelMetadataDTO],
         state: ChannelState,
-    ) -> list[tuple[ChannelMetadata, LifecycleStatus]]:
+    ) -> list[tuple[ChannelMetadataDTO, LifecycleStatus]]:
         """Get all channels in a specific state.
 
         Args:
