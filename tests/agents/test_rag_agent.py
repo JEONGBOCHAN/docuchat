@@ -4,6 +4,7 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
+from src.core.config import GeminiModels
 from src.agents.rag_agent import (
     create_rag_agent,
     run_rag_agent,
@@ -25,7 +26,7 @@ class TestRAGAgentConfig:
 
         assert config.channel_id == "test-channel"
         assert config.max_iterations == 3
-        assert config.model == "gemini-3-flash-preview"
+        assert config.model == GeminiModels.DEFAULT
         assert config.temperature == 0.0
         assert config.system_prompt is None
         assert config.middleware == []
@@ -134,7 +135,7 @@ class TestCreateRAGAgent:
         # Verify ChatGoogleGenerativeAI was created with correct params
         mock_chat_model.assert_called_once()
         call_kwargs = mock_chat_model.call_args[1]
-        assert call_kwargs["model"] == "gemini-3-flash-preview"
+        assert call_kwargs["model"] == GeminiModels.DEFAULT
         assert call_kwargs["google_api_key"] == "test-key"
         assert call_kwargs["temperature"] == 0.0
 

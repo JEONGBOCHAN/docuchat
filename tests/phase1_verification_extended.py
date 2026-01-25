@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from src.core.config import GeminiModels
+
 # Windows 콘솔 UTF-8 출력 설정
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -61,7 +63,7 @@ def upload_file(client, store, file_path: str):
 def search(client, store, question: str):
     print(f"\n[질문] {question}")
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model=GeminiModels.DEFAULT,
         contents=question,
         config=types.GenerateContentConfig(
             tools=[

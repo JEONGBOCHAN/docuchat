@@ -10,7 +10,7 @@ from google import genai
 from google.genai import types
 
 from src.application.ports.document_search import DocumentSearchPort, SearchResult
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiDocumentSearchAdapter(DocumentSearchPort):
@@ -42,7 +42,7 @@ class GeminiDocumentSearchAdapter(DocumentSearchPort):
         query: str,
         channel_id: str,
         top_k: int = 5,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> list[SearchResult]:
         """Search for relevant documents using Gemini.
 
@@ -149,7 +149,7 @@ class GeminiDocumentSearchAdapter(DocumentSearchPort):
         query: str,
         channel_id: str,
         conversation_history: list[dict] | None = None,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> dict:
         """Search and generate an answer using Gemini.
 

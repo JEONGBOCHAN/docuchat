@@ -3,6 +3,7 @@
 
 import re
 
+from src.core.config import GeminiModels
 from src.application.ports.document_search import DocumentSearchPort
 from src.application.ports.persistence import (
     DocumentPreviewCacheRepositoryPort,
@@ -217,7 +218,7 @@ Return the extracted text content now:"""
         result = self._document_search.search_with_answer(
             query=prompt,
             channel_id=channel_id,
-            model="gemini-3-flash-preview",
+            model=GeminiModels.DEFAULT,
         )
 
         if result.get("error"):

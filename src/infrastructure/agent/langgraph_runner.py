@@ -34,7 +34,7 @@ from src.agents.tools.search_tools import (
     create_search_documents_tool,
     create_finish_tool,
 )
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 from src.application.ports.document_search import DocumentSearchPort
 
 
@@ -83,7 +83,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self,
         event_sink: AgentEventSinkPort | None = None,
         document_search: DocumentSearchPort | None = None,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ):
         """Initialize the LangGraph runner.
 

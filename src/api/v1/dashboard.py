@@ -12,6 +12,7 @@ from pathlib import Path
 import json
 
 from src.mcp_server.state import get_global_state_store
+from src.core.config import GeminiModels
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -72,10 +73,10 @@ async def simulate_event(event_type: str):
     if event_type == "start":
         state_store.on_agent_start(query="테스트 질문입니다", channel_id="test-channel")
     elif event_type == "model_start":
-        state_store.on_model_start(model_name="gemini-3-flash-preview")
+        state_store.on_model_start(model_name=GeminiModels.DEFAULT)
     elif event_type == "model_complete":
         state_store.on_model_complete(
-            model_name="gemini-3-flash-preview",
+            model_name=GeminiModels.DEFAULT,
             input_tokens=100,
             output_tokens=50
         )

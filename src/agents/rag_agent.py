@@ -17,7 +17,7 @@ from src.agents.tools.search_tools import (
     create_search_documents_tool,
     create_finish_tool,
 )
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 # Clean Architecture imports
 from src.application.ports.observability import AgentEventSinkPort
@@ -74,7 +74,7 @@ class RAGAgentConfig:
     """
     channel_id: str
     max_iterations: int = 3
-    model: str = "gemini-3-flash-preview"
+    model: str = GeminiModels.DEFAULT
     temperature: float = 0.0
     system_prompt: str | None = None
     middleware: list[Any] = field(default_factory=list)

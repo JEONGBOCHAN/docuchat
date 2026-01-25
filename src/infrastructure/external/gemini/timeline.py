@@ -11,7 +11,7 @@ from google import genai
 from google.genai import types
 
 from src.application.ports.timeline import TimelinePort, TimelineEventDTO
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiTimelineAdapter(TimelinePort):
@@ -42,7 +42,7 @@ class GeminiTimelineAdapter(TimelinePort):
         self,
         store_name: str,
         max_events: int = 20,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> list[TimelineEventDTO]:
         """Generate a timeline of events using Gemini.
 

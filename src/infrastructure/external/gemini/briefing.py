@@ -11,7 +11,7 @@ from google import genai
 from google.genai import types
 
 from src.application.ports.timeline import BriefingPort, BriefingDTO, BriefingSectionDTO
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiBriefingAdapter(BriefingPort):
@@ -43,7 +43,7 @@ class GeminiBriefingAdapter(BriefingPort):
         store_name: str,
         style: str = "executive",
         max_sections: int = 5,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> BriefingDTO:
         """Generate a briefing document using Gemini.
 

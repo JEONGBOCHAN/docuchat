@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from src.core.config import GeminiModels
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
@@ -128,7 +130,7 @@ def test_streaming():
 
         # 스트리밍으로 긴 응답 생성
         response_stream = client.models.generate_content_stream(
-            model="gemini-3-flash-preview",
+            model=GeminiModels.DEFAULT,
             contents="Explain machine learning in 5 paragraphs."
         )
 
@@ -175,7 +177,7 @@ def test_flashcards_quiz():
         # Flashcards 생성
         print("\n[Flashcards 생성]")
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model=GeminiModels.DEFAULT,
             contents="""Based on the uploaded documents, create 3 flashcards.
             Format each flashcard as:
             Q: [question]
@@ -196,7 +198,7 @@ def test_flashcards_quiz():
         # Quiz 생성
         print("\n[Quiz 생성]")
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model=GeminiModels.DEFAULT,
             contents="""Based on the uploaded documents, create a 3-question multiple choice quiz.
             Format:
             1. [Question]

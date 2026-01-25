@@ -17,6 +17,8 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from src.core.config import GeminiModels
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
@@ -142,7 +144,7 @@ def test_pdf_rag_chunk():
         # 검색
         print("\n[질문] What is discussed on Page 2?")
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model=GeminiModels.DEFAULT,
             contents="What is on Page 2? Please mention the page number in your answer.",
             config=types.GenerateContentConfig(
                 tools=[

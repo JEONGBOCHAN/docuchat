@@ -15,7 +15,7 @@ from src.application.ports.podcast import (
     PodcastScriptDTO,
     DialogueLineDTO,
 )
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiPodcastAdapter(PodcastScriptPort):
@@ -52,7 +52,7 @@ class GeminiPodcastAdapter(PodcastScriptPort):
         duration_minutes: int = 5,
         style: str = "conversational",
         language: str = "ko",
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> PodcastScriptDTO:
         """Generate a podcast script using Gemini.
 

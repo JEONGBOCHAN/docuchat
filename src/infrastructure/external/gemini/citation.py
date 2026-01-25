@@ -16,7 +16,7 @@ from src.application.ports.citation_search import (
     CitationDTO,
     CitationResultDTO,
 )
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiCitationAdapter(CitationSearchPort):
@@ -177,7 +177,7 @@ class GeminiCitationAdapter(CitationSearchPort):
         self,
         store_name: str,
         query: str,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> CitationResultDTO:
         """Search documents and generate answer with citations.
 
@@ -240,7 +240,7 @@ class GeminiCitationAdapter(CitationSearchPort):
         self,
         store_name: str,
         query: str,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> Generator[dict[str, Any], None, None]:
         """Search documents with streaming response.
 

@@ -16,7 +16,7 @@ from src.application.ports.learning import (
     QuizQuestionDTO,
     QuizChoiceDTO,
 )
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiQuizAdapter(QuizPort):
@@ -50,7 +50,7 @@ class GeminiQuizAdapter(QuizPort):
         quiz_type: str = "mixed",
         difficulty: str = "medium",
         include_explanations: bool = True,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> QuizDTO:
         """Generate a quiz using Gemini.
 

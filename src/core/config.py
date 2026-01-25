@@ -4,6 +4,28 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class GeminiModels:
+    """Centralized Gemini model configuration.
+
+    Usage:
+        from src.core.config import GeminiModels
+
+        model = GeminiModels.FAST  # For quick, simple tasks
+        model = GeminiModels.SMART  # For complex reasoning (future use)
+        model = GeminiModels.TEST  # For testing (cheap model)
+    """
+
+    # Production models
+    FAST = "gemini-3-flash-preview"  # Fast and cost-effective
+    SMART = "gemini-3-flash-preview"  # For complex tasks (can upgrade to Pro later)
+
+    # Test model (cheap, for unit tests)
+    TEST = "gemini-1.5-flash"
+
+    # Default model
+    DEFAULT = FAST
+
+
 class Environment(str, Enum):
     """Application environment."""
 

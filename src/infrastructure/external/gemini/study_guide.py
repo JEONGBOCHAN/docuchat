@@ -16,7 +16,7 @@ from src.application.ports.learning import (
     StudySectionDTO,
     KeyConceptDTO,
 )
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiStudyGuideAdapter(StudyGuidePort):
@@ -50,7 +50,7 @@ class GeminiStudyGuideAdapter(StudyGuidePort):
         include_summary: bool = True,
         max_sections: int = 5,
         difficulty: str = "medium",
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> StudyGuideDTO:
         """Generate a study guide using Gemini.
 

@@ -9,7 +9,7 @@ from google import genai
 from google.genai import types
 
 from src.application.ports.summarization import SummarizationPort, SummaryDTO
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiSummarizationAdapter(SummarizationPort):
@@ -40,7 +40,7 @@ class GeminiSummarizationAdapter(SummarizationPort):
         self,
         store_name: str,
         summary_type: str = "short",
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> SummaryDTO:
         """Summarize all documents in a channel using Gemini.
 
@@ -94,7 +94,7 @@ Focus on the main topic and the most important points. Be clear and informative.
         store_name: str,
         document_name: str,
         summary_type: str = "short",
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> SummaryDTO:
         """Summarize a specific document using Gemini.
 

@@ -12,7 +12,7 @@ from google import genai
 from google.genai import types
 
 from src.application.ports.faq_generation import FAQGenerationPort, FAQItemDTO
-from src.core.config import get_settings
+from src.core.config import get_settings, GeminiModels
 
 
 class GeminiFAQAdapter(FAQGenerationPort):
@@ -43,7 +43,7 @@ class GeminiFAQAdapter(FAQGenerationPort):
         self,
         store_name: str,
         count: int = 5,
-        model: str = "gemini-3-flash-preview",
+        model: str = GeminiModels.DEFAULT,
     ) -> list[FAQItemDTO]:
         """Generate FAQ items using Gemini.
 
