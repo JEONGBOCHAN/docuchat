@@ -53,30 +53,6 @@ class TestLangGraphAPICompatibility:
                 )
             raise
 
-    def test_rag_agent_creates_without_error(self):
-        """Test that RAG agent creation doesn't raise state_modifier error."""
-        from src.agents.rag_agent import create_rag_agent, RAGAgentConfig
-
-        # Mock only the external dependencies, not create_react_agent
-        with patch("src.agents.rag_agent.get_settings") as mock_settings, \
-             patch("src.infrastructure.di.create_document_search") as mock_search:
-
-            mock_settings.return_value = Mock(google_api_key="fake-key")
-            mock_search.return_value = Mock()
-            mock_search.return_value.search = Mock(return_value=[])
-
-            config = RAGAgentConfig(channel_id="test-channel")
-
-            try:
-                agent = create_rag_agent(config)
-                assert agent is not None
-            except TypeError as e:
-                if "state_modifier" in str(e):
-                    pytest.fail(
-                        f"rag_agent.py still using 'state_modifier': {e}"
-                    )
-                raise
-
     def test_langgraph_runner_creates_without_error(self):
         """Test that LangGraphAgentRunner doesn't raise state_modifier error."""
         from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner

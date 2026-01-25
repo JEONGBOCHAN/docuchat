@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # Google Gemini
     google_api_key: str = ""
 
+    # Tavily Web Search
+    tavily_api_key: str = ""
+
     # Google Drive Integration (OAuth)
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
