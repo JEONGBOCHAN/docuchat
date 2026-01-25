@@ -18,6 +18,17 @@ from src.infrastructure.persistence.audio_repository import (
     AudioRepository,
     to_response,
 )
+from src.infrastructure.persistence.adapters import (
+    ChannelRepositoryAdapter,
+    ChatHistoryRepositoryAdapter,
+    ChatSessionRepositoryAdapter,
+    NoteRepositoryAdapter,
+    FavoriteRepositoryAdapter,
+    SearchHistoryRepositoryAdapter,
+    TrashRepositoryAdapter,
+    AudioRepositoryAdapter,
+    DocumentPreviewCacheRepositoryAdapter,
+)
 
 __all__ = [
     # Channel repositories
@@ -35,4 +46,14 @@ __all__ = [
     # Audio repository
     "AudioRepository",
     "to_response",
+    # Repository adapters (Port implementations)
+    "ChannelRepositoryAdapter",
+    "ChatHistoryRepositoryAdapter",
+    "ChatSessionRepositoryAdapter",
+    "NoteRepositoryAdapter",
+    "FavoriteRepositoryAdapter",
+    "SearchHistoryRepositoryAdapter",
+    "TrashRepositoryAdapter",
+    "AudioRepositoryAdapter",
+    "DocumentPreviewCacheRepositoryAdapter",
 ]

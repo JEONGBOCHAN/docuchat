@@ -18,6 +18,7 @@ from src.application.ports.persistence import (
     SearchHistoryDTO,
     TrashItemDTO,
     AudioOverviewDTO,
+    DocumentPreviewCacheDTO,
     ChannelRepositoryPort,
     ChatHistoryRepositoryPort,
     ChatSessionRepositoryPort,
@@ -26,8 +27,9 @@ from src.application.ports.persistence import (
     SearchHistoryRepositoryPort,
     TrashRepositoryPort,
     AudioRepositoryPort,
+    DocumentPreviewCacheRepositoryPort,
 )
-from src.models.db_models import ChannelMetadata, ChatMessageDB, ChatSessionDB, NoteDB
+from src.models.db_models import ChannelMetadata, ChatMessageDB, ChatSessionDB, NoteDB, DocumentPreviewCacheDB
 
 
 # =============================================================================
@@ -774,3 +776,75 @@ class AudioRepositoryAdapter(AudioRepositoryPort):
     def get_channel_by_store_id(self, gemini_store_id: str) -> ChannelMetadataDTO | None:
         channel = self._repo.get_channel_by_store_id(gemini_store_id)
         return _channel_to_dto(channel) if channel else None
+
+
+# =============================================================================
+# Document Preview Cache Repository Adapter
+# =============================================================================
+
+def _preview_cache_to_dto(cache: DocumentPreviewCacheDB) -> DocumentPreviewCacheDTO:
+    """Convert DocumentPreviewCacheDB model to DTO."""
+    return DocumentPreviewCacheDTO(
+        id=cache.id,
+        document_id=cache.document_id,
+        channel_id=cache.channel_id,
+        filename=cache.filename,
+        content=cache.content,
+        total_characters=cache.total_characters,
+        created_at=cache.created_at,
+        updated_at=cache.updated_at,
+    )
+
+
+class DocumentPreviewCacheRepositoryAdapter(DocumentPreviewCacheRepositoryPort):
+    """Adapter that implements DocumentPreviewCacheRepositoryPort."""
+
+    def __init__(self, db=None):
+        """Initialize adapter with database session.
+
+        Args:
+            db: Optional database session. If None, creates one from get_db().
+        """
+        self._db = db if db is not None else next(get_db())
+
+    def get_by_document_id(self, document_id: str) -> DocumentPreviewCacheDTO | None:
+        cache = self._db.query(DocumentPreviewCacheDB).filter(
+            DocumentPreviewCacheDB.document_id == document_id
+        ).first()
+        return _preview_cache_to_dto(cache) if cache else None
+
+    def create(
+        self,
+        document_id: str,
+        channel_id: str,
+        filename: str,
+        content: str,
+    ) -> DocumentPreviewCacheDTO:
+        cache = DocumentPreviewCacheDB(
+            document_id=document_id,
+            channel_id=channel_id,
+            filename=filename,
+            content=content,
+            total_characters=len(content),
+        )
+        self._db.add(cache)
+        self._db.commit()
+        self._db.refresh(cache)
+        return _preview_cache_to_dto(cache)
+
+    def delete_by_document_id(self, document_id: str) -> bool:
+        cache = self._db.query(DocumentPreviewCacheDB).filter(
+            DocumentPreviewCacheDB.document_id == document_id
+        ).first()
+        if cache:
+            self._db.delete(cache)
+            self._db.commit()
+            return True
+        return False
+
+    def delete_by_channel_id(self, channel_id: str) -> int:
+        count = self._db.query(DocumentPreviewCacheDB).filter(
+            DocumentPreviewCacheDB.channel_id == channel_id
+        ).delete()
+        self._db.commit()
+        return count

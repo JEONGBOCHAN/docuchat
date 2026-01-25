@@ -126,6 +126,20 @@ class AudioOverviewDTO:
     completed_at: datetime | None
 
 
+@dataclass
+class DocumentPreviewCacheDTO:
+    """DTO for document preview cache."""
+
+    id: int
+    document_id: str
+    channel_id: str
+    filename: str
+    content: str
+    total_characters: int
+    created_at: datetime
+    updated_at: datetime
+
+
 # =============================================================================
 # Port Interfaces
 # =============================================================================
@@ -587,4 +601,34 @@ class AudioRepositoryPort(ABC):
     @abstractmethod
     def get_channel_by_store_id(self, gemini_store_id: str) -> ChannelMetadataDTO | None:
         """Get channel by Gemini store ID (convenience method)."""
+        ...
+
+
+class DocumentPreviewCacheRepositoryPort(ABC):
+    """Port for document preview cache repository operations."""
+
+    @abstractmethod
+    def get_by_document_id(self, document_id: str) -> DocumentPreviewCacheDTO | None:
+        """Get cached preview by document ID."""
+        ...
+
+    @abstractmethod
+    def create(
+        self,
+        document_id: str,
+        channel_id: str,
+        filename: str,
+        content: str,
+    ) -> DocumentPreviewCacheDTO:
+        """Create a new preview cache entry."""
+        ...
+
+    @abstractmethod
+    def delete_by_document_id(self, document_id: str) -> bool:
+        """Delete cached preview by document ID."""
+        ...
+
+    @abstractmethod
+    def delete_by_channel_id(self, channel_id: str) -> int:
+        """Delete all cached previews for a channel. Returns count of deleted entries."""
         ...
