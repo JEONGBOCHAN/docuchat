@@ -387,30 +387,31 @@ class TestExportChannel:
 class TestExportService:
     """Unit tests for ExportService."""
 
-    def test_parse_sources_empty(self, test_db):
-        """Test parsing empty sources."""
+    def test_sources_from_list_empty(self, test_db):
+        """Test converting empty sources list."""
         from src.infrastructure.di.container import create_export_service
 
         service = create_export_service(test_db)
-        sources = service._parse_sources("")
+        sources = service._sources_from_list([])
         assert sources == []
 
-    def test_parse_sources_valid(self, test_db):
-        """Test parsing valid sources JSON."""
+    def test_sources_from_list_valid(self, test_db):
+        """Test converting valid sources list."""
         from src.infrastructure.di.container import create_export_service
 
         service = create_export_service(test_db)
-        sources_json = '[{"source": "test.pdf", "content": "Test content", "page": 1}]'
-        sources = service._parse_sources(sources_json)
+        sources_list = [{"source": "test.pdf", "content": "Test content", "page": 1}]
+        sources = service._sources_from_list(sources_list)
 
         assert len(sources) == 1
         assert sources[0].source == "test.pdf"
         assert sources[0].page == 1
 
-    def test_parse_sources_invalid_json(self, test_db):
-        """Test parsing invalid JSON returns empty list."""
+    def test_sources_from_list_invalid(self, test_db):
+        """Test converting invalid sources list returns empty list."""
         from src.infrastructure.di.container import create_export_service
 
         service = create_export_service(test_db)
-        sources = service._parse_sources("invalid json")
+        # Invalid source with missing required field - should gracefully handle
+        sources = service._sources_from_list(None)
         assert sources == []
