@@ -386,9 +386,17 @@ def send_message(
             for s in result.get("sources", [])
         ]
 
+        # Handle response that might be a list (multipart message from LangGraph)
+        response_content = result.get("response", "")
+        if isinstance(response_content, list):
+            response_content = "".join(
+                part.get("text", "") if isinstance(part, dict) else str(part)
+                for part in response_content
+            )
+
         response = ChatResponse(
             query=body.query,
-            response=result.get("response", ""),
+            response=response_content,
             sources=sources,
             session_id=session_id_response,
             created_at=datetime.now(UTC),

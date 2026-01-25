@@ -118,10 +118,11 @@ def create_rag_agent(config: RAGAgentConfig) -> Any:
 
     # Create the agent using LangGraph's create_react_agent
     # Note: middleware is handled separately in run_rag_agent
+    # LangGraph 1.x uses 'prompt' parameter instead of deprecated 'state_modifier'
     agent = create_react_agent(
         model=llm,
         tools=[search_tool, finish_tool],
-        state_modifier=system_prompt,
+        prompt=system_prompt,
     )
 
     return agent

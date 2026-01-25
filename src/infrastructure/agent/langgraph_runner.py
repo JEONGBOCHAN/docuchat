@@ -9,11 +9,14 @@ This is the key infrastructure component that prevents LangGraph framework
 details from leaking into the application layer.
 """
 
+import logging
 from datetime import datetime
 from typing import Any, Generator
 
 from langgraph.prebuilt import create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+logger = logging.getLogger(__name__)
 
 from src.application.ports.agent_runner import (
     AgentRunnerPort,
@@ -101,21 +104,23 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self._model = model
         self._settings = get_settings()
 
-    def _create_agent(self, channel_id: str, config: AgentConfig):
+    def _create_agent(self, channel_id: str, config: AgentConfig, streaming: bool = False):
         """Create a LangGraph agent for the specified channel.
 
         Args:
             channel_id: The channel to search in.
             config: Agent configuration.
+            streaming: Whether to enable token-by-token streaming.
 
         Returns:
             Compiled LangGraph agent.
         """
-        # Create the LLM
+        # Create the LLM with streaming option
         llm = ChatGoogleGenerativeAI(
             model=self._model,
             google_api_key=self._settings.google_api_key,
             temperature=config.temperature,
+            streaming=streaming,
         )
 
         # Create tools
@@ -131,10 +136,11 @@ class LangGraphAgentRunner(AgentRunnerPort):
         system_prompt = config.system_prompt or RAG_SYSTEM_PROMPT
 
         # Create the agent
+        # LangGraph 1.x uses 'prompt' parameter instead of deprecated 'state_modifier'
         agent = create_react_agent(
             model=llm,
             tools=tools,
-            state_modifier=system_prompt,
+            prompt=system_prompt,
         )
 
         return agent
@@ -288,7 +294,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         yield {"event": "agent_started", "session_id": session_id}
 
         try:
-            agent = self._create_agent(channel_id, config)
+            agent = self._create_agent(channel_id, config, streaming=True)
 
             # Build messages
             messages = []
@@ -314,25 +320,58 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             yield {"event": "tool_started", "tool": "search_documents"}
 
-            # Use stream mode
-            collected_chunks = []
-            for chunk in agent.stream(
+            # Use stream mode "messages" for token-by-token streaming
+            final_response = ""
+            final_messages = []
+            for msg, metadata in agent.stream(
                 {"messages": messages},
                 config={"recursion_limit": config.max_iterations * 2 + 1},
-                stream_mode="values",
+                stream_mode="messages",
             ):
-                collected_chunks.append(chunk)
-                # Yield intermediate updates
-                if "messages" in chunk:
-                    last_msg = chunk["messages"][-1] if chunk["messages"] else None
-                    if last_msg and hasattr(last_msg, "content"):
+                final_messages.append(msg)
+
+                # Get message type
+                msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
+
+                # Skip HumanMessage (user's query)
+                if "human" in str(msg_type).lower():
+                    continue
+
+                # Skip ToolMessage from search_documents (only show final answer)
+                if "tool" in str(msg_type).lower():
+                    tool_name = getattr(msg, "name", "")
+                    if tool_name == "search_documents":
+                        continue
+
+                # Get content from the message chunk
+                content = getattr(msg, "content", "")
+
+                # Handle content that might be a list (multi-part messages from AI)
+                if isinstance(content, list):
+                    content = "".join(
+                        part.get("text", "") if isinstance(part, dict) else str(part)
+                        for part in content
+                    )
+
+                # For AIMessageChunk, yield the content token
+                if content and "ai" in str(msg_type).lower():
+                    final_response += content
+                    yield {
+                        "event": "content",
+                        "content": content,
+                    }
+                # For finish tool result (ToolMessage), yield the content
+                elif content and "tool" in str(msg_type).lower():
+                    tool_name = getattr(msg, "name", "")
+                    if tool_name == "finish":
+                        final_response = content
                         yield {
                             "event": "content",
-                            "content": getattr(last_msg, "content", ""),
+                            "content": content,
                         }
 
-            # Get final result from collected chunks
-            result = collected_chunks[-1] if collected_chunks else {"messages": []}
+            # Build result from collected messages
+            result = {"messages": final_messages, "response": final_response}
 
             # Calculate tool duration
             tool_duration_ms = (datetime.now() - tool_start_time).total_seconds() * 1000
@@ -347,9 +386,15 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             yield {"event": "tool_completed", "tool": "search_documents"}
 
-            # Extract final response
-            final_message = result.get("messages", [])[-1] if result.get("messages") else None
-            response_text = getattr(final_message, "content", str(final_message)) if final_message else "No response generated."
+            # Use accumulated response from streaming
+            response_text = result.get("response", "") or "No response generated."
+
+            # Handle response that might be a list
+            if isinstance(response_text, list):
+                response_text = "".join(
+                    part.get("text", "") if isinstance(part, dict) else str(part)
+                    for part in response_text
+                )
 
             # Extract metadata
             sources, iterations, tool_calls = self._extract_metadata(result)
