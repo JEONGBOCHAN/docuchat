@@ -554,6 +554,7 @@ export default function ChannelDetailPage() {
               </div>
               <div className="flex-1 overflow-hidden">
                 <AgentDashboard
+                  key={channelId}
                   channelId={channelId}
                   pollingInterval={2000}
                   renderMode="iframe"
