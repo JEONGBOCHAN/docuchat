@@ -98,6 +98,7 @@ from src.application.ports.persistence import (
     SearchHistoryDTO,
     TrashItemDTO,
     AudioOverviewDTO,
+    DocumentPreviewCacheDTO,
     # Ports
     ChannelRepositoryPort,
     ChatHistoryRepositoryPort,
@@ -107,6 +108,7 @@ from src.application.ports.persistence import (
     SearchHistoryRepositoryPort,
     TrashRepositoryPort,
     AudioRepositoryPort,
+    DocumentPreviewCacheRepositoryPort,
 )
 
 # External Service Ports
@@ -210,6 +212,8 @@ __all__ = [
     "SearchHistoryRepositoryPort",
     "TrashRepositoryPort",
     "AudioRepositoryPort",
+    "DocumentPreviewCacheDTO",
+    "DocumentPreviewCacheRepositoryPort",
     # External Service Ports
     "YouTubeTranscriptDTO",
     "YouTubeMetadataDTO",

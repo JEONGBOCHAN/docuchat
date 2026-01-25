@@ -4,7 +4,10 @@
 import re
 
 from src.application.ports.document_search import DocumentSearchPort
-from src.models.db_models import DocumentPreviewCacheDB
+from src.application.ports.persistence import (
+    DocumentPreviewCacheRepositoryPort,
+    DocumentPreviewCacheDTO,
+)
 from src.models.preview import (
     DocumentPreviewResponse,
     TextHighlight,
@@ -20,14 +23,18 @@ DEFAULT_PAGE_SIZE = 2000
 class PreviewService:
     """Service for document preview functionality."""
 
-    def __init__(self, db: Session, document_search: DocumentSearchPort):
+    def __init__(
+        self,
+        preview_cache_repo: DocumentPreviewCacheRepositoryPort,
+        document_search: DocumentSearchPort,
+    ):
         """Initialize preview service.
 
         Args:
-            db: Database session
+            preview_cache_repo: Repository port for preview cache operations
             document_search: DocumentSearchPort instance
         """
-        self._db = db
+        self._preview_cache_repo = preview_cache_repo
         self._document_search = document_search
 
     def get_preview(
@@ -53,12 +60,17 @@ class PreviewService:
             Document preview response with content and highlights
         """
         # Get or create cache
-        cached = self._get_cached_preview(document_id)
+        cached = self._preview_cache_repo.get_by_document_id(document_id)
 
         if not cached:
             # Extract text using Gemini
             content = self._extract_text(channel_id, filename)
-            cached = self._cache_preview(document_id, channel_id, filename, content)
+            cached = self._preview_cache_repo.create(
+                document_id=document_id,
+                channel_id=channel_id,
+                filename=filename,
+                content=content,
+            )
 
         # Calculate pagination
         total_chars = cached.total_characters
@@ -112,11 +124,16 @@ class PreviewService:
             Source location response with page and position
         """
         # Get or create cache
-        cached = self._get_cached_preview(document_id)
+        cached = self._preview_cache_repo.get_by_document_id(document_id)
 
         if not cached:
             content = self._extract_text(channel_id, filename)
-            cached = self._cache_preview(document_id, channel_id, filename, content)
+            cached = self._preview_cache_repo.create(
+                document_id=document_id,
+                channel_id=channel_id,
+                filename=filename,
+                content=content,
+            )
 
         # Find the source text in content
         position = cached.content.lower().find(source_text.lower())
@@ -161,15 +178,7 @@ class PreviewService:
         Returns:
             True if cache was invalidated
         """
-        cached = self._db.query(DocumentPreviewCacheDB).filter(
-            DocumentPreviewCacheDB.document_id == document_id
-        ).first()
-
-        if cached:
-            self._db.delete(cached)
-            self._db.commit()
-            return True
-        return False
+        return self._preview_cache_repo.delete_by_document_id(document_id)
 
     def invalidate_channel_cache(self, channel_id: str) -> int:
         """Invalidate all cached previews for a channel.
@@ -180,54 +189,7 @@ class PreviewService:
         Returns:
             Number of caches invalidated
         """
-        count = self._db.query(DocumentPreviewCacheDB).filter(
-            DocumentPreviewCacheDB.channel_id == channel_id
-        ).delete()
-        self._db.commit()
-        return count
-
-    def _get_cached_preview(self, document_id: str) -> DocumentPreviewCacheDB | None:
-        """Get cached preview from database.
-
-        Args:
-            document_id: Document file ID
-
-        Returns:
-            Cached preview or None
-        """
-        return self._db.query(DocumentPreviewCacheDB).filter(
-            DocumentPreviewCacheDB.document_id == document_id
-        ).first()
-
-    def _cache_preview(
-        self,
-        document_id: str,
-        channel_id: str,
-        filename: str,
-        content: str,
-    ) -> DocumentPreviewCacheDB:
-        """Cache document preview content.
-
-        Args:
-            document_id: Document file ID
-            channel_id: Channel (store) ID
-            filename: Original filename
-            content: Extracted text content
-
-        Returns:
-            Created cache entry
-        """
-        cache = DocumentPreviewCacheDB(
-            document_id=document_id,
-            channel_id=channel_id,
-            filename=filename,
-            content=content,
-            total_characters=len(content),
-        )
-        self._db.add(cache)
-        self._db.commit()
-        self._db.refresh(cache)
-        return cache
+        return self._preview_cache_repo.delete_by_channel_id(channel_id)
 
     def _extract_text(self, channel_id: str, filename: str) -> str:
         """Extract text content from document using Gemini.
@@ -298,16 +260,16 @@ Return the extracted text content now:"""
 
 
 def get_preview_service(
-    db,
+    preview_cache_repo: DocumentPreviewCacheRepositoryPort,
     document_search: DocumentSearchPort,
 ) -> PreviewService:
     """Get preview service instance with injected dependencies.
 
     Args:
-        db: Database session
+        preview_cache_repo: Repository port for preview cache operations
         document_search: Document search port instance
 
     Returns:
         PreviewService instance
     """
-    return PreviewService(db, document_search)
+    return PreviewService(preview_cache_repo, document_search)

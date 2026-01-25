@@ -37,6 +37,7 @@ from src.application.ports import (
     SearchHistoryRepositoryPort,
     TrashRepositoryPort,
     AudioRepositoryPort,
+    DocumentPreviewCacheRepositoryPort,
     # External Service Ports
     YouTubePort,
     CrawlerPort,
@@ -615,6 +616,19 @@ def create_audio_repository_port(db=None) -> AudioRepositoryPort:
     return AudioRepositoryAdapter(db)
 
 
+def create_document_preview_cache_repository_port(db=None) -> DocumentPreviewCacheRepositoryPort:
+    """Create document preview cache repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        DocumentPreviewCacheRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import DocumentPreviewCacheRepositoryAdapter
+    return DocumentPreviewCacheRepositoryAdapter(db)
+
+
 # ============================================================
 # External Service Port Factory Functions
 # ============================================================
@@ -738,8 +752,9 @@ def create_preview_service(db=None):
         from src.core.database import get_db
         db = next(get_db())
     from src.application.services.preview_service import PreviewService
+    from src.infrastructure.persistence.adapters import DocumentPreviewCacheRepositoryAdapter
     return PreviewService(
-        db=db,
+        preview_cache_repo=DocumentPreviewCacheRepositoryAdapter(db),
         document_search=create_document_search(),
     )
 
