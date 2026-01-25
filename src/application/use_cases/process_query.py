@@ -108,7 +108,7 @@ class ProcessQueryUseCase:
         query: str,
         channel_id: str,
         conversation_history: list[dict[str, str]] | None = None,
-        max_iterations: int = 5,
+        max_iterations: int = 15,
         session_id: str | None = None,
     ) -> QueryResult:
         """Execute the query processing.
@@ -209,7 +209,7 @@ class ProcessQueryUseCase:
         query: str,
         channel_id: str,
         conversation_history: list[dict[str, str]] | None = None,
-        max_iterations: int = 5,
+        max_iterations: int = 15,
         session_id: str | None = None,
     ) -> Generator[dict, None, QueryResult]:
         """Execute query processing with streaming events.

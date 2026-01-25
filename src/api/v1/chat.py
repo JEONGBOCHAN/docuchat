@@ -128,7 +128,7 @@ def _run_agent_chat(
     channel_id: str,
     query: str,
     conversation_history: list[dict[str, str]] | None = None,
-    max_iterations: int = 3,
+    max_iterations: int = 15,
 ) -> dict:
     """Run the agent to answer a query using documents in the channel.
 
@@ -141,7 +141,7 @@ def _run_agent_chat(
         channel_id: The channel ID to search in
         query: User's question
         conversation_history: Previous conversation for context
-        max_iterations: Maximum agent iterations (default 3)
+        max_iterations: Maximum agent iterations (default 15)
 
     Returns:
         Dict with 'response', 'sources', 'iterations', and 'session_id'
@@ -173,7 +173,7 @@ def _run_agent_chat_stream(
     channel_id: str,
     query: str,
     conversation_history: list[dict[str, str]] | None = None,
-    max_iterations: int = 3,
+    max_iterations: int = 15,
 ) -> Generator[dict, None, dict]:
     """Run the agent with streaming, yielding events for SSE.
 
@@ -186,7 +186,7 @@ def _run_agent_chat_stream(
         channel_id: The channel ID to search in
         query: User's question
         conversation_history: Previous conversation for context
-        max_iterations: Maximum agent iterations (default 3)
+        max_iterations: Maximum agent iterations (default 15)
 
     Yields:
         Event dicts for SSE: {"chunk": text}, {"sources": [...]}, etc.
@@ -368,7 +368,6 @@ def send_message(
             channel_id=channel_id,
             query=body.query,
             conversation_history=conversation_history,
-            max_iterations=3,
         )
 
         if "error" in result and result["error"]:

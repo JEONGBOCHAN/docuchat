@@ -135,7 +135,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
         result = runner.run(
             query="What is AI?",
-            config=AgentConfig(max_iterations=3),
+            config=AgentConfig(),  # defaults to max_iterations=15
             context={"channel_id": "channel-123"}
         )
 
