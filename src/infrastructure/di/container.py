@@ -19,6 +19,7 @@ from src.application.ports import (
     AgentEventSinkPort,
     DocumentSearchPort,
     WebSearchPort,
+    ArxivSearchPort,
     FAQGenerationPort,
     SummarizationPort,
     TimelinePort,
@@ -80,6 +81,7 @@ from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
 from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
 from src.infrastructure.external.mcp.web_search import McpWebSearchAdapter
+from src.infrastructure.external.arxiv.adapter import ArxivAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
 
@@ -170,6 +172,15 @@ def create_web_search() -> WebSearchPort:
         WebSearchPort implementation (McpWebSearchAdapter).
     """
     return McpWebSearchAdapter()
+
+
+def create_arxiv_search() -> ArxivSearchPort:
+    """Create an arXiv search adapter.
+
+    Returns:
+        ArxivSearchPort implementation (ArxivAdapter).
+    """
+    return ArxivAdapter()
 
 
 def create_citation_search() -> CitationSearchPort:

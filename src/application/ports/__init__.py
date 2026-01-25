@@ -48,6 +48,7 @@ Infrastructure Ports:
 from src.application.ports.observability import AgentEventSinkPort
 from src.application.ports.document_search import DocumentSearchPort, SearchResult
 from src.application.ports.web_search import WebSearchPort, WebSearchResult
+from src.application.ports.arxiv_search import ArxivSearchPort, ArxivPaperResult
 from src.application.ports.llm import LLMPort, LLMMessage, LLMResponse
 from src.application.ports.agent_runner import (
     AgentRunnerPort,
@@ -148,6 +149,9 @@ __all__ = [
     # Web Search
     "WebSearchPort",
     "WebSearchResult",
+    # arXiv Search
+    "ArxivSearchPort",
+    "ArxivPaperResult",
     # LLM
     "LLMPort",
     "LLMMessage",

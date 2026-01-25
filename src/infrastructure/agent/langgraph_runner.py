@@ -33,29 +33,50 @@ from src.application.dto.agent_event import (
     ToolCompletedEvent,
     generate_session_id,
 )
-from src.agents.tools.search_tools import create_search_documents_tool
+from src.agents.tools.search_tools import (
+    create_search_documents_tool,
+    create_web_search_tool,
+    create_arxiv_search_tool,
+)
 from src.core.config import get_settings, GeminiModels
 from src.application.ports.document_search import DocumentSearchPort
+from src.application.ports.web_search import WebSearchPort
 
 
 # Default system prompt for RAG agent
-RAG_SYSTEM_PROMPT = """You are a document analysis assistant. Your task is to answer user questions based on uploaded documents.
+RAG_SYSTEM_PROMPT = """You are an intelligent assistant with access to multiple tools. Choose the appropriate tool based on the user's question.
 
 ## Available Tools
-You have access to the following tool:
-- **search_documents**: Search for relevant information in the uploaded documents
+1. **search_documents**: Search for relevant information in the uploaded documents
+   - Use for questions about uploaded files, papers, or documents
+   - Returns excerpts with source citations
+
+2. **web_search**: Search the internet for current information
+   - Use for current events, news, real-world facts
+   - Use for restaurants, places, weather, locations
+   - Use for anything requiring up-to-date web data
+
+3. **arxiv_search**: Search arXiv for academic papers and research
+   - Use for academic papers, research, scientific studies
+   - Use for latest research on specific topics
+   - Use for technical papers in AI, ML, physics, math, computer science, etc.
+   - Returns paper titles, authors, summaries, and PDF links
 
 ## Instructions
-1. When the user asks a question, use the search_documents tool to find relevant information
-2. If the search results are insufficient, try searching with different keywords
-3. Once you have enough information, respond directly to the user with a complete answer
-4. Always cite your sources in the answer (e.g., [Source 1], [Source 2])
+1. Analyze the user's question to determine which tool is most appropriate
+2. For document-related questions → use search_documents
+3. For real-world/current information → use web_search
+4. For academic research/papers → use arxiv_search
+5. You can use multiple tools if needed (e.g., search documents first, then arxiv for related research)
+6. Once you have enough information, respond directly to the user with a complete answer
+7. Always cite your sources in the answer
 
 ## Important Rules
-- After searching, respond directly to the user - do NOT call any other tools
-- Include citations from the documents in your answer
-- If no relevant information is found after searching, inform the user honestly
-- Do not make up information - only use what you find in the documents
+- Choose the right tool based on the question type
+- After gathering information, respond directly - do NOT call unnecessary tools
+- Include citations in your answer (e.g., [Source 1] for documents, [Web 1] for web results, [Paper 1] for arXiv)
+- If no relevant information is found, inform the user honestly
+- Do not make up information - only use what you find from the tools
 """
 
 
@@ -119,13 +140,22 @@ class LangGraphAgentRunner(AgentRunnerPort):
             streaming=streaming,
         )
 
-        # Create tools (only search - LLM responds directly for streaming)
+        # Create tools
         search_tool = create_search_documents_tool(
             channel_id=channel_id,
             document_search=self._document_search,
         )
 
-        tools = [search_tool]
+        # Create web search tool (import locally to avoid circular dependency)
+        from src.infrastructure.di import create_web_search, create_arxiv_search
+        web_search_adapter = create_web_search()
+        web_tool = create_web_search_tool(web_search_port=web_search_adapter)
+
+        # Create arxiv search tool
+        arxiv_search_adapter = create_arxiv_search()
+        arxiv_tool = create_arxiv_search_tool(arxiv_search_port=arxiv_search_adapter)
+
+        tools = [search_tool, web_tool, arxiv_tool]
 
         # Use custom system prompt if provided
         system_prompt = config.system_prompt or RAG_SYSTEM_PROMPT
@@ -477,6 +507,26 @@ class LangGraphAgentRunner(AgentRunnerPort):
                     "query": {
                         "type": "string",
                         "description": "The search query",
+                    }
+                },
+            ),
+            AgentTool(
+                name="web_search",
+                description="Search the internet for current information, news, places, etc.",
+                parameters={
+                    "query": {
+                        "type": "string",
+                        "description": "The web search query",
+                    }
+                },
+            ),
+            AgentTool(
+                name="arxiv_search",
+                description="Search arXiv for academic papers, research, and scientific studies",
+                parameters={
+                    "query": {
+                        "type": "string",
+                        "description": "The search query for academic papers",
                     }
                 },
             ),
