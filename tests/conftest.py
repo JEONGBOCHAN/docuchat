@@ -41,12 +41,18 @@ def _get_reset_cache_service():
 
 
 @pytest.fixture(autouse=True)
-def reset_cache():
+def reset_cache(request):
     """Reset cache service before each test to ensure test isolation.
 
     This fixture uses lazy loading to avoid breaking lightweight tests
     (like MCP server tests) that don't need the full application loaded.
     """
+    # Skip entirely for MCP server tests - they have their own isolation
+    test_path = str(request.fspath)
+    if "mcp_server" in test_path or "test_mcp" in test_path:
+        yield
+        return
+
     reset_fn = None
 
     # Try to get the reset function at setup time
@@ -54,7 +60,6 @@ def reset_cache():
         reset_fn = _get_reset_cache_service()
     except Exception:
         # If cache service is not available for any reason, skip reset
-        # This allows MCP tests to run without loading the full app
         pass
 
     # Reset before test (if available)
