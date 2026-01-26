@@ -220,7 +220,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             # Emit LLM start event for synchronous run
             if self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_start("llm_response", {})
+                self._dashboard_middleware.on_llm_start("llm_response", {"channel_id": channel_id})
 
             # Run agent
             agent_start_time = datetime.now()
@@ -232,7 +232,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             # Emit LLM end event for synchronous run
             if self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end("llm_response", {})
+                self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id})
 
             # Emit tool events based on actual tool calls in result
             if self._event_sink:
@@ -425,7 +425,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
                     # LLM response started - emit llm_start event via middleware
                     if not llm_response_started and self._dashboard_middleware:
                         llm_response_started = True
-                        self._dashboard_middleware.on_llm_start(current_llm_role, {})
+                        self._dashboard_middleware.on_llm_start(current_llm_role, {"channel_id": channel_id})
 
                     final_response += content
                     yield {
@@ -435,7 +435,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             # LLM response completed - emit llm_end event via middleware
             if llm_response_started and self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end(current_llm_role, {})
+                self._dashboard_middleware.on_llm_end(current_llm_role, {"channel_id": channel_id})
 
             # Build result from collected messages
             result = {"messages": final_messages, "response": final_response}
