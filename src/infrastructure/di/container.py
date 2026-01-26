@@ -84,6 +84,7 @@ from src.infrastructure.external.mcp.web_search import McpWebSearchAdapter
 from src.infrastructure.external.arxiv.adapter import ArxivAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
+from src.agents.middlewares.dashboard import DashboardMiddleware
 
 from src.mcp_server.state import get_global_state_store
 
@@ -123,6 +124,15 @@ def get_state_store_adapter() -> StateStoreAdapter:
     return _state_store_adapter
 
 
+def create_dashboard_middleware() -> DashboardMiddleware:
+    """Create a dashboard middleware with state store.
+
+    Returns:
+        DashboardMiddleware instance connected to global state store.
+    """
+    return DashboardMiddleware(state_store=get_global_state_store())
+
+
 # ============================================================
 # Factory Functions
 # ============================================================
@@ -144,16 +154,21 @@ def create_event_sink(use_legacy_dashboard: bool = True) -> AgentEventSinkPort:
 
 def create_agent_runner(
     event_sink: AgentEventSinkPort | None = None,
+    dashboard_middleware: DashboardMiddleware | None = None,
 ) -> AgentRunnerPort:
     """Create an agent runner.
 
     Args:
         event_sink: Optional event sink for observability.
+        dashboard_middleware: Optional DashboardMiddleware for LLM node display.
 
     Returns:
         AgentRunnerPort implementation (LangGraphAgentRunner).
     """
-    return LangGraphAgentRunner(event_sink=event_sink)
+    return LangGraphAgentRunner(
+        event_sink=event_sink,
+        dashboard_middleware=dashboard_middleware,
+    )
 
 
 def create_document_search() -> DocumentSearchPort:
@@ -223,8 +238,14 @@ def create_process_query_use_case(
     # Create event sink
     event_sink = create_event_sink(use_legacy_dashboard=use_legacy_dashboard)
 
-    # Create agent runner with event sink
-    agent_runner = create_agent_runner(event_sink=event_sink)
+    # Create dashboard middleware for LLM node display (only when using legacy dashboard)
+    dashboard_middleware = create_dashboard_middleware() if use_legacy_dashboard else None
+
+    # Create agent runner with event sink and dashboard middleware
+    agent_runner = create_agent_runner(
+        event_sink=event_sink,
+        dashboard_middleware=dashboard_middleware,
+    )
 
     # Create search adapters
     document_search = create_document_search()
