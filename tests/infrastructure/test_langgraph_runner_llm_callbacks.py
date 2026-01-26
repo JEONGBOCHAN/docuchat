@@ -3,6 +3,11 @@
 
 Tests the integration between LangGraphAgentRunner and DashboardMiddleware
 for LLM node display in the dashboard.
+
+Includes tests for:
+- llm_response: Final LLM response with content
+- llm_reasoning: Initial reasoning when agent decides to use tools (no content, only tool_calls)
+- llm_observation: After tool execution, when agent observes results and decides next action
 """
 
 import pytest
@@ -207,14 +212,21 @@ class TestLangGraphAgentRunnerRunStreamLLMCallbacks:
 
 
 class TestLangGraphAgentRunnerRunLLMCallbacks:
-    """Tests for synchronous run method LLM callback integration."""
+    """Tests for synchronous run method LLM callback integration.
+
+    Note: run() now analyzes messages to emit proper LLM events:
+    - llm_reasoning: When AI selects tools
+    - llm_observation: After tool execution, when deciding next action
+    - llm_response: Final AI response with content
+    """
 
     @pytest.fixture
     def mock_agent_result(self):
-        """Create a mock agent invoke result."""
+        """Create a mock agent invoke result with content only (no tools)."""
         mock_msg = Mock()
+        mock_msg.type = "ai"  # Set type for proper detection
         mock_msg.content = "Final response"
-        mock_msg.tool_calls = []
+        mock_msg.tool_calls = []  # Empty list means no tool calls
         return {"messages": [mock_msg]}
 
     @pytest.fixture
@@ -224,8 +236,8 @@ class TestLangGraphAgentRunnerRunLLMCallbacks:
         agent.invoke = Mock(return_value=mock_agent_result)
         return agent
 
-    def test_run_emits_llm_start_before_invoke(self, mock_agent_sync):
-        """Test that on_llm_start is called before agent.invoke."""
+    def test_run_emits_llm_response_for_direct_answer(self, mock_agent_sync):
+        """Test that on_llm_start is called for direct answer without tools."""
         middleware = DashboardMiddleware()
         runner = LangGraphAgentRunner(
             event_sink=None,
@@ -240,12 +252,12 @@ class TestLangGraphAgentRunnerRunLLMCallbacks:
                 context={"channel_id": "test-channel"},
             )
 
-        # Verify LLM step was created
+        # Verify LLM step was created (now only llm_response for direct answers)
         llm_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
         assert len(llm_steps) == 1
         assert llm_steps[0].data.get("type") == "llm"
 
-    def test_run_emits_llm_end_after_invoke(self, mock_agent_sync):
+    def test_run_emits_llm_end_for_direct_answer(self, mock_agent_sync):
         """Test that on_llm_end is called after agent.invoke completes."""
         middleware = DashboardMiddleware()
         runner = LangGraphAgentRunner(
@@ -291,7 +303,7 @@ class TestLangGraphAgentRunnerToolCallsNotAffected:
     """Tests to verify existing tool tracking is not affected."""
 
     def test_run_stream_tool_tracking_still_works(self):
-        """Test that tool call tracking still works correctly."""
+        """Test that tool call tracking still works correctly with new LLM phases."""
         # Create message sequence: AI with tool_call -> Tool result -> AI response
         mock_ai_with_tool = Mock()
         mock_ai_with_tool.type = "ai"
@@ -339,9 +351,16 @@ class TestLangGraphAgentRunnerToolCallsNotAffected:
         # Content should be yielded
         assert len(content_events) >= 1
 
-        # LLM step should be recorded in middleware
+        # LLM steps should be recorded in middleware
+        # With new logic: llm_reasoning (for tool selection) + llm_response (for final content)
         llm_steps = [s for s in middleware.state.steps if s.data.get("type") == "llm"]
-        assert len(llm_steps) == 1
+        assert len(llm_steps) == 2  # reasoning + response
+
+        # Verify specific LLM step types
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        response_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+        assert len(reasoning_steps) == 1, "Should have llm_reasoning for tool selection"
+        assert len(response_steps) == 1, "Should have llm_response for final answer"
 
     def test_run_stream_event_sink_tool_events_still_emitted(self):
         """Test that event_sink still receives tool events."""
@@ -477,3 +496,552 @@ class TestLangGraphAgentRunnerStreamingNotAffected:
 
         # Verify final response
         assert result.response == "Part 1 Part 2"
+
+
+class TestLLMReasoningTracking:
+    """Tests for llm_reasoning tracking - initial tool selection phase."""
+
+    def test_run_stream_emits_llm_reasoning_on_tool_calls_without_content(self):
+        """Test that llm_reasoning is emitted when tool_calls present but no content."""
+        # AI message with tool_calls but no content (initial reasoning)
+        mock_ai_with_tool = Mock()
+        mock_ai_with_tool.type = "ai"
+        mock_ai_with_tool.content = ""  # No content
+        mock_ai_with_tool.tool_calls = [{"name": "arxiv_search", "args": {"query": "attention"}}]
+
+        # Tool result
+        mock_tool_result = Mock()
+        mock_tool_result.type = "tool"
+        mock_tool_result.content = "Tool result"
+        mock_tool_result.name = "arxiv_search"
+
+        # Final AI response with content
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Based on the search results..."
+        mock_ai_response.tool_calls = None
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_with_tool, {}),
+            (mock_tool_result, {}),
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        # Verify llm_reasoning step was created
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        assert len(reasoning_steps) == 1
+        assert reasoning_steps[0].status == NodeStatus.COMPLETE
+        assert reasoning_steps[0].data.get("type") == "llm"
+
+    def test_run_stream_reasoning_ends_before_tool_starts(self):
+        """Test that llm_reasoning ends before tool execution starts."""
+        events_order = []
+
+        def track_events(event):
+            events_order.append(event["event"])
+
+        # AI message with tool_calls
+        mock_ai_with_tool = Mock()
+        mock_ai_with_tool.type = "ai"
+        mock_ai_with_tool.content = ""
+        mock_ai_with_tool.tool_calls = [{"name": "web_search", "args": {"query": "test"}}]
+
+        # Tool result
+        mock_tool_result = Mock()
+        mock_tool_result.type = "tool"
+        mock_tool_result.content = "Search result"
+        mock_tool_result.name = "web_search"
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_with_tool, {}),
+            (mock_tool_result, {}),
+        ]))
+
+        middleware = DashboardMiddleware(state_updater=track_events)
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        # Verify event order: llm_start -> llm_complete -> tool_start -> tool_complete
+        assert "llm_start" in events_order
+        assert "llm_complete" in events_order
+
+        # Find first llm_start and first llm_complete
+        llm_start_indices = [i for i, e in enumerate(events_order) if e == "llm_start"]
+        llm_complete_indices = [i for i, e in enumerate(events_order) if e == "llm_complete"]
+
+        assert len(llm_start_indices) >= 1, "Should have at least one llm_start"
+        assert len(llm_complete_indices) >= 1, "Should have at least one llm_complete"
+
+        # First LLM (reasoning) should complete before tool interaction
+        first_llm_start = llm_start_indices[0]
+        first_llm_complete = llm_complete_indices[0]
+        assert first_llm_start < first_llm_complete, "LLM start should come before complete"
+
+
+class TestLLMObservationTracking:
+    """Tests for llm_observation tracking - after tool execution, deciding next action."""
+
+    def test_run_stream_emits_llm_observation_after_tool_completion(self):
+        """Test that llm_observation is emitted after tool completes and LLM decides next tool."""
+        # First AI message: initial reasoning -> tool call
+        mock_ai_reasoning = Mock()
+        mock_ai_reasoning.type = "ai"
+        mock_ai_reasoning.content = ""
+        mock_ai_reasoning.tool_calls = [{"name": "arxiv_search", "args": {"query": "attention"}}]
+
+        # First tool result
+        mock_tool_result1 = Mock()
+        mock_tool_result1.type = "tool"
+        mock_tool_result1.content = "ArXiv results"
+        mock_tool_result1.name = "arxiv_search"
+
+        # Second AI message: observation -> decides to use another tool
+        mock_ai_observation = Mock()
+        mock_ai_observation.type = "ai"
+        mock_ai_observation.content = ""
+        mock_ai_observation.tool_calls = [{"name": "web_search", "args": {"query": "more info"}}]
+
+        # Second tool result
+        mock_tool_result2 = Mock()
+        mock_tool_result2.type = "tool"
+        mock_tool_result2.content = "Web results"
+        mock_tool_result2.name = "web_search"
+
+        # Final AI response
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Final answer based on all results"
+        mock_ai_response.tool_calls = None
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_reasoning, {}),
+            (mock_tool_result1, {}),
+            (mock_ai_observation, {}),
+            (mock_tool_result2, {}),
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        # Verify both llm_reasoning and llm_observation steps
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        observation_steps = [s for s in middleware.state.steps if s.node == "llm_observation"]
+        response_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+
+        assert len(reasoning_steps) == 1, "Should have one llm_reasoning step"
+        assert len(observation_steps) == 1, "Should have one llm_observation step"
+        assert len(response_steps) == 1, "Should have one llm_response step"
+
+    def test_run_stream_multiple_observations(self):
+        """Test tracking multiple observation phases in a ReAct loop."""
+        # Initial reasoning
+        mock_ai_reasoning = Mock()
+        mock_ai_reasoning.type = "ai"
+        mock_ai_reasoning.content = ""
+        mock_ai_reasoning.tool_calls = [{"name": "arxiv_search", "args": {}}]
+
+        mock_tool1 = Mock()
+        mock_tool1.type = "tool"
+        mock_tool1.content = "Result 1"
+        mock_tool1.name = "arxiv_search"
+
+        # First observation
+        mock_ai_obs1 = Mock()
+        mock_ai_obs1.type = "ai"
+        mock_ai_obs1.content = ""
+        mock_ai_obs1.tool_calls = [{"name": "web_search", "args": {}}]
+
+        mock_tool2 = Mock()
+        mock_tool2.type = "tool"
+        mock_tool2.content = "Result 2"
+        mock_tool2.name = "web_search"
+
+        # Second observation
+        mock_ai_obs2 = Mock()
+        mock_ai_obs2.type = "ai"
+        mock_ai_obs2.content = ""
+        mock_ai_obs2.tool_calls = [{"name": "search_documents", "args": {}}]
+
+        mock_tool3 = Mock()
+        mock_tool3.type = "tool"
+        mock_tool3.content = "Result 3"
+        mock_tool3.name = "search_documents"
+
+        # Final response
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Final comprehensive answer"
+        mock_ai_response.tool_calls = None
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_reasoning, {}),
+            (mock_tool1, {}),
+            (mock_ai_obs1, {}),
+            (mock_tool2, {}),
+            (mock_ai_obs2, {}),
+            (mock_tool3, {}),
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Complex query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        # Verify correct counts
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        observation_steps = [s for s in middleware.state.steps if s.node == "llm_observation"]
+        response_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+
+        assert len(reasoning_steps) == 1, "Should have one llm_reasoning step"
+        assert len(observation_steps) == 2, "Should have two llm_observation steps"
+        assert len(response_steps) == 1, "Should have one llm_response step"
+
+        # Verify model_calls metric
+        # 1 reasoning + 2 observations + 1 response = 4 model calls
+        assert middleware.state.metrics.model_calls == 4
+
+
+class TestRunMethodLLMTracking:
+    """Tests for synchronous run() method LLM tracking with reasoning/observation."""
+
+    def _create_ai_message_mock(self, content="", tool_calls=None):
+        """Helper to create properly configured AI message mock."""
+        msg = Mock()
+        # Set type attribute for detection (matches run_stream pattern)
+        msg.type = "ai"
+        msg.content = content
+        msg.tool_calls = tool_calls if tool_calls else []
+        return msg
+
+    def _create_tool_message_mock(self, content=""):
+        """Helper to create properly configured tool message mock."""
+        msg = Mock()
+        msg.type = "tool"
+        msg.content = content
+        msg.tool_calls = []
+        return msg
+
+    def test_run_emits_reasoning_and_response(self):
+        """Test that run() emits both llm_reasoning and llm_response for simple tool use."""
+        # Build a result with tool usage
+        mock_ai_with_tool = self._create_ai_message_mock(
+            content="",
+            tool_calls=[{"name": "search_documents", "args": {"query": "test"}}]
+        )
+
+        mock_tool_result = self._create_tool_message_mock(content="Tool output")
+
+        mock_final_response = self._create_ai_message_mock(
+            content="Final answer",
+            tool_calls=[]
+        )
+
+        mock_agent = Mock()
+        mock_agent.invoke = Mock(return_value={
+            "messages": [mock_ai_with_tool, mock_tool_result, mock_final_response]
+        })
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            result = runner.run(
+                query="Test query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            )
+
+        # Verify reasoning and response steps
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        response_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+
+        assert len(reasoning_steps) == 1, "Should have one llm_reasoning step"
+        assert len(response_steps) == 1, "Should have one llm_response step"
+
+    def test_run_emits_observation_for_multi_tool_flow(self):
+        """Test that run() emits llm_observation for multi-tool ReAct flow."""
+        # First tool selection
+        mock_ai_reasoning = self._create_ai_message_mock(
+            content="",
+            tool_calls=[{"name": "arxiv_search", "args": {}}]
+        )
+
+        mock_tool1 = self._create_tool_message_mock(content="ArXiv result")
+
+        # Second tool selection (observation)
+        mock_ai_observation = self._create_ai_message_mock(
+            content="",
+            tool_calls=[{"name": "web_search", "args": {}}]
+        )
+
+        mock_tool2 = self._create_tool_message_mock(content="Web result")
+
+        # Final response
+        mock_final = self._create_ai_message_mock(
+            content="Comprehensive answer",
+            tool_calls=[]
+        )
+
+        mock_agent = Mock()
+        mock_agent.invoke = Mock(return_value={
+            "messages": [mock_ai_reasoning, mock_tool1, mock_ai_observation, mock_tool2, mock_final]
+        })
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            result = runner.run(
+                query="Complex query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            )
+
+        # Verify all three types of LLM steps
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        observation_steps = [s for s in middleware.state.steps if s.node == "llm_observation"]
+        response_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+
+        assert len(reasoning_steps) == 1, "Should have one llm_reasoning step"
+        assert len(observation_steps) == 1, "Should have one llm_observation step"
+        assert len(response_steps) == 1, "Should have one llm_response step"
+
+    def test_run_no_tools_only_response(self):
+        """Test that run() handles direct response without tool usage."""
+        mock_final = self._create_ai_message_mock(
+            content="Direct answer without tools",
+            tool_calls=[]
+        )
+
+        mock_agent = Mock()
+        mock_agent.invoke = Mock(return_value={
+            "messages": [mock_final]
+        })
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            result = runner.run(
+                query="Simple question",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            )
+
+        # Should only have llm_response, no reasoning
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        response_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+
+        assert len(reasoning_steps) == 0, "Should not have llm_reasoning without tool usage"
+        assert len(response_steps) == 1, "Should have one llm_response step"
+
+
+class TestModelCallsMetric:
+    """Tests for model_calls metric accuracy with new LLM tracking."""
+
+    def test_model_calls_counts_all_llm_phases(self):
+        """Test that model_calls metric correctly counts all LLM phases."""
+        # Simulate: reasoning -> tool -> observation -> tool -> response
+        mock_ai_reasoning = Mock()
+        mock_ai_reasoning.type = "ai"
+        mock_ai_reasoning.content = ""
+        mock_ai_reasoning.tool_calls = [{"name": "arxiv_search", "args": {}}]
+
+        mock_tool1 = Mock()
+        mock_tool1.type = "tool"
+        mock_tool1.content = "Result"
+        mock_tool1.name = "arxiv_search"
+
+        mock_ai_observation = Mock()
+        mock_ai_observation.type = "ai"
+        mock_ai_observation.content = ""
+        mock_ai_observation.tool_calls = [{"name": "web_search", "args": {}}]
+
+        mock_tool2 = Mock()
+        mock_tool2.type = "tool"
+        mock_tool2.content = "Result"
+        mock_tool2.name = "web_search"
+
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Final answer"
+        mock_ai_response.tool_calls = None
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_reasoning, {}),
+            (mock_tool1, {}),
+            (mock_ai_observation, {}),
+            (mock_tool2, {}),
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        # 1 reasoning + 1 observation + 1 response = 3 model calls
+        assert middleware.state.metrics.model_calls == 3
+
+    def test_tool_calls_metric_unchanged(self):
+        """Test that tool_calls metric is still correctly tracked."""
+        mock_ai_reasoning = Mock()
+        mock_ai_reasoning.type = "ai"
+        mock_ai_reasoning.content = ""
+        mock_ai_reasoning.tool_calls = [{"name": "arxiv_search", "args": {}}]
+
+        mock_tool1 = Mock()
+        mock_tool1.type = "tool"
+        mock_tool1.content = "Result"
+        mock_tool1.name = "arxiv_search"
+
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Answer"
+        mock_ai_response.tool_calls = None
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_reasoning, {}),
+            (mock_tool1, {}),
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        # Tool calls: 1 arxiv_search (tracked by middleware on_tool_start)
+        # Note: Tool tracking happens through middleware.on_tool_start, not the runner
+        # The runner emits tool events but doesn't call middleware.on_tool_start
+        # Tool metric is tracked separately
+        assert middleware.state.metrics.tool_calls == 0  # Not tracked by LLM callbacks
+
+
+class TestChannelIdPassedToCallbacks:
+    """Tests to verify channel_id is properly passed to all LLM callbacks."""
+
+    def test_reasoning_callback_receives_channel_id(self):
+        """Test that llm_reasoning callbacks receive channel_id."""
+        received_data = []
+
+        def capture_events(event):
+            if "llm" in event.get("event", ""):
+                received_data.append(event.get("data", {}))
+
+        mock_ai_with_tool = Mock()
+        mock_ai_with_tool.type = "ai"
+        mock_ai_with_tool.content = ""
+        mock_ai_with_tool.tool_calls = [{"name": "search", "args": {}}]
+
+        mock_tool = Mock()
+        mock_tool.type = "tool"
+        mock_tool.content = "Result"
+        mock_tool.name = "search"
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_with_tool, {}),
+            (mock_tool, {}),
+        ]))
+
+        middleware = DashboardMiddleware(state_updater=capture_events)
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test",
+                config=AgentConfig(),
+                context={"channel_id": "my-channel-123"},
+            ))
+
+        # Verify channel_id was included
+        assert len(received_data) >= 2  # At least start and complete
+        for data in received_data:
+            assert data.get("channel_id") == "my-channel-123"

@@ -218,10 +218,6 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             messages.append(("user", query))
 
-            # Emit LLM start event for synchronous run
-            if self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_start("llm_response", {"channel_id": channel_id})
-
             # Run agent
             agent_start_time = datetime.now()
             result = agent.invoke(
@@ -230,9 +226,52 @@ class LangGraphAgentRunner(AgentRunnerPort):
             )
             agent_duration_ms = (datetime.now() - agent_start_time).total_seconds() * 1000
 
-            # Emit LLM end event for synchronous run
+            # Analyze messages to emit proper LLM events for synchronous run
+            # ReAct flow: llm_reasoning -> tool -> llm_observation -> tool -> ... -> llm_response
             if self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id})
+                result_messages = result.get("messages", [])
+                llm_call_count = 0
+                tool_call_count = 0
+
+                # DEBUG: Print all messages for E2E verification
+                print(f"[RUN DEBUG] Total messages: {len(result_messages)}", flush=True)
+                for idx, msg in enumerate(result_messages):
+                    msg_type_dbg = getattr(msg, "type", None) or type(msg).__name__.lower()
+                    tc_dbg = getattr(msg, "tool_calls", None)
+                    content_dbg = str(getattr(msg, "content", ""))[:50]
+                    print(f"[RUN DEBUG] msg[{idx}] type={msg_type_dbg}, tool_calls={tc_dbg}, content={content_dbg}", flush=True)
+
+                for msg in result_messages:
+                    # Get message type - support both real messages and mocks
+                    msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
+
+                    # Skip user/human messages
+                    if "human" in str(msg_type).lower():
+                        continue
+
+                    # AIMessage with tool_calls - reasoning or observation phase
+                    if "ai" in str(msg_type).lower() and hasattr(msg, "tool_calls") and msg.tool_calls:
+                        if tool_call_count == 0:
+                            # First tool selection - llm_reasoning
+                            llm_role = "llm_reasoning"
+                        else:
+                            # After tool execution - llm_observation
+                            llm_role = "llm_observation"
+
+                        self._dashboard_middleware.on_llm_start(llm_role, {"channel_id": channel_id})
+                        self._dashboard_middleware.on_llm_end(llm_role, {"channel_id": channel_id})
+                        llm_call_count += 1
+                        tool_call_count += len(msg.tool_calls)
+
+                    # AIMessage with content (no tool_calls or empty) - final response
+                    elif "ai" in str(msg_type).lower():
+                        content = getattr(msg, "content", "")
+                        has_tool_calls = hasattr(msg, "tool_calls") and msg.tool_calls
+
+                        if content and not has_tool_calls:
+                            # Final response with content
+                            self._dashboard_middleware.on_llm_start("llm_response", {"channel_id": channel_id})
+                            self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id})
 
             # Emit tool events based on actual tool calls in result
             if self._event_sink:
@@ -351,9 +390,14 @@ class LangGraphAgentRunner(AgentRunnerPort):
             tool_start_times: dict[str, datetime] = {}
             active_tools: set[str] = set()
 
-            # Track LLM response state for dashboard middleware
+            # Track LLM call state for dashboard middleware
+            # - llm_reasoning: Initial reasoning when tool_calls present but no content
+            # - llm_observation: After tool execution, observing results and deciding next action
+            # - llm_response: Final response with content to user
+            llm_reasoning_started = False
+            llm_observation_started = False
             llm_response_started = False
-            current_llm_role = "llm_response"
+            tool_just_completed = False  # Flag to detect observation phase
 
             # Use stream mode "messages" for token-by-token streaming
             final_response = ""
@@ -368,6 +412,10 @@ class LangGraphAgentRunner(AgentRunnerPort):
                 # Get message type
                 msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
 
+                # DEBUG: Print message details for E2E verification
+                tool_calls_debug = getattr(msg, "tool_calls", None)
+                print(f"[RUNNER DEBUG] msg_type={msg_type}, tool_calls={tool_calls_debug}, content_preview={str(getattr(msg, 'content', ''))[:50]}", flush=True)
+
                 # Skip HumanMessage (user's query)
                 if "human" in str(msg_type).lower():
                     continue
@@ -376,9 +424,31 @@ class LangGraphAgentRunner(AgentRunnerPort):
                 if "ai" in str(msg_type).lower():
                     tool_calls = getattr(msg, "tool_calls", None)
                     if tool_calls:
+                        # Determine LLM role based on context
+                        if tool_just_completed:
+                            # After tool execution, this is an observation/decision phase
+                            llm_role = "llm_observation"
+                            if not llm_observation_started and self._dashboard_middleware:
+                                llm_observation_started = True
+                                self._dashboard_middleware.on_llm_start(llm_role, {"channel_id": channel_id})
+                        else:
+                            # Initial reasoning phase (first tool selection)
+                            llm_role = "llm_reasoning"
+                            if not llm_reasoning_started and self._dashboard_middleware:
+                                llm_reasoning_started = True
+                                self._dashboard_middleware.on_llm_start(llm_role, {"channel_id": channel_id})
+
                         for tc in tool_calls:
                             tool_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
                             if tool_name and tool_name not in active_tools:
+                                # End the current LLM phase before tool starts
+                                if llm_reasoning_started and not tool_just_completed and self._dashboard_middleware:
+                                    self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id})
+                                    llm_reasoning_started = False
+                                elif llm_observation_started and self._dashboard_middleware:
+                                    self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id})
+                                    llm_observation_started = False
+
                                 active_tools.add(tool_name)
                                 tool_start_times[tool_name] = datetime.now()
 
@@ -408,6 +478,9 @@ class LangGraphAgentRunner(AgentRunnerPort):
                                 duration_ms=duration_ms,
                             ))
                         yield {"event": "tool_completed", "tool": tool_name}
+
+                        # Mark that a tool just completed (for observation phase detection)
+                        tool_just_completed = True
                     continue  # Skip tool message content from final response
 
                 # Get content from the message chunk
@@ -425,7 +498,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
                     # LLM response started - emit llm_start event via middleware
                     if not llm_response_started and self._dashboard_middleware:
                         llm_response_started = True
-                        self._dashboard_middleware.on_llm_start(current_llm_role, {"channel_id": channel_id})
+                        self._dashboard_middleware.on_llm_start("llm_response", {"channel_id": channel_id})
 
                     final_response += content
                     yield {
@@ -433,9 +506,16 @@ class LangGraphAgentRunner(AgentRunnerPort):
                         "content": content,
                     }
 
+            # Finalize any remaining LLM phases
             # LLM response completed - emit llm_end event via middleware
             if llm_response_started and self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end(current_llm_role, {"channel_id": channel_id})
+                self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id})
+
+            # Clean up any incomplete LLM phases (edge cases)
+            if llm_reasoning_started and self._dashboard_middleware:
+                self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id})
+            if llm_observation_started and self._dashboard_middleware:
+                self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id})
 
             # Build result from collected messages
             result = {"messages": final_messages, "response": final_response}
