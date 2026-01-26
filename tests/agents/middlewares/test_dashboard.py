@@ -806,3 +806,91 @@ class TestDashboardMiddlewareLLMIntegration:
 
         assert llm_step["data"]["type"] == "llm"
         assert tool_step["data"]["type"] == "tool"
+
+
+class TestDashboardMiddlewareLLMTokens:
+    """Tests for LLM token usage tracking in on_llm_end."""
+
+    def test_on_llm_end_with_tokens(self):
+        """Test that on_llm_end records token usage."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_draft")
+        middleware.on_llm_end("llm_draft", tokens=1500)
+
+        step = middleware.state.steps[0]
+        assert step.status == NodeStatus.COMPLETE
+        assert step.data.get("tokens") == 1500
+
+    def test_on_llm_end_without_tokens(self):
+        """Test that on_llm_end works when tokens is None."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_draft")
+        middleware.on_llm_end("llm_draft", tokens=None)
+
+        step = middleware.state.steps[0]
+        assert step.status == NodeStatus.COMPLETE
+        assert "tokens" not in step.data
+
+    def test_on_llm_end_tokens_in_event(self):
+        """Test that tokens are included in LLM_COMPLETE event data."""
+        events = []
+        middleware = DashboardMiddleware(state_updater=lambda e: events.append(e))
+
+        middleware.on_llm_start("llm_response")
+        events.clear()
+        middleware.on_llm_end("llm_response", tokens=2500)
+
+        assert len(events) == 1
+        assert events[0]["event"] == "llm_complete"
+        assert events[0]["data"]["tokens"] == 2500
+
+    def test_on_llm_end_tokens_not_in_event_when_none(self):
+        """Test that tokens are not in event when None."""
+        events = []
+        middleware = DashboardMiddleware(state_updater=lambda e: events.append(e))
+
+        middleware.on_llm_start("llm_response")
+        events.clear()
+        middleware.on_llm_end("llm_response", tokens=None)
+
+        assert len(events) == 1
+        assert events[0]["event"] == "llm_complete"
+        assert "tokens" not in events[0]["data"]
+
+    def test_on_llm_end_with_data_and_tokens(self):
+        """Test that tokens work alongside other data."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_reflect", {"prompt_length": 100})
+        middleware.on_llm_end("llm_reflect", {"response_length": 200}, tokens=850)
+
+        step = middleware.state.steps[0]
+        assert step.data["type"] == "llm"
+        assert step.data["prompt_length"] == 100
+        assert step.data["tokens"] == 850
+
+    def test_multiple_llm_calls_with_different_tokens(self):
+        """Test multiple LLM calls each with different token counts."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_reasoning")
+        middleware.on_llm_end("llm_reasoning", tokens=500)
+
+        middleware.on_llm_start("llm_response")
+        middleware.on_llm_end("llm_response", tokens=1200)
+
+        assert middleware.state.steps[0].data.get("tokens") == 500
+        assert middleware.state.steps[1].data.get("tokens") == 1200
+
+    def test_state_dict_includes_tokens(self):
+        """Test that tokens are serialized in state dict."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_draft")
+        middleware.on_llm_end("llm_draft", tokens=3500)
+
+        state_dict = middleware.get_state_dict()
+
+        assert state_dict["steps"][0]["data"]["tokens"] == 3500

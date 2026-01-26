@@ -292,12 +292,16 @@ class AgentStateStore:
 
             elif event_type == "llm_complete":
                 node = event.get("node", "unknown")
-                duration = event.get("data", {}).get("duration_ms")
+                event_data = event.get("data", {})
+                duration = event_data.get("duration_ms")
+                tokens = event_data.get("tokens")
                 # Update the last step for this node
                 for step in reversed(state.steps):
                     if step.node == node and step.status == "running":
                         step.status = "complete"
                         step.duration_ms = duration
+                        if tokens is not None:
+                            step.data["tokens"] = tokens
                         break
 
             # Handle tool events

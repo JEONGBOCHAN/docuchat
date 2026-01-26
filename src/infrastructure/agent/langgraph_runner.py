@@ -258,8 +258,12 @@ class LangGraphAgentRunner(AgentRunnerPort):
                             # After tool execution - llm_observation
                             llm_role = "llm_observation"
 
+                        # Extract token usage from usage_metadata
+                        usage = getattr(msg, "usage_metadata", None)
+                        tokens = usage.get("total_tokens") if usage else None
+
                         self._dashboard_middleware.on_llm_start(llm_role, {"channel_id": channel_id})
-                        self._dashboard_middleware.on_llm_end(llm_role, {"channel_id": channel_id})
+                        self._dashboard_middleware.on_llm_end(llm_role, {"channel_id": channel_id}, tokens=tokens)
                         llm_call_count += 1
                         tool_call_count += len(msg.tool_calls)
 
@@ -269,9 +273,13 @@ class LangGraphAgentRunner(AgentRunnerPort):
                         has_tool_calls = hasattr(msg, "tool_calls") and msg.tool_calls
 
                         if content and not has_tool_calls:
+                            # Extract token usage from usage_metadata
+                            usage = getattr(msg, "usage_metadata", None)
+                            tokens = usage.get("total_tokens") if usage else None
+
                             # Final response with content
                             self._dashboard_middleware.on_llm_start("llm_response", {"channel_id": channel_id})
-                            self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id})
+                            self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id}, tokens=tokens)
 
             # Emit tool events based on actual tool calls in result
             if self._event_sink:
@@ -399,6 +407,9 @@ class LangGraphAgentRunner(AgentRunnerPort):
             llm_response_started = False
             tool_just_completed = False  # Flag to detect observation phase
 
+            # Track token usage for each LLM phase
+            current_llm_tokens: int | None = None
+
             # Use stream mode "messages" for token-by-token streaming
             final_response = ""
             final_messages = []
@@ -422,6 +433,11 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
                 # Detect tool calls from AIMessage (agent deciding to use a tool)
                 if "ai" in str(msg_type).lower():
+                    # Extract token usage from usage_metadata (available on final chunk)
+                    usage = getattr(msg, "usage_metadata", None)
+                    if usage:
+                        current_llm_tokens = usage.get("total_tokens")
+
                     tool_calls = getattr(msg, "tool_calls", None)
                     if tool_calls:
                         # Determine LLM role based on context
@@ -443,11 +459,13 @@ class LangGraphAgentRunner(AgentRunnerPort):
                             if tool_name and tool_name not in active_tools:
                                 # End the current LLM phase before tool starts
                                 if llm_reasoning_started and not tool_just_completed and self._dashboard_middleware:
-                                    self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id})
+                                    self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=current_llm_tokens)
                                     llm_reasoning_started = False
+                                    current_llm_tokens = None
                                 elif llm_observation_started and self._dashboard_middleware:
-                                    self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id})
+                                    self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=current_llm_tokens)
                                     llm_observation_started = False
+                                    current_llm_tokens = None
 
                                 active_tools.add(tool_name)
                                 tool_start_times[tool_name] = datetime.now()
@@ -509,13 +527,14 @@ class LangGraphAgentRunner(AgentRunnerPort):
             # Finalize any remaining LLM phases
             # LLM response completed - emit llm_end event via middleware
             if llm_response_started and self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id})
+                self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id}, tokens=current_llm_tokens)
+                current_llm_tokens = None
 
             # Clean up any incomplete LLM phases (edge cases)
             if llm_reasoning_started and self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id})
+                self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=current_llm_tokens)
             if llm_observation_started and self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id})
+                self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=current_llm_tokens)
 
             # Build result from collected messages
             result = {"messages": final_messages, "response": final_response}

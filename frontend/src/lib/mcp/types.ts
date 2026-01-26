@@ -170,7 +170,11 @@ export interface ExecutionStep {
   status: 'pending' | 'active' | 'complete' | 'error';
   startTime?: string;
   endTime?: string;
-  data?: Record<string, unknown>;
+  data?: {
+    type?: string;
+    tokens?: number;
+    [key: string]: unknown;
+  };
 }
 
 export interface ExecutionMetrics {

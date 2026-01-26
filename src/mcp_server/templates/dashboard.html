@@ -200,6 +200,15 @@
         .step-duration {
             color: #9ca3af;
             font-size: 12px;
+            min-width: 50px;
+            text-align: right;
+        }
+
+        .step-tokens {
+            color: #60a5fa;
+            font-size: 12px;
+            min-width: 50px;
+            text-align: right;
         }
 
         /* Error message */
@@ -297,6 +306,17 @@
             'error': ''
         };
 
+        // Format token count for display
+        // < 1,000: display as-is (e.g., 500, 850)
+        // 1,000 ~ 999,999: display as k with 1 decimal (e.g., 1.2k, 10.5k)
+        // >= 1,000,000: display as M with 1 decimal (e.g., 1.5M)
+        function formatTokens(tokens) {
+            if (tokens === null || tokens === undefined) return '';
+            if (tokens < 1000) return tokens.toString();
+            if (tokens < 1000000) return (tokens / 1000).toFixed(1) + 'k';
+            return (tokens / 1000000).toFixed(1) + 'M';
+        }
+
         // Render the dashboard based on state
         function render(state) {
             if (!state) return;
@@ -369,11 +389,15 @@
                 const duration = step.duration_ms
                     ? (step.duration_ms / 1000).toFixed(2) + 's'
                     : '';
+                const tokens = step.data?.tokens
+                    ? formatTokens(step.data.tokens)
+                    : '';
 
                 stepEl.innerHTML = `
                     <span class="step-icon">${icon}</span>
                     <span class="step-name">${step.node}</span>
                     <span class="step-duration">${duration}</span>
+                    <span class="step-tokens">${tokens}</span>
                 `;
 
                 stepsList.appendChild(stepEl);

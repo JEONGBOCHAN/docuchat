@@ -545,6 +545,96 @@ class TestAgentStateStoreUpdate:
         assert state["steps"][2]["node"] == "llm_revise"
         assert state["steps"][2]["status"] == "complete"
 
+    def test_update_llm_complete_with_tokens(self):
+        """Test handling llm_complete event with token usage."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        # First, start an LLM call
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_reasoning",
+            "timestamp": "2024-01-01T00:00:01",
+            "data": {"type": "llm"},
+        })
+
+        # Then complete it with tokens
+        store.update({
+            "event": "llm_complete",
+            "channel_id": channel_id,
+            "node": "llm_reasoning",
+            "data": {"type": "llm", "duration_ms": 2000, "tokens": 1500},
+        })
+
+        state = store.get_state(channel_id)
+        assert len(state["steps"]) == 1
+        assert state["steps"][0]["status"] == "complete"
+        assert state["steps"][0]["duration_ms"] == 2000
+        assert state["steps"][0]["data"]["tokens"] == 1500
+
+    def test_update_llm_complete_without_tokens(self):
+        """Test that llm_complete without tokens doesn't add tokens key."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_draft",
+            "timestamp": "2024-01-01T00:00:01",
+            "data": {"type": "llm"},
+        })
+
+        store.update({
+            "event": "llm_complete",
+            "channel_id": channel_id,
+            "node": "llm_draft",
+            "data": {"type": "llm", "duration_ms": 1000},
+        })
+
+        state = store.get_state(channel_id)
+        assert "tokens" not in state["steps"][0]["data"]
+
+    def test_update_multiple_llm_with_tokens(self):
+        """Test multiple LLM calls with different token counts."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        # First LLM call
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_reasoning",
+            "timestamp": "2024-01-01T00:00:01",
+            "data": {"type": "llm"},
+        })
+        store.update({
+            "event": "llm_complete",
+            "channel_id": channel_id,
+            "node": "llm_reasoning",
+            "data": {"type": "llm", "duration_ms": 1000, "tokens": 500},
+        })
+
+        # Second LLM call
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_response",
+            "timestamp": "2024-01-01T00:00:02",
+            "data": {"type": "llm"},
+        })
+        store.update({
+            "event": "llm_complete",
+            "channel_id": channel_id,
+            "node": "llm_response",
+            "data": {"type": "llm", "duration_ms": 2000, "tokens": 2500},
+        })
+
+        state = store.get_state(channel_id)
+        assert state["steps"][0]["data"]["tokens"] == 500
+        assert state["steps"][1]["data"]["tokens"] == 2500
+
 
 class TestAgentStateStoreThreadSafety:
     """Tests for thread safety of AgentStateStore."""

@@ -316,14 +316,21 @@ class DashboardMiddleware:
             data={"type": "llm", **data},
         )
 
-    def on_llm_end(self, llm_role: str, data: dict[str, Any] | None = None) -> None:
+    def on_llm_end(
+        self,
+        llm_role: str,
+        data: dict[str, Any] | None = None,
+        tokens: int | None = None,
+    ) -> None:
         """Called when an LLM call completes.
 
-        Updates the step record with duration and publishes an llm_complete event.
+        Updates the step record with duration and token usage, and publishes
+        an llm_complete event.
 
         Args:
             llm_role: Role of the LLM that completed.
             data: Additional data about the completion (e.g., response_length).
+            tokens: Total token count for this LLM call (optional).
         """
         data = data or {}
         duration = self._calculate_duration(llm_role)
@@ -332,12 +339,18 @@ class DashboardMiddleware:
             if step.node == llm_role and step.status == NodeStatus.RUNNING:
                 step.status = NodeStatus.COMPLETE
                 step.duration_ms = duration
+                if tokens is not None:
+                    step.data["tokens"] = tokens
                 break
+
+        event_data = {"type": "llm", "duration_ms": duration, **data}
+        if tokens is not None:
+            event_data["tokens"] = tokens
 
         self._publish_event(
             EventType.LLM_COMPLETE,
             node=llm_role,
-            data={"type": "llm", "duration_ms": duration, **data},
+            data=event_data,
         )
 
     def _calculate_duration(self, node: str) -> float | None:
