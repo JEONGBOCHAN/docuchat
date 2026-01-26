@@ -12,9 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    services:
-      # SQLite is used by default, no external DB needed
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
