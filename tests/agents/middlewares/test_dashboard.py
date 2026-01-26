@@ -598,3 +598,211 @@ class TestDashboardMiddlewareIntegration:
             assert "current_node" in state
             assert "steps" in state
             assert "metrics" in state
+
+
+class TestDashboardMiddlewareLLMHooks:
+    """Tests for on_llm_start and on_llm_end hooks."""
+
+    def test_on_llm_start_updates_state(self):
+        """Test that on_llm_start correctly updates middleware state."""
+        events = []
+        middleware = DashboardMiddleware(state_updater=lambda e: events.append(e))
+
+        middleware.on_llm_start("llm_draft", {"prompt_length": 100})
+
+        assert middleware.state.current_node == "llm_draft"
+        assert middleware.state.metrics.model_calls == 1
+        assert middleware.state.metrics.total_steps == 1
+
+        # Check step was recorded
+        assert len(middleware.state.steps) == 1
+        step = middleware.state.steps[0]
+        assert step.node == "llm_draft"
+        assert step.status == NodeStatus.RUNNING
+        assert step.data["type"] == "llm"
+        assert step.data["prompt_length"] == 100
+
+    def test_on_llm_end_completes_step(self):
+        """Test that on_llm_end marks step as complete with duration."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_reflect")
+        middleware.on_llm_end("llm_reflect", {"response_length": 500})
+
+        step = middleware.state.steps[0]
+        assert step.status == NodeStatus.COMPLETE
+        assert step.duration_ms is not None
+        assert step.duration_ms >= 0
+
+    def test_on_llm_start_publishes_event(self):
+        """Test that on_llm_start publishes LLM_START event."""
+        events = []
+        middleware = DashboardMiddleware(state_updater=lambda e: events.append(e))
+
+        middleware.on_llm_start("llm_draft")
+
+        assert len(events) == 1
+        assert events[0]["event"] == "llm_start"
+        assert events[0]["node"] == "llm_draft"
+        assert events[0]["data"]["type"] == "llm"
+
+    def test_on_llm_end_publishes_event(self):
+        """Test that on_llm_end publishes LLM_COMPLETE event."""
+        events = []
+        middleware = DashboardMiddleware(state_updater=lambda e: events.append(e))
+
+        middleware.on_llm_start("llm_revise")
+        events.clear()
+        middleware.on_llm_end("llm_revise")
+
+        assert len(events) == 1
+        assert events[0]["event"] == "llm_complete"
+        assert events[0]["node"] == "llm_revise"
+        assert "duration_ms" in events[0]["data"]
+        assert events[0]["data"]["type"] == "llm"
+
+    def test_multiple_llm_calls_sequence(self):
+        """Test sequence of LLM calls (draft -> reflect -> revise)."""
+        middleware = DashboardMiddleware()
+
+        # Draft
+        middleware.on_llm_start("llm_draft")
+        middleware.on_llm_end("llm_draft")
+
+        # Reflect
+        middleware.on_llm_start("llm_reflect")
+        middleware.on_llm_end("llm_reflect")
+
+        # Revise
+        middleware.on_llm_start("llm_revise")
+        middleware.on_llm_end("llm_revise")
+
+        assert middleware.state.metrics.model_calls == 3
+        assert middleware.state.metrics.total_steps == 3
+        assert len(middleware.state.steps) == 3
+
+        # Verify all steps completed
+        for step in middleware.state.steps:
+            assert step.status == NodeStatus.COMPLETE
+            assert step.data["type"] == "llm"
+
+    def test_llm_and_tool_calls_mixed(self):
+        """Test LLM calls mixed with tool calls."""
+        events = []
+        middleware = DashboardMiddleware(state_updater=lambda e: events.append(e))
+
+        # LLM call
+        middleware.on_llm_start("llm_draft")
+        middleware.on_llm_end("llm_draft")
+
+        # Tool call
+        middleware.on_tool_start("search_documents", {"query": "test"})
+        middleware.on_tool_end("search_documents", {"results": 5})
+
+        # Another LLM call
+        middleware.on_llm_start("llm_reflect")
+        middleware.on_llm_end("llm_reflect")
+
+        assert middleware.state.metrics.model_calls == 2
+        assert middleware.state.metrics.tool_calls == 1
+        assert middleware.state.metrics.total_steps == 3
+
+        # Verify step types
+        llm_steps = [s for s in middleware.state.steps if s.data.get("type") == "llm"]
+        tool_steps = [s for s in middleware.state.steps if s.data.get("type") == "tool"]
+        assert len(llm_steps) == 2
+        assert len(tool_steps) == 1
+
+    def test_on_llm_start_with_no_data(self):
+        """Test on_llm_start works with no additional data."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_draft")
+
+        step = middleware.state.steps[0]
+        assert step.data["type"] == "llm"
+
+    def test_on_llm_end_with_no_data(self):
+        """Test on_llm_end works with no additional data."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_draft")
+        middleware.on_llm_end("llm_draft")
+
+        step = middleware.state.steps[0]
+        assert step.status == NodeStatus.COMPLETE
+
+    def test_llm_event_type_values(self):
+        """Test that LLM event types have expected values."""
+        assert EventType.LLM_START.value == "llm_start"
+        assert EventType.LLM_COMPLETE.value == "llm_complete"
+
+
+class TestDashboardMiddlewareLLMIntegration:
+    """Integration tests for LLM callbacks with full agent lifecycle."""
+
+    def test_full_lifecycle_with_llm_callbacks(self):
+        """Test complete agent execution using on_llm_start/on_llm_end."""
+        events = []
+        middleware = DashboardMiddleware(state_updater=lambda e: events.append(e))
+
+        # 1. Agent starts
+        middleware.on_agent_start({"query": "What is AI?"})
+
+        # 2. LLM Draft
+        middleware.on_llm_start("llm_draft", {"prompt_length": 50})
+        middleware.on_llm_end("llm_draft", {"response_length": 200})
+
+        # 3. Tool call
+        middleware.on_tool_start("search_documents", {"query": "AI"})
+        middleware.on_tool_end("search_documents", {"results": 3})
+
+        # 4. LLM Reflect
+        middleware.on_llm_start("llm_reflect", {"prompt_length": 300})
+        middleware.on_llm_end("llm_reflect", {"response_length": 150})
+
+        # 5. LLM Revise
+        middleware.on_llm_start("llm_revise", {"prompt_length": 450})
+        middleware.on_llm_end("llm_revise", {"response_length": 500})
+
+        # 6. Agent completes
+        middleware.on_agent_end({"response": "AI is..."})
+
+        # Verify final state
+        assert middleware.state.status == AgentStatus.COMPLETE
+        assert middleware.state.metrics.model_calls == 3
+        assert middleware.state.metrics.tool_calls == 1
+        assert middleware.state.metrics.total_steps == 4
+
+        # Verify events include llm_start and llm_complete
+        event_types = [e["event"] for e in events]
+        assert "agent_start" in event_types
+        assert "llm_start" in event_types
+        assert "llm_complete" in event_types
+        assert "tool_start" in event_types
+        assert "tool_complete" in event_types
+        assert "agent_complete" in event_types
+
+        # Count LLM events
+        llm_start_events = [e for e in events if e["event"] == "llm_start"]
+        llm_complete_events = [e for e in events if e["event"] == "llm_complete"]
+        assert len(llm_start_events) == 3
+        assert len(llm_complete_events) == 3
+
+    def test_llm_step_distinguishable_from_tool(self):
+        """Test that LLM steps are distinguishable from tool steps in state dict."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_draft")
+        middleware.on_llm_end("llm_draft")
+        middleware.on_tool_start("search", {"query": "test"})
+        middleware.on_tool_end("search", {})
+
+        state_dict = middleware.get_state_dict()
+
+        # Verify steps have type field
+        llm_step = state_dict["steps"][0]
+        tool_step = state_dict["steps"][1]
+
+        assert llm_step["data"]["type"] == "llm"
+        assert tool_step["data"]["type"] == "tool"

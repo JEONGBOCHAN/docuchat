@@ -433,6 +433,118 @@ class TestAgentStateStoreUpdate:
         assert state["steps"][0]["status"] == "error"
         assert state["steps"][0]["data"].get("error") == "API timeout"
 
+    def test_update_llm_start(self):
+        """Test handling llm_start event."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_draft",
+            "timestamp": "2024-01-01T00:00:01",
+            "data": {"type": "llm", "prompt_length": 100},
+        })
+
+        state = store.get_state(channel_id)
+        assert state["current_node"] == "llm_draft"
+        assert state["metrics"]["model_calls"] == 1
+        assert state["metrics"]["total_steps"] == 1
+        assert len(state["steps"]) == 1
+        assert state["steps"][0]["node"] == "llm_draft"
+        assert state["steps"][0]["status"] == "running"
+        assert state["steps"][0]["data"]["type"] == "llm"
+
+    def test_update_llm_complete(self):
+        """Test handling llm_complete event."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        # First, start an LLM call
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_reflect",
+            "timestamp": "2024-01-01T00:00:01",
+            "data": {"type": "llm"},
+        })
+
+        # Then complete it
+        store.update({
+            "event": "llm_complete",
+            "channel_id": channel_id,
+            "node": "llm_reflect",
+            "data": {"type": "llm", "duration_ms": 2500},
+        })
+
+        state = store.get_state(channel_id)
+        assert len(state["steps"]) == 1
+        assert state["steps"][0]["status"] == "complete"
+        assert state["steps"][0]["duration_ms"] == 2500
+
+    def test_update_llm_sequence(self):
+        """Test handling sequence of LLM events (draft -> reflect -> revise)."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        # Draft
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_draft",
+            "timestamp": "2024-01-01T00:00:01",
+            "data": {"type": "llm"},
+        })
+        store.update({
+            "event": "llm_complete",
+            "channel_id": channel_id,
+            "node": "llm_draft",
+            "data": {"type": "llm", "duration_ms": 1000},
+        })
+
+        # Reflect
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_reflect",
+            "timestamp": "2024-01-01T00:00:02",
+            "data": {"type": "llm"},
+        })
+        store.update({
+            "event": "llm_complete",
+            "channel_id": channel_id,
+            "node": "llm_reflect",
+            "data": {"type": "llm", "duration_ms": 800},
+        })
+
+        # Revise
+        store.update({
+            "event": "llm_start",
+            "channel_id": channel_id,
+            "node": "llm_revise",
+            "timestamp": "2024-01-01T00:00:03",
+            "data": {"type": "llm"},
+        })
+        store.update({
+            "event": "llm_complete",
+            "channel_id": channel_id,
+            "node": "llm_revise",
+            "data": {"type": "llm", "duration_ms": 1200},
+        })
+
+        state = store.get_state(channel_id)
+        assert state["metrics"]["model_calls"] == 3
+        assert state["metrics"]["total_steps"] == 3
+        assert len(state["steps"]) == 3
+
+        # Verify all steps
+        assert state["steps"][0]["node"] == "llm_draft"
+        assert state["steps"][0]["status"] == "complete"
+        assert state["steps"][1]["node"] == "llm_reflect"
+        assert state["steps"][1]["status"] == "complete"
+        assert state["steps"][2]["node"] == "llm_revise"
+        assert state["steps"][2]["status"] == "complete"
+
 
 class TestAgentStateStoreThreadSafety:
     """Tests for thread safety of AgentStateStore."""

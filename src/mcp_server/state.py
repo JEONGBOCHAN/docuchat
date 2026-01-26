@@ -275,6 +275,31 @@ class AgentStateStore:
                         step.duration_ms = duration
                         break
 
+            # Handle LLM events (role-based: llm_draft, llm_reflect, llm_revise)
+            elif event_type == "llm_start":
+                node = event.get("node", "unknown")
+                state.current_node = node
+                state.metrics.model_calls += 1
+                state.metrics.total_steps += 1
+                state.steps.append(
+                    StepRecord(
+                        node=node,
+                        status="running",
+                        timestamp=event.get("timestamp", datetime.now().isoformat()),
+                        data=event.get("data", {}),
+                    )
+                )
+
+            elif event_type == "llm_complete":
+                node = event.get("node", "unknown")
+                duration = event.get("data", {}).get("duration_ms")
+                # Update the last step for this node
+                for step in reversed(state.steps):
+                    if step.node == node and step.status == "running":
+                        step.status = "complete"
+                        step.duration_ms = duration
+                        break
+
             # Handle tool events
             elif event_type == "tool_start":
                 node = event.get("node", "unknown")

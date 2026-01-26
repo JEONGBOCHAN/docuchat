@@ -41,6 +41,8 @@ class EventType(str, Enum):
     NODE_ERROR = "node_error"
     MODEL_START = "model_start"
     MODEL_COMPLETE = "model_complete"
+    LLM_START = "llm_start"
+    LLM_COMPLETE = "llm_complete"
     TOOL_START = "tool_start"
     TOOL_COMPLETE = "tool_complete"
     TOOL_ERROR = "tool_error"
@@ -283,6 +285,59 @@ class DashboardMiddleware:
             EventType.TOOL_COMPLETE,
             node=tool_name,
             data={"duration_ms": duration, **data},
+        )
+
+    def on_llm_start(self, llm_role: str, data: dict[str, Any] | None = None) -> None:
+        """Called when an LLM call starts.
+
+        This method provides real-time feedback when an LLM begins processing.
+        Use role-based names like llm_draft, llm_reflect, llm_revise for clarity.
+
+        Args:
+            llm_role: Role of the LLM (e.g., llm_draft, llm_reflect, llm_revise).
+            data: Additional data about the LLM call (e.g., prompt_length).
+        """
+        data = data or {}
+        self._state.current_node = llm_role
+        self._step_start_times[llm_role] = datetime.now()
+        self._state.metrics.model_calls += 1
+
+        step = StepRecord(
+            node=llm_role,
+            status=NodeStatus.RUNNING,
+            data={"type": "llm", **data},
+        )
+        self._state.steps.append(step)
+        self._state.metrics.total_steps += 1
+
+        self._publish_event(
+            EventType.LLM_START,
+            node=llm_role,
+            data={"type": "llm", **data},
+        )
+
+    def on_llm_end(self, llm_role: str, data: dict[str, Any] | None = None) -> None:
+        """Called when an LLM call completes.
+
+        Updates the step record with duration and publishes an llm_complete event.
+
+        Args:
+            llm_role: Role of the LLM that completed.
+            data: Additional data about the completion (e.g., response_length).
+        """
+        data = data or {}
+        duration = self._calculate_duration(llm_role)
+
+        for step in reversed(self._state.steps):
+            if step.node == llm_role and step.status == NodeStatus.RUNNING:
+                step.status = NodeStatus.COMPLETE
+                step.duration_ms = duration
+                break
+
+        self._publish_event(
+            EventType.LLM_COMPLETE,
+            node=llm_role,
+            data={"type": "llm", "duration_ms": duration, **data},
         )
 
     def _calculate_duration(self, node: str) -> float | None:
