@@ -46,6 +46,7 @@ class EventType(str, Enum):
     TOOL_START = "tool_start"
     TOOL_COMPLETE = "tool_complete"
     TOOL_ERROR = "tool_error"
+    TOKEN_UPDATE = "token_update"
 
 
 @dataclass
@@ -386,6 +387,32 @@ class DashboardMiddleware:
             if step.node == llm_role:
                 step.data["tokens"] = tokens
                 break
+
+    def update_realtime_tokens(
+        self,
+        tokens: int,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """Update realtime token count during streaming.
+
+        This method publishes a token_update event for real-time
+        token visualization during LLM streaming.
+
+        Args:
+            tokens: Current accumulated token count.
+            data: Additional data (e.g., channel_id).
+        """
+        data = data or {}
+        event = {
+            "event": EventType.TOKEN_UPDATE.value,
+            "timestamp": datetime.now().isoformat(),
+            "tokens": tokens,
+            "data": data,
+        }
+
+        # Publish to state_store directly (bypasses full state serialization)
+        if self._state_store and hasattr(self._state_store, "update"):
+            self._state_store.update(event)
 
     def _detect_model_node(self, state: dict[str, Any]) -> str:
         """Detect which model node is being called based on state.

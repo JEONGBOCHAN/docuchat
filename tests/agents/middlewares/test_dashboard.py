@@ -992,3 +992,72 @@ class TestDashboardMiddlewareUpdateStepTokens:
 
         state_dict = middleware.get_state_dict()
         assert state_dict["steps"][0]["data"]["tokens"] == 2500
+
+
+class TestDashboardMiddlewareRealtimeTokens:
+    """Tests for update_realtime_tokens method."""
+
+    def test_token_update_event_type_exists(self):
+        """Test that TOKEN_UPDATE event type is defined."""
+        assert EventType.TOKEN_UPDATE.value == "token_update"
+
+    def test_update_realtime_tokens_with_state_store(self):
+        """Test update_realtime_tokens publishes event to state_store."""
+        mock_state_store = Mock()
+        mock_state_store.update = Mock()
+        middleware = DashboardMiddleware(state_store=mock_state_store)
+
+        middleware.update_realtime_tokens(100, {"channel_id": "test-channel"})
+
+        mock_state_store.update.assert_called_once()
+        event = mock_state_store.update.call_args[0][0]
+        assert event["event"] == "token_update"
+        assert event["tokens"] == 100
+        assert event["data"]["channel_id"] == "test-channel"
+        assert "timestamp" in event
+
+    def test_update_realtime_tokens_without_state_store(self):
+        """Test update_realtime_tokens does nothing without state_store."""
+        middleware = DashboardMiddleware()
+
+        # Should not raise an error
+        middleware.update_realtime_tokens(100, {"channel_id": "test-channel"})
+
+    def test_update_realtime_tokens_empty_data(self):
+        """Test update_realtime_tokens with no data."""
+        mock_state_store = Mock()
+        mock_state_store.update = Mock()
+        middleware = DashboardMiddleware(state_store=mock_state_store)
+
+        middleware.update_realtime_tokens(200)
+
+        event = mock_state_store.update.call_args[0][0]
+        assert event["tokens"] == 200
+        assert event["data"] == {}
+
+    def test_update_realtime_tokens_zero_tokens(self):
+        """Test update_realtime_tokens with zero tokens."""
+        mock_state_store = Mock()
+        mock_state_store.update = Mock()
+        middleware = DashboardMiddleware(state_store=mock_state_store)
+
+        middleware.update_realtime_tokens(0, {"channel_id": "test"})
+
+        event = mock_state_store.update.call_args[0][0]
+        assert event["tokens"] == 0
+
+    def test_update_realtime_tokens_multiple_calls(self):
+        """Test multiple update_realtime_tokens calls accumulate correctly."""
+        mock_state_store = Mock()
+        mock_state_store.update = Mock()
+        middleware = DashboardMiddleware(state_store=mock_state_store)
+
+        middleware.update_realtime_tokens(50)
+        middleware.update_realtime_tokens(150)
+        middleware.update_realtime_tokens(300)
+
+        assert mock_state_store.update.call_count == 3
+
+        # Last call should have 300 tokens
+        last_event = mock_state_store.update.call_args_list[2][0][0]
+        assert last_event["tokens"] == 300

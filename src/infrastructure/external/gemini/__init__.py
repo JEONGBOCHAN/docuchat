@@ -14,6 +14,7 @@ from src.infrastructure.external.gemini.briefing import GeminiBriefingAdapter
 from src.infrastructure.external.gemini.study_guide import GeminiStudyGuideAdapter
 from src.infrastructure.external.gemini.quiz import GeminiQuizAdapter
 from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
+from src.infrastructure.external.gemini.token_counter import GeminiTokenCounterAdapter
 
 __all__ = [
     "GeminiDocumentSearchAdapter",
@@ -25,4 +26,5 @@ __all__ = [
     "GeminiStudyGuideAdapter",
     "GeminiQuizAdapter",
     "GeminiPodcastAdapter",
+    "GeminiTokenCounterAdapter",
 ]

@@ -48,6 +48,8 @@ from src.application.ports import (
     TTSPort,
     # Cache Port
     CachePort,
+    # Token Counter Port
+    TokenCounterPort,
     # Infrastructure Ports
     ApiMetricsPort,
     SchedulerPort,
@@ -84,6 +86,7 @@ from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
 from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
 from src.infrastructure.external.gemini.document_summary import GeminiDocumentSummaryAdapter
+from src.infrastructure.external.gemini.token_counter import GeminiTokenCounterAdapter
 from src.infrastructure.external.mcp.web_search import McpWebSearchAdapter
 from src.infrastructure.external.arxiv.adapter import ArxivAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
@@ -137,6 +140,19 @@ def create_dashboard_middleware() -> DashboardMiddleware:
     return DashboardMiddleware(state_store=get_global_state_store())
 
 
+def create_token_counter(use_api: bool = False) -> TokenCounterPort:
+    """Create a token counter adapter.
+
+    Args:
+        use_api: If True, use API-based counting (slower but accurate).
+                If False, use character-based estimation (faster).
+
+    Returns:
+        TokenCounterPort implementation (GeminiTokenCounterAdapter).
+    """
+    return GeminiTokenCounterAdapter(use_api=use_api)
+
+
 # ============================================================
 # Factory Functions
 # ============================================================
@@ -159,12 +175,14 @@ def create_event_sink(use_legacy_dashboard: bool = True) -> AgentEventSinkPort:
 def create_agent_runner(
     event_sink: AgentEventSinkPort | None = None,
     dashboard_middleware: DashboardMiddleware | None = None,
+    token_counter: TokenCounterPort | None = None,
 ) -> AgentRunnerPort:
     """Create an agent runner.
 
     Args:
         event_sink: Optional event sink for observability.
         dashboard_middleware: Optional DashboardMiddleware for LLM node display.
+        token_counter: Optional TokenCounterPort for real-time token counting.
 
     Returns:
         AgentRunnerPort implementation (LangGraphAgentRunner).
@@ -172,6 +190,7 @@ def create_agent_runner(
     return LangGraphAgentRunner(
         event_sink=event_sink,
         dashboard_middleware=dashboard_middleware,
+        token_counter=token_counter,
     )
 
 
@@ -218,6 +237,7 @@ def create_citation_search() -> CitationSearchPort:
 def create_process_query_use_case(
     use_legacy_dashboard: bool = True,
     include_web_search: bool = False,
+    enable_realtime_tokens: bool = True,
 ) -> ProcessQueryUseCase:
     """Create a ProcessQueryUseCase with all dependencies wired.
 
@@ -228,6 +248,8 @@ def create_process_query_use_case(
         use_legacy_dashboard: If True, enables dashboard updates via
                              legacy state store adapter.
         include_web_search: If True, includes web search capability.
+        enable_realtime_tokens: If True, enables real-time token counting
+                               during streaming.
 
     Returns:
         Fully configured ProcessQueryUseCase.
@@ -245,10 +267,14 @@ def create_process_query_use_case(
     # Create dashboard middleware for LLM node display (only when using legacy dashboard)
     dashboard_middleware = create_dashboard_middleware() if use_legacy_dashboard else None
 
-    # Create agent runner with event sink and dashboard middleware
+    # Create token counter for real-time token counting (only when dashboard is enabled)
+    token_counter = create_token_counter() if (enable_realtime_tokens and use_legacy_dashboard) else None
+
+    # Create agent runner with event sink, dashboard middleware, and token counter
     agent_runner = create_agent_runner(
         event_sink=event_sink,
         dashboard_middleware=dashboard_middleware,
+        token_counter=token_counter,
     )
 
     # Create search adapters

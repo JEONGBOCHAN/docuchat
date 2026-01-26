@@ -133,6 +133,9 @@ from src.application.ports.external_services import (
 # Cache Port
 from src.application.ports.cache import CachePort
 
+# Token Counter Port
+from src.application.ports.token_counter import TokenCounterPort
+
 # Infrastructure Ports
 from src.application.ports.infrastructure import (
     # DTOs
@@ -237,6 +240,8 @@ __all__ = [
     "TTSPort",
     # Cache Port
     "CachePort",
+    # Token Counter Port
+    "TokenCounterPort",
     # Infrastructure Ports
     "EndpointMetricsDTO",
     "ApiStatsDTO",

@@ -41,6 +41,7 @@ from src.agents.tools.search_tools import (
 from src.core.config import get_settings, GeminiModels
 from src.application.ports.document_search import DocumentSearchPort
 from src.application.ports.web_search import WebSearchPort
+from src.application.ports.token_counter import TokenCounterPort
 from src.agents.middlewares.dashboard import DashboardMiddleware
 
 
@@ -106,6 +107,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         document_search: DocumentSearchPort | None = None,
         model: str = GeminiModels.DEFAULT,
         dashboard_middleware: DashboardMiddleware | None = None,
+        token_counter: TokenCounterPort | None = None,
     ):
         """Initialize the LangGraph runner.
 
@@ -114,6 +116,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
             document_search: Optional DocumentSearchPort instance.
             model: The Gemini model to use.
             dashboard_middleware: Optional DashboardMiddleware for LLM node display.
+            token_counter: Optional TokenCounterPort for real-time token counting.
         """
         self._event_sink = event_sink
         if document_search is None:
@@ -124,6 +127,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self._model = model
         self._settings = get_settings()
         self._dashboard_middleware = dashboard_middleware
+        self._token_counter = token_counter
 
     def _create_agent(self, channel_id: str, config: AgentConfig, streaming: bool = False):
         """Create a LangGraph agent for the specified channel.
@@ -407,6 +411,12 @@ class LangGraphAgentRunner(AgentRunnerPort):
             # Use stream mode "messages" for token-by-token streaming
             final_response = ""
             final_messages = []
+
+            # Real-time token counting state
+            accumulated_tokens = 0
+            last_token_update_time = datetime.now()
+            token_update_interval_ms = 100  # Throttle: update at most every 100ms
+
             for msg, metadata in agent.stream(
                 {"messages": messages},
                 config={"recursion_limit": config.max_iterations * 2 + 1},
@@ -508,10 +518,36 @@ class LangGraphAgentRunner(AgentRunnerPort):
                         self._dashboard_middleware.on_llm_start("llm_response", {"channel_id": channel_id})
 
                     final_response += content
+
+                    # Real-time token counting during streaming
+                    if self._token_counter and content:
+                        accumulated_tokens = self._token_counter.count_tokens_incremental(
+                            content, accumulated_tokens
+                        )
+
+                        # Throttle token updates to avoid excessive UI refreshes
+                        now = datetime.now()
+                        elapsed_ms = (now - last_token_update_time).total_seconds() * 1000
+                        if elapsed_ms >= token_update_interval_ms:
+                            last_token_update_time = now
+                            if self._dashboard_middleware:
+                                self._dashboard_middleware.update_realtime_tokens(
+                                    accumulated_tokens,
+                                    {"channel_id": channel_id},
+                                )
+
                     yield {
                         "event": "content",
                         "content": content,
+                        "tokens": accumulated_tokens if self._token_counter else None,
                     }
+
+            # Final token update (ensure the last count is published)
+            if self._token_counter and accumulated_tokens > 0 and self._dashboard_middleware:
+                self._dashboard_middleware.update_realtime_tokens(
+                    accumulated_tokens,
+                    {"channel_id": channel_id},
+                )
 
             # Finalize any remaining LLM phases (tokens extracted post-streaming)
             # LLM response completed - emit llm_end event via middleware

@@ -278,6 +278,10 @@
                 <span class="info-label">Duration</span>
                 <span class="info-value" id="duration">-</span>
             </div>
+            <div class="info-row">
+                <span class="info-label">Tokens</span>
+                <span class="info-value" id="currentTokens">0</span>
+            </div>
         </div>
 
         <!-- Steps timeline -->
@@ -363,6 +367,15 @@
             } else {
                 document.getElementById('duration').textContent = '-';
             }
+
+            // Update real-time token count
+            const tokenDisplay = state.current_tokens
+                ? formatTokens(state.current_tokens)
+                : '0';
+            const tokenSuffix = state.status === 'running' && state.current_tokens > 0
+                ? '...'
+                : '';
+            document.getElementById('currentTokens').textContent = tokenDisplay + tokenSuffix;
 
             // Update steps list
             updateStepsList(state.steps || []);

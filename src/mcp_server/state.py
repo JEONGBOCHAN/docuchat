@@ -77,6 +77,7 @@ class AgentState:
     steps: list[StepRecord] = field(default_factory=list)
     metrics: AgentMetrics = field(default_factory=AgentMetrics)
     last_error: str | None = None
+    current_tokens: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert state to dictionary for JSON serialization."""
@@ -104,6 +105,7 @@ class AgentState:
                 "total_duration_ms": self.metrics.total_duration_ms,
             },
             "last_error": self.last_error,
+            "current_tokens": self.current_tokens,
         }
 
 
@@ -342,6 +344,11 @@ class AgentStateStore:
                         step.duration_ms = duration
                         step.data["error"] = error
                         break
+
+            # Handle token update events (real-time token counting during streaming)
+            elif event_type == "token_update":
+                tokens = event.get("tokens", 0)
+                state.current_tokens = tokens
 
         # Notify subscribers outside the lock
         self._notify_subscribers(channel_id)

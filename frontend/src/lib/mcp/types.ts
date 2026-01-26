@@ -183,6 +183,7 @@ export interface ExecutionMetrics {
   toolCalls: number;
   inputTokens: number;
   outputTokens: number;
+  currentTokens?: number;
 }
 
 export interface AgentState {
@@ -204,4 +205,5 @@ export interface AgentState {
   pipelineNodes: PipelineNode[];
   startTime: string | null;
   endTime: string | null;
+  currentTokens?: number;
 }

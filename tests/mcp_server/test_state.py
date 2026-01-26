@@ -679,6 +679,101 @@ class TestAgentStateStoreThreadSafety:
         assert state["metrics"]["tool_calls"] == 30
 
 
+class TestAgentStateStoreTokenUpdate:
+    """Tests for token_update event handling."""
+
+    def test_update_token_update_event(self):
+        """Test handling token_update event."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        store.update({
+            "event": "token_update",
+            "channel_id": channel_id,
+            "tokens": 150,
+            "timestamp": "2024-01-01T00:00:01",
+        })
+
+        state = store.get_state(channel_id)
+        assert state["current_tokens"] == 150
+
+    def test_update_token_update_incremental(self):
+        """Test multiple token_update events update current_tokens."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        store.update({
+            "event": "token_update",
+            "channel_id": channel_id,
+            "tokens": 50,
+        })
+        store.update({
+            "event": "token_update",
+            "channel_id": channel_id,
+            "tokens": 200,
+        })
+        store.update({
+            "event": "token_update",
+            "channel_id": channel_id,
+            "tokens": 350,
+        })
+
+        state = store.get_state(channel_id)
+        assert state["current_tokens"] == 350
+
+    def test_update_token_update_zero(self):
+        """Test token_update with zero tokens."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        store.update({
+            "event": "token_update",
+            "channel_id": channel_id,
+            "tokens": 0,
+        })
+
+        state = store.get_state(channel_id)
+        assert state["current_tokens"] == 0
+
+    def test_current_tokens_resets_on_agent_start(self):
+        """Test that current_tokens is reset when new agent run starts."""
+        store = AgentStateStore()
+        channel_id = "test-channel"
+
+        # Add some tokens
+        store.update({
+            "event": "token_update",
+            "channel_id": channel_id,
+            "tokens": 500,
+        })
+
+        # Start a new agent run (resets state)
+        store.update({
+            "event": "agent_start",
+            "channel_id": channel_id,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+        state = store.get_state(channel_id)
+        assert state["current_tokens"] == 0
+
+    def test_current_tokens_in_to_dict(self):
+        """Test that current_tokens appears in state to_dict."""
+        state = AgentState()
+        state.current_tokens = 1234
+
+        result = state.to_dict()
+        assert result["current_tokens"] == 1234
+
+    def test_current_tokens_default_zero(self):
+        """Test that current_tokens defaults to 0."""
+        state = AgentState()
+        assert state.current_tokens == 0
+
+        result = state.to_dict()
+        assert result["current_tokens"] == 0
+
+
 class TestGlobalStateStore:
     """Tests for global state store functions."""
 
