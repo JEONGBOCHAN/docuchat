@@ -233,14 +233,6 @@ class LangGraphAgentRunner(AgentRunnerPort):
                 llm_call_count = 0
                 tool_call_count = 0
 
-                # DEBUG: Print all messages for E2E verification
-                print(f"[RUN DEBUG] Total messages: {len(result_messages)}", flush=True)
-                for idx, msg in enumerate(result_messages):
-                    msg_type_dbg = getattr(msg, "type", None) or type(msg).__name__.lower()
-                    tc_dbg = getattr(msg, "tool_calls", None)
-                    content_dbg = str(getattr(msg, "content", ""))[:50]
-                    print(f"[RUN DEBUG] msg[{idx}] type={msg_type_dbg}, tool_calls={tc_dbg}, content={content_dbg}", flush=True)
-
                 for msg in result_messages:
                     # Get message type - support both real messages and mocks
                     msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
@@ -424,10 +416,6 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
                 # Get message type
                 msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
-
-                # DEBUG: Print message details for E2E verification
-                tool_calls_debug = getattr(msg, "tool_calls", None)
-                print(f"[RUNNER DEBUG] msg_type={msg_type}, tool_calls={tool_calls_debug}, content_preview={str(getattr(msg, 'content', ''))[:50]}", flush=True)
 
                 # Skip HumanMessage (user's query)
                 if "human" in str(msg_type).lower():
@@ -621,10 +609,6 @@ class LangGraphAgentRunner(AgentRunnerPort):
         if not self._dashboard_middleware:
             return
 
-        # DEBUG: Print post-streaming token extraction info
-        print(f"[TOKEN DEBUG] Extracting tokens from {len(final_messages)} messages", flush=True)
-        print(f"[TOKEN DEBUG] LLM phases to update: {llm_phase_message_indices}", flush=True)
-
         # Scan messages for usage_metadata
         # AIMessage objects (not chunks) after streaming may have usage_metadata
         # We need to match them to the LLM phases tracked during streaming
@@ -637,7 +621,6 @@ class LangGraphAgentRunner(AgentRunnerPort):
                     tokens = usage.get("total_tokens")
                     if tokens:
                         ai_messages_with_usage.append((idx, tokens))
-                        print(f"[TOKEN DEBUG] Found usage at msg[{idx}]: {tokens} tokens", flush=True)
 
         # Match usage data to LLM phases
         # Strategy: For each LLM phase, find the closest AI message with usage data
@@ -645,7 +628,6 @@ class LangGraphAgentRunner(AgentRunnerPort):
             # Find usage data from messages at or after this phase's start
             for msg_idx, tokens in ai_messages_with_usage:
                 if msg_idx >= phase_idx:
-                    print(f"[TOKEN DEBUG] Updating {llm_role} with {tokens} tokens", flush=True)
                     self._dashboard_middleware.update_step_tokens(llm_role, tokens)
                     # Remove used entry to avoid duplicate assignment
                     ai_messages_with_usage.remove((msg_idx, tokens))
