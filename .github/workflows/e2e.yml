@@ -48,7 +48,7 @@ jobs:
       - name: Start API server
         env:
           APP_ENV: test
-          DATABASE_URL: sqlite:///./test_e2e.db
+          DATABASE_URL: "sqlite:///./test_e2e.db"
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           uvicorn src.main:app --host 0.0.0.0 --port 8000 &
