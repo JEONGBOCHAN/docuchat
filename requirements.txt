@@ -11,6 +11,7 @@ pydantic-settings>=2.0.0
 
 # LangGraph (for RAG workflow)
 langgraph>=1.0.0
+langchain-google-genai>=2.0.0
 
 # Database
 sqlalchemy>=2.0.0
