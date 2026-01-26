@@ -42,20 +42,36 @@ def _get_reset_cache_service():
 
 @pytest.fixture(autouse=True)
 def reset_cache():
-    """Reset cache service before each test to ensure test isolation."""
+    """Reset cache service before each test to ensure test isolation.
+
+    This fixture uses lazy loading to avoid breaking lightweight tests
+    (like MCP server tests) that don't need the full application loaded.
+    """
+    reset_fn = None
+
     # Try to get the reset function at setup time
     try:
         reset_fn = _get_reset_cache_service()
-    except ImportError:
-        # If cache service is not available, skip reset
-        yield
-        return
+    except Exception:
+        # If cache service is not available for any reason, skip reset
+        # This allows MCP tests to run without loading the full app
+        pass
 
-    # Reset before test
-    reset_fn()
+    # Reset before test (if available)
+    if reset_fn is not None:
+        try:
+            reset_fn()
+        except Exception:
+            pass
+
     yield
-    # Reset after test
-    reset_fn()
+
+    # Reset after test (if available)
+    if reset_fn is not None:
+        try:
+            reset_fn()
+        except Exception:
+            pass
 
 
 @pytest.fixture
