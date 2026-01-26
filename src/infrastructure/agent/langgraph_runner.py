@@ -41,6 +41,7 @@ from src.agents.tools.search_tools import (
 from src.core.config import get_settings, GeminiModels
 from src.application.ports.document_search import DocumentSearchPort
 from src.application.ports.web_search import WebSearchPort
+from src.agents.middlewares.dashboard import DashboardMiddleware
 
 
 # Default system prompt for RAG agent
@@ -104,6 +105,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         event_sink: AgentEventSinkPort | None = None,
         document_search: DocumentSearchPort | None = None,
         model: str = GeminiModels.DEFAULT,
+        dashboard_middleware: DashboardMiddleware | None = None,
     ):
         """Initialize the LangGraph runner.
 
@@ -111,6 +113,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
             event_sink: Optional event sink for observability.
             document_search: Optional DocumentSearchPort instance.
             model: The Gemini model to use.
+            dashboard_middleware: Optional DashboardMiddleware for LLM node display.
         """
         self._event_sink = event_sink
         if document_search is None:
@@ -120,6 +123,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self._document_search = document_search
         self._model = model
         self._settings = get_settings()
+        self._dashboard_middleware = dashboard_middleware
 
     def _create_agent(self, channel_id: str, config: AgentConfig, streaming: bool = False):
         """Create a LangGraph agent for the specified channel.
@@ -214,6 +218,10 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
             messages.append(("user", query))
 
+            # Emit LLM start event for synchronous run
+            if self._dashboard_middleware:
+                self._dashboard_middleware.on_llm_start("llm_response", {})
+
             # Run agent
             agent_start_time = datetime.now()
             result = agent.invoke(
@@ -221,6 +229,10 @@ class LangGraphAgentRunner(AgentRunnerPort):
                 config={"recursion_limit": config.max_iterations * 2 + 1}
             )
             agent_duration_ms = (datetime.now() - agent_start_time).total_seconds() * 1000
+
+            # Emit LLM end event for synchronous run
+            if self._dashboard_middleware:
+                self._dashboard_middleware.on_llm_end("llm_response", {})
 
             # Emit tool events based on actual tool calls in result
             if self._event_sink:
@@ -339,6 +351,10 @@ class LangGraphAgentRunner(AgentRunnerPort):
             tool_start_times: dict[str, datetime] = {}
             active_tools: set[str] = set()
 
+            # Track LLM response state for dashboard middleware
+            llm_response_started = False
+            current_llm_role = "llm_response"
+
             # Use stream mode "messages" for token-by-token streaming
             final_response = ""
             final_messages = []
@@ -406,11 +422,20 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
                 # For AIMessageChunk, yield the content token (direct LLM response)
                 if content and "ai" in str(msg_type).lower():
+                    # LLM response started - emit llm_start event via middleware
+                    if not llm_response_started and self._dashboard_middleware:
+                        llm_response_started = True
+                        self._dashboard_middleware.on_llm_start(current_llm_role, {})
+
                     final_response += content
                     yield {
                         "event": "content",
                         "content": content,
                     }
+
+            # LLM response completed - emit llm_end event via middleware
+            if llm_response_started and self._dashboard_middleware:
+                self._dashboard_middleware.on_llm_end(current_llm_role, {})
 
             # Build result from collected messages
             result = {"messages": final_messages, "response": final_response}
