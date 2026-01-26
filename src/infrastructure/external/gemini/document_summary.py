@@ -89,8 +89,9 @@ is relevant to user questions. Maximum {max_tokens} tokens."""
                             )
                         )
                     ],
-                    # Limit response length
-                    max_output_tokens=max_tokens + 50,  # Buffer for safety
+                    # Higher limit needed when using file_search
+                    # File search consumes tokens for internal reasoning
+                    max_output_tokens=500,
                 ),
             )
 
