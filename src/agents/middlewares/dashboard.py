@@ -368,6 +368,25 @@ class DashboardMiddleware:
             return delta.total_seconds() * 1000
         return None
 
+    def update_step_tokens(self, llm_role: str, tokens: int | None) -> None:
+        """Update token count for a completed LLM step.
+
+        This is used to retroactively add token information to steps when
+        token data becomes available after streaming completes.
+
+        Args:
+            llm_role: Role of the LLM step to update (e.g., llm_response).
+            tokens: Total token count for this LLM call (optional).
+        """
+        if tokens is None:
+            return
+
+        # Find the most recent step with this role and update tokens
+        for step in reversed(self._state.steps):
+            if step.node == llm_role:
+                step.data["tokens"] = tokens
+                break
+
     def _detect_model_node(self, state: dict[str, Any]) -> str:
         """Detect which model node is being called based on state.
 

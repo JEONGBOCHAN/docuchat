@@ -1045,3 +1045,190 @@ class TestChannelIdPassedToCallbacks:
         assert len(received_data) >= 2  # At least start and complete
         for data in received_data:
             assert data.get("channel_id") == "my-channel-123"
+
+
+class TestStreamingTokenExtraction:
+    """Tests for post-streaming token extraction functionality."""
+
+    def test_tokens_extracted_after_streaming(self):
+        """Test that tokens are extracted from final_messages after streaming."""
+        # Create AI message with usage_metadata
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Response content"
+        mock_ai_response.tool_calls = None
+        mock_ai_response.usage_metadata = {"total_tokens": 1500}
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        # Verify tokens were extracted and added to the step
+        llm_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+        assert len(llm_steps) == 1
+        assert llm_steps[0].data.get("tokens") == 1500
+
+    def test_tokens_extracted_for_multiple_llm_phases(self):
+        """Test that tokens are extracted for reasoning and response phases."""
+        # Reasoning phase with tool_calls and usage_metadata
+        mock_ai_reasoning = Mock()
+        mock_ai_reasoning.type = "ai"
+        mock_ai_reasoning.content = ""
+        mock_ai_reasoning.tool_calls = [{"name": "search", "args": {}}]
+        mock_ai_reasoning.usage_metadata = {"total_tokens": 500}
+
+        mock_tool = Mock()
+        mock_tool.type = "tool"
+        mock_tool.content = "Result"
+        mock_tool.name = "search"
+
+        # Response phase with content and usage_metadata
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Final response"
+        mock_ai_response.tool_calls = None
+        mock_ai_response.usage_metadata = {"total_tokens": 1200}
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_reasoning, {}),
+            (mock_tool, {}),
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        response_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+
+        assert len(reasoning_steps) == 1
+        assert len(response_steps) == 1
+        assert reasoning_steps[0].data.get("tokens") == 500
+        assert response_steps[0].data.get("tokens") == 1200
+
+    def test_no_tokens_when_usage_metadata_missing(self):
+        """Test graceful handling when usage_metadata is not present."""
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Response"
+        mock_ai_response.tool_calls = None
+        mock_ai_response.usage_metadata = None  # No usage_metadata
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Test",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        llm_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+        assert len(llm_steps) == 1
+        # tokens should not be present when usage_metadata is missing
+        assert "tokens" not in llm_steps[0].data or llm_steps[0].data.get("tokens") is None
+
+    def test_tokens_with_observation_phase(self):
+        """Test token extraction with reasoning, observation, and response phases."""
+        # Initial reasoning
+        mock_ai_reasoning = Mock()
+        mock_ai_reasoning.type = "ai"
+        mock_ai_reasoning.content = ""
+        mock_ai_reasoning.tool_calls = [{"name": "arxiv_search", "args": {}}]
+        mock_ai_reasoning.usage_metadata = {"total_tokens": 400}
+
+        mock_tool1 = Mock()
+        mock_tool1.type = "tool"
+        mock_tool1.content = "ArXiv results"
+        mock_tool1.name = "arxiv_search"
+
+        # Observation phase (after tool, decides to use another tool)
+        mock_ai_observation = Mock()
+        mock_ai_observation.type = "ai"
+        mock_ai_observation.content = ""
+        mock_ai_observation.tool_calls = [{"name": "web_search", "args": {}}]
+        mock_ai_observation.usage_metadata = {"total_tokens": 600}
+
+        mock_tool2 = Mock()
+        mock_tool2.type = "tool"
+        mock_tool2.content = "Web results"
+        mock_tool2.name = "web_search"
+
+        # Final response
+        mock_ai_response = Mock()
+        mock_ai_response.type = "ai"
+        mock_ai_response.content = "Final answer"
+        mock_ai_response.tool_calls = None
+        mock_ai_response.usage_metadata = {"total_tokens": 1000}
+
+        mock_agent = Mock()
+        mock_agent.stream = Mock(return_value=iter([
+            (mock_ai_reasoning, {}),
+            (mock_tool1, {}),
+            (mock_ai_observation, {}),
+            (mock_tool2, {}),
+            (mock_ai_response, {}),
+        ]))
+
+        middleware = DashboardMiddleware()
+        runner = LangGraphAgentRunner(
+            event_sink=None,
+            document_search=Mock(),
+            dashboard_middleware=middleware,
+        )
+
+        with patch.object(runner, '_create_agent', return_value=mock_agent):
+            list(runner.run_stream(
+                query="Complex query",
+                config=AgentConfig(),
+                context={"channel_id": "test-channel"},
+            ))
+
+        reasoning_steps = [s for s in middleware.state.steps if s.node == "llm_reasoning"]
+        observation_steps = [s for s in middleware.state.steps if s.node == "llm_observation"]
+        response_steps = [s for s in middleware.state.steps if s.node == "llm_response"]
+
+        assert len(reasoning_steps) == 1
+        assert len(observation_steps) == 1
+        assert len(response_steps) == 1
+
+        assert reasoning_steps[0].data.get("tokens") == 400
+        assert observation_steps[0].data.get("tokens") == 600
+        assert response_steps[0].data.get("tokens") == 1000

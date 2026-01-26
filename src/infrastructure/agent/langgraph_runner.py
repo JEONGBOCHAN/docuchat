@@ -407,8 +407,10 @@ class LangGraphAgentRunner(AgentRunnerPort):
             llm_response_started = False
             tool_just_completed = False  # Flag to detect observation phase
 
-            # Track token usage for each LLM phase
-            current_llm_tokens: int | None = None
+            # Track LLM phases for post-streaming token extraction
+            # Maps message index to LLM role (for token extraction after streaming)
+            llm_phase_message_indices: list[tuple[int, str]] = []
+            current_ai_message_index = -1
 
             # Use stream mode "messages" for token-by-token streaming
             final_response = ""
@@ -433,10 +435,8 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
                 # Detect tool calls from AIMessage (agent deciding to use a tool)
                 if "ai" in str(msg_type).lower():
-                    # Extract token usage from usage_metadata (available on final chunk)
-                    usage = getattr(msg, "usage_metadata", None)
-                    if usage:
-                        current_llm_tokens = usage.get("total_tokens")
+                    # Track current AI message index for post-streaming token extraction
+                    current_ai_message_index = len(final_messages) - 1
 
                     tool_calls = getattr(msg, "tool_calls", None)
                     if tool_calls:
@@ -446,26 +446,26 @@ class LangGraphAgentRunner(AgentRunnerPort):
                             llm_role = "llm_observation"
                             if not llm_observation_started and self._dashboard_middleware:
                                 llm_observation_started = True
+                                llm_phase_message_indices.append((current_ai_message_index, llm_role))
                                 self._dashboard_middleware.on_llm_start(llm_role, {"channel_id": channel_id})
                         else:
                             # Initial reasoning phase (first tool selection)
                             llm_role = "llm_reasoning"
                             if not llm_reasoning_started and self._dashboard_middleware:
                                 llm_reasoning_started = True
+                                llm_phase_message_indices.append((current_ai_message_index, llm_role))
                                 self._dashboard_middleware.on_llm_start(llm_role, {"channel_id": channel_id})
 
                         for tc in tool_calls:
                             tool_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
                             if tool_name and tool_name not in active_tools:
-                                # End the current LLM phase before tool starts
+                                # End the current LLM phase before tool starts (tokens extracted post-streaming)
                                 if llm_reasoning_started and not tool_just_completed and self._dashboard_middleware:
-                                    self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=current_llm_tokens)
+                                    self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=None)
                                     llm_reasoning_started = False
-                                    current_llm_tokens = None
                                 elif llm_observation_started and self._dashboard_middleware:
-                                    self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=current_llm_tokens)
+                                    self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=None)
                                     llm_observation_started = False
-                                    current_llm_tokens = None
 
                                 active_tools.add(tool_name)
                                 tool_start_times[tool_name] = datetime.now()
@@ -516,6 +516,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
                     # LLM response started - emit llm_start event via middleware
                     if not llm_response_started and self._dashboard_middleware:
                         llm_response_started = True
+                        llm_phase_message_indices.append((current_ai_message_index, "llm_response"))
                         self._dashboard_middleware.on_llm_start("llm_response", {"channel_id": channel_id})
 
                     final_response += content
@@ -524,17 +525,25 @@ class LangGraphAgentRunner(AgentRunnerPort):
                         "content": content,
                     }
 
-            # Finalize any remaining LLM phases
+            # Finalize any remaining LLM phases (tokens extracted post-streaming)
             # LLM response completed - emit llm_end event via middleware
             if llm_response_started and self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id}, tokens=current_llm_tokens)
-                current_llm_tokens = None
+                self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id}, tokens=None)
 
             # Clean up any incomplete LLM phases (edge cases)
             if llm_reasoning_started and self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=current_llm_tokens)
+                self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=None)
             if llm_observation_started and self._dashboard_middleware:
-                self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=current_llm_tokens)
+                self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=None)
+
+            # Post-streaming token extraction: extract tokens from final_messages
+            # In streaming mode, usage_metadata is not available on chunks.
+            # After streaming completes, we scan final_messages for AIMessage objects
+            # that contain usage_metadata and update the corresponding LLM steps.
+            if self._dashboard_middleware and llm_phase_message_indices:
+                self._extract_and_update_streaming_tokens(
+                    final_messages, llm_phase_message_indices, channel_id
+                )
 
             # Build result from collected messages
             result = {"messages": final_messages, "response": final_response}
@@ -591,6 +600,56 @@ class LangGraphAgentRunner(AgentRunnerPort):
                 session_id=session_id,
                 metadata={"error": str(e), "channel_id": channel_id},
             )
+
+    def _extract_and_update_streaming_tokens(
+        self,
+        final_messages: list,
+        llm_phase_message_indices: list[tuple[int, str]],
+        channel_id: str,
+    ) -> None:
+        """Extract token usage from final messages and update dashboard steps.
+
+        In streaming mode, usage_metadata is not available on AIMessageChunks.
+        After streaming completes, we analyze the collected messages to extract
+        token information and retroactively update the corresponding LLM steps.
+
+        Args:
+            final_messages: List of all messages from streaming.
+            llm_phase_message_indices: List of (message_index, llm_role) tuples.
+            channel_id: The channel ID for logging.
+        """
+        if not self._dashboard_middleware:
+            return
+
+        # DEBUG: Print post-streaming token extraction info
+        print(f"[TOKEN DEBUG] Extracting tokens from {len(final_messages)} messages", flush=True)
+        print(f"[TOKEN DEBUG] LLM phases to update: {llm_phase_message_indices}", flush=True)
+
+        # Scan messages for usage_metadata
+        # AIMessage objects (not chunks) after streaming may have usage_metadata
+        # We need to match them to the LLM phases tracked during streaming
+        ai_messages_with_usage = []
+        for idx, msg in enumerate(final_messages):
+            msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
+            if "ai" in str(msg_type).lower():
+                usage = getattr(msg, "usage_metadata", None)
+                if usage:
+                    tokens = usage.get("total_tokens")
+                    if tokens:
+                        ai_messages_with_usage.append((idx, tokens))
+                        print(f"[TOKEN DEBUG] Found usage at msg[{idx}]: {tokens} tokens", flush=True)
+
+        # Match usage data to LLM phases
+        # Strategy: For each LLM phase, find the closest AI message with usage data
+        for phase_idx, llm_role in llm_phase_message_indices:
+            # Find usage data from messages at or after this phase's start
+            for msg_idx, tokens in ai_messages_with_usage:
+                if msg_idx >= phase_idx:
+                    print(f"[TOKEN DEBUG] Updating {llm_role} with {tokens} tokens", flush=True)
+                    self._dashboard_middleware.update_step_tokens(llm_role, tokens)
+                    # Remove used entry to avoid duplicate assignment
+                    ai_messages_with_usage.remove((msg_idx, tokens))
+                    break
 
     def _extract_metadata(self, result: dict) -> tuple[list[dict], int, list[dict]]:
         """Extract sources, iterations, and tool calls from result.

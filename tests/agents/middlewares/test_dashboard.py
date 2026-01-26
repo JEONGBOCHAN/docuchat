@@ -894,3 +894,101 @@ class TestDashboardMiddlewareLLMTokens:
         state_dict = middleware.get_state_dict()
 
         assert state_dict["steps"][0]["data"]["tokens"] == 3500
+
+
+class TestDashboardMiddlewareUpdateStepTokens:
+    """Tests for update_step_tokens method (post-streaming token update)."""
+
+    def test_update_step_tokens_adds_tokens(self):
+        """Test that update_step_tokens adds tokens to existing step."""
+        middleware = DashboardMiddleware()
+
+        # Create and complete a step without tokens
+        middleware.on_llm_start("llm_response")
+        middleware.on_llm_end("llm_response", tokens=None)
+
+        # Verify no tokens initially
+        step = middleware.state.steps[0]
+        assert "tokens" not in step.data
+
+        # Update with tokens
+        middleware.update_step_tokens("llm_response", 1500)
+
+        assert step.data.get("tokens") == 1500
+
+    def test_update_step_tokens_updates_most_recent(self):
+        """Test that update_step_tokens updates the most recent matching step."""
+        middleware = DashboardMiddleware()
+
+        # Create multiple llm_response steps
+        middleware.on_llm_start("llm_response")
+        middleware.on_llm_end("llm_response", tokens=None)
+        middleware.on_llm_start("llm_response")
+        middleware.on_llm_end("llm_response", tokens=None)
+
+        # Update should affect the most recent (second) step
+        middleware.update_step_tokens("llm_response", 2000)
+
+        assert middleware.state.steps[0].data.get("tokens") is None
+        assert middleware.state.steps[1].data.get("tokens") == 2000
+
+    def test_update_step_tokens_with_none_does_nothing(self):
+        """Test that update_step_tokens with None does not modify step."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_reasoning")
+        middleware.on_llm_end("llm_reasoning", tokens=None)
+
+        middleware.update_step_tokens("llm_reasoning", None)
+
+        step = middleware.state.steps[0]
+        assert "tokens" not in step.data
+
+    def test_update_step_tokens_different_roles(self):
+        """Test updating tokens for different LLM roles."""
+        middleware = DashboardMiddleware()
+
+        # Create multiple steps with different roles
+        middleware.on_llm_start("llm_reasoning")
+        middleware.on_llm_end("llm_reasoning", tokens=None)
+        middleware.on_llm_start("llm_observation")
+        middleware.on_llm_end("llm_observation", tokens=None)
+        middleware.on_llm_start("llm_response")
+        middleware.on_llm_end("llm_response", tokens=None)
+
+        # Update each role
+        middleware.update_step_tokens("llm_reasoning", 500)
+        middleware.update_step_tokens("llm_observation", 800)
+        middleware.update_step_tokens("llm_response", 1200)
+
+        reasoning = [s for s in middleware.state.steps if s.node == "llm_reasoning"][0]
+        observation = [s for s in middleware.state.steps if s.node == "llm_observation"][0]
+        response = [s for s in middleware.state.steps if s.node == "llm_response"][0]
+
+        assert reasoning.data.get("tokens") == 500
+        assert observation.data.get("tokens") == 800
+        assert response.data.get("tokens") == 1200
+
+    def test_update_step_tokens_nonexistent_role(self):
+        """Test that updating tokens for nonexistent role does nothing."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_response")
+        middleware.on_llm_end("llm_response", tokens=None)
+
+        # Should not raise an error
+        middleware.update_step_tokens("llm_nonexistent", 1000)
+
+        # Original step should be unchanged
+        assert "tokens" not in middleware.state.steps[0].data
+
+    def test_update_step_tokens_state_dict_serialization(self):
+        """Test that updated tokens appear in state dict."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_response")
+        middleware.on_llm_end("llm_response", tokens=None)
+        middleware.update_step_tokens("llm_response", 2500)
+
+        state_dict = middleware.get_state_dict()
+        assert state_dict["steps"][0]["data"]["tokens"] == 2500
