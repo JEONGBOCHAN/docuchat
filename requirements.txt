@@ -32,6 +32,9 @@ google-api-python-client>=2.100.0
 # YouTube Transcript
 youtube-transcript-api>=0.6.0
 
+# ArXiv API
+arxiv>=2.1.0
+
 # Scheduler
 apscheduler>=3.10.0
 
