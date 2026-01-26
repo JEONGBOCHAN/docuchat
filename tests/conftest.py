@@ -43,14 +43,19 @@ def _get_reset_cache_service():
 @pytest.fixture(autouse=True)
 def reset_cache():
     """Reset cache service before each test to ensure test isolation."""
+    # Try to get the reset function at setup time
     try:
-        reset_cache_service = _get_reset_cache_service()
-        reset_cache_service()
-        yield
-        reset_cache_service()
+        reset_fn = _get_reset_cache_service()
     except ImportError:
         # If cache service is not available, skip reset
         yield
+        return
+
+    # Reset before test
+    reset_fn()
+    yield
+    # Reset after test
+    reset_fn()
 
 
 @pytest.fixture
