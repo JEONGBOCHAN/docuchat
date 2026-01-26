@@ -48,8 +48,14 @@ def reset_cache(request):
     (like MCP server tests) that don't need the full application loaded.
     """
     # Skip entirely for MCP server tests - they have their own isolation
-    test_path = str(request.fspath)
-    if "mcp_server" in test_path or "test_mcp" in test_path:
+    # Use nodeid which is more reliable across pytest versions
+    try:
+        nodeid = request.node.nodeid
+        if "mcp_server" in nodeid or "test_mcp" in nodeid:
+            yield
+            return
+    except Exception:
+        # If we can't determine the test path, skip cache reset to be safe
         yield
         return
 
@@ -60,7 +66,8 @@ def reset_cache(request):
         reset_fn = _get_reset_cache_service()
     except Exception:
         # If cache service is not available for any reason, skip reset
-        pass
+        yield
+        return
 
     # Reset before test (if available)
     if reset_fn is not None:

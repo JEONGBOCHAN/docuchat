@@ -71,12 +71,21 @@ jobs:
           pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing || true
         continue-on-error: true
 
+      - name: Debug - Check Python and installed packages
+        run: |
+          python --version
+          pip list | grep -E "(pytest|mcp|fastapi|pydantic)"
+          echo "--- Testing imports ---"
+          python -c "import sys; print(sys.path)"
+          python -c "from src.mcp_server.state import AgentStateStore; print('MCP state import OK')"
+          python -c "from src.infrastructure.cache.cache_service import reset_cache_service; print('Cache service import OK')" || echo "Cache service import failed (expected for MCP tests)"
+
       - name: Run MCP server tests
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           TESTING: "true"
         run: |
-          pytest tests/mcp_server/ tests/integration/test_mcp_integration.py -v --tb=short
+          pytest tests/mcp_server/ tests/integration/test_mcp_integration.py -v --tb=long 2>&1 || (echo "=== FAILED ===" && exit 1)
         continue-on-error: false
 
       - name: Upload coverage report
