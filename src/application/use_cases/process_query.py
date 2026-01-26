@@ -103,6 +103,32 @@ class ProcessQueryUseCase:
         self.document_search = document_search
         self.web_search = web_search
 
+    def _build_enhanced_system_prompt(self, document_context: str | None) -> str | None:
+        """Build enhanced system prompt with document context.
+
+        Args:
+            document_context: Optional document summaries string
+
+        Returns:
+            Enhanced system prompt or None if no context
+        """
+        if not document_context:
+            return None
+
+        # Import here to avoid circular dependency
+        from src.infrastructure.agent.langgraph_runner import RAG_SYSTEM_PROMPT
+
+        # Inject document context into the system prompt
+        enhanced_prompt = f"""{RAG_SYSTEM_PROMPT}
+
+## Channel Document Context
+{document_context}
+
+When the user asks about topics related to these documents, prioritize using search_documents tool.
+If the question is clearly about external/current events not covered in these documents, use web_search.
+"""
+        return enhanced_prompt
+
     def execute(
         self,
         query: str,
@@ -110,6 +136,7 @@ class ProcessQueryUseCase:
         conversation_history: list[dict[str, str]] | None = None,
         max_iterations: int = 15,
         session_id: str | None = None,
+        document_context: str | None = None,
     ) -> QueryResult:
         """Execute the query processing.
 
@@ -125,6 +152,7 @@ class ProcessQueryUseCase:
             conversation_history: Previous conversation for context
             max_iterations: Maximum agent iterations
             session_id: Optional session ID (generated if not provided)
+            document_context: Optional document summaries to inject into prompt
 
         Returns:
             QueryResult with response, sources, and metadata
@@ -149,10 +177,14 @@ class ProcessQueryUseCase:
             if self.web_search:
                 available_tools.append("web_search")
 
+            # Build enhanced system prompt with document context
+            system_prompt = self._build_enhanced_system_prompt(document_context)
+
             # Configure agent
             config = AgentConfig(
                 max_iterations=max_iterations,
                 tools=available_tools,
+                system_prompt=system_prompt,
             )
 
             # Build context
@@ -211,6 +243,7 @@ class ProcessQueryUseCase:
         conversation_history: list[dict[str, str]] | None = None,
         max_iterations: int = 15,
         session_id: str | None = None,
+        document_context: str | None = None,
     ) -> Generator[dict, None, QueryResult]:
         """Execute query processing with streaming events.
 
@@ -223,6 +256,7 @@ class ProcessQueryUseCase:
             conversation_history: Previous conversation for context
             max_iterations: Maximum agent iterations
             session_id: Optional session ID (generated if not provided)
+            document_context: Optional document summaries to inject into prompt
 
         Yields:
             Event dictionaries (agent_started, tool_started, content, etc.)
@@ -242,10 +276,14 @@ class ProcessQueryUseCase:
             if self.web_search:
                 available_tools.append("web_search")
 
+            # Build enhanced system prompt with document context
+            system_prompt = self._build_enhanced_system_prompt(document_context)
+
             # Configure agent
             config = AgentConfig(
                 max_iterations=max_iterations,
                 tools=available_tools,
+                system_prompt=system_prompt,
             )
 
             # Build context (include session_id for runner)

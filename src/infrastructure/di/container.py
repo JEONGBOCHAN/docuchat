@@ -39,6 +39,9 @@ from src.application.ports import (
     TrashRepositoryPort,
     AudioRepositoryPort,
     DocumentPreviewCacheRepositoryPort,
+    # Document Summary Ports
+    DocumentSummaryGenerationPort,
+    DocumentSummaryCachePort,
     # External Service Ports
     YouTubePort,
     CrawlerPort,
@@ -80,6 +83,7 @@ from src.infrastructure.external.gemini.quiz import GeminiQuizAdapter
 from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
 from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
+from src.infrastructure.external.gemini.document_summary import GeminiDocumentSummaryAdapter
 from src.infrastructure.external.mcp.web_search import McpWebSearchAdapter
 from src.infrastructure.external.arxiv.adapter import ArxivAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
@@ -826,3 +830,75 @@ def create_scheduler_port() -> SchedulerPort:
         from src.infrastructure.scheduler.adapters import SchedulerAdapter
         _scheduler_port = SchedulerAdapter(get_scheduler())
     return _scheduler_port
+
+
+# ============================================================
+# Document Summary Factory Functions
+# ============================================================
+
+def create_document_summary_generation_port() -> DocumentSummaryGenerationPort:
+    """Create document summary generation adapter.
+
+    Returns:
+        DocumentSummaryGenerationPort implementation (GeminiDocumentSummaryAdapter).
+    """
+    return GeminiDocumentSummaryAdapter()
+
+
+def create_document_summary_cache_port(db=None) -> DocumentSummaryCachePort:
+    """Create document summary cache repository port.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        DocumentSummaryCachePort implementation.
+    """
+    from src.infrastructure.persistence.document_summary_repository import (
+        DocumentSummaryCacheRepository,
+    )
+    return DocumentSummaryCacheRepository(db)
+
+
+def create_generate_document_summary_use_case(db=None):
+    """Create GenerateDocumentSummaryUseCase with dependencies.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        Fully configured GenerateDocumentSummaryUseCase.
+
+    Example:
+        use_case = create_generate_document_summary_use_case()
+        result = use_case.execute(
+            channel_id="channel-123",
+            document_id="file-abc",
+            document_name="paper.pdf",
+        )
+    """
+    from src.application.use_cases.document_summary import GenerateDocumentSummaryUseCase
+    return GenerateDocumentSummaryUseCase(
+        generation_port=create_document_summary_generation_port(),
+        cache_port=create_document_summary_cache_port(db),
+    )
+
+
+def create_get_channel_summaries_use_case(db=None):
+    """Create GetChannelDocumentSummariesUseCase with dependencies.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        Fully configured GetChannelDocumentSummariesUseCase.
+
+    Example:
+        use_case = create_get_channel_summaries_use_case()
+        result = use_case.execute(channel_id="channel-123")
+        context = use_case.build_context_string(channel_id="channel-123")
+    """
+    from src.application.use_cases.document_summary import GetChannelDocumentSummariesUseCase
+    return GetChannelDocumentSummariesUseCase(
+        cache_port=create_document_summary_cache_port(db),
+    )

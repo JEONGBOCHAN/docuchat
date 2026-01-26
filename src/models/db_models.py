@@ -177,3 +177,21 @@ class AudioOverviewDB(Base):
 
     # Relationship to channel
     channel = relationship("ChannelMetadata", back_populates="audio_overviews")
+
+
+class DocumentSummaryCacheDB(Base):
+    """Cache for document summaries to inject into agent system prompt.
+
+    Stores concise summaries of uploaded documents so the agent
+    knows what content is available and can choose the right tool.
+    """
+
+    __tablename__ = "document_summary_cache"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(String(255), unique=True, nullable=False, index=True)
+    channel_id = Column(String(255), nullable=False, index=True)  # Gemini store ID
+    document_name = Column(String(500), nullable=False)
+    summary = Column(Text, nullable=False)  # Concise summary (~100 tokens)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)

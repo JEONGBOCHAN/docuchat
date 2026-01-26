@@ -63,6 +63,11 @@ from src.application.ports.citation_search import (
     CitationResultDTO,
 )
 from src.application.ports.summarization import SummarizationPort, SummaryDTO
+from src.application.ports.document_summary import (
+    DocumentSummaryGenerationPort,
+    DocumentSummaryCachePort,
+    DocumentSummaryDTO,
+)
 from src.application.ports.timeline import (
     TimelinePort,
     TimelineEventDTO,
@@ -171,6 +176,10 @@ __all__ = [
     # Summarization
     "SummarizationPort",
     "SummaryDTO",
+    # Document Summary
+    "DocumentSummaryGenerationPort",
+    "DocumentSummaryCachePort",
+    "DocumentSummaryDTO",
     # Timeline
     "TimelinePort",
     "TimelineEventDTO",

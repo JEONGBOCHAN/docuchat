@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Document upload API endpoints."""
 
+import logging
 import os
 import tempfile
 from datetime import datetime, UTC
@@ -8,8 +9,10 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query, status
+from sqlalchemy.orm import Session
 
 from src.core.config import get_settings, Settings
+from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.models.document import (
     DocumentResponse,
@@ -23,13 +26,17 @@ from src.application.ports.document import DocumentPort
 from src.application.ports.external_services import CrawlerPort
 from src.application.ports.cache import CachePort
 from src.application.services.capacity_service import CapacityService, CapacityExceededError
+from src.application.use_cases.document_summary import GenerateDocumentSummaryUseCase
 from src.infrastructure.di.container import (
     create_channel_port,
     create_document_port,
     create_crawler_port,
     create_cache_port,
     create_capacity_service,
+    create_generate_document_summary_use_case,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -57,6 +64,11 @@ def get_cache_port() -> CachePort:
 def get_capacity_service() -> CapacityService:
     """Get capacity service instance."""
     return create_capacity_service()
+
+
+def get_summary_use_case(db: Session = Depends(get_db)) -> GenerateDocumentSummaryUseCase:
+    """Get document summary use case instance."""
+    return create_generate_document_summary_use_case(db)
 
 
 def validate_file(
@@ -103,6 +115,7 @@ async def upload_document(
     settings: Annotated[Settings, Depends(get_settings)],
     cache: Annotated[CachePort, Depends(get_cache_port)],
     capacity_service: Annotated[CapacityService, Depends(get_capacity_service)],
+    summary_use_case: Annotated[GenerateDocumentSummaryUseCase, Depends(get_summary_use_case)],
 ) -> DocumentUploadResponse:
     """Upload a document to a channel.
 
@@ -148,6 +161,25 @@ async def upload_document(
         # Invalidate document list and chat caches for this channel
         cache.invalidate_document_cache(channel_id)
         cache.invalidate_chat_cache(channel_id)
+
+        # Generate document summary for agent context (graceful degradation)
+        # This helps the agent choose the right tool (search_documents vs web_search)
+        try:
+            summary_result = summary_use_case.execute(
+                channel_id=channel_id,
+                document_id=result.document_id or result.operation_name,
+                document_name=original_filename,
+            )
+            if summary_result.success:
+                logger.info(f"Generated summary for document: {original_filename}")
+            else:
+                logger.warning(
+                    f"Failed to generate summary for {original_filename}: "
+                    f"{summary_result.error}"
+                )
+        except Exception as e:
+            # Graceful degradation: log but don't fail upload
+            logger.warning(f"Summary generation failed for {original_filename}: {e}")
 
         return DocumentUploadResponse(
             id=result.operation_name,
@@ -197,6 +229,7 @@ def upload_from_url(
     crawler: Annotated[CrawlerPort, Depends(get_crawler_port)],
     cache: Annotated[CachePort, Depends(get_cache_port)],
     capacity_service: Annotated[CapacityService, Depends(get_capacity_service)],
+    summary_use_case: Annotated[GenerateDocumentSummaryUseCase, Depends(get_summary_use_case)],
 ) -> DocumentUploadResponse:
     """Crawl a URL and upload the content as a document.
 
@@ -238,6 +271,23 @@ def upload_from_url(
         # Invalidate document list and chat caches for this channel
         cache.invalidate_document_cache(channel_id)
         cache.invalidate_chat_cache(channel_id)
+
+        # Generate document summary for agent context (graceful degradation)
+        try:
+            summary_result = summary_use_case.execute(
+                channel_id=channel_id,
+                document_id=upload_result.document_id or upload_result.operation_name,
+                document_name=url_filename,
+            )
+            if summary_result.success:
+                logger.info(f"Generated summary for URL document: {url_filename}")
+            else:
+                logger.warning(
+                    f"Failed to generate summary for {url_filename}: "
+                    f"{summary_result.error}"
+                )
+        except Exception as e:
+            logger.warning(f"Summary generation failed for {url_filename}: {e}")
 
         return DocumentUploadResponse(
             id=upload_result.operation_name,

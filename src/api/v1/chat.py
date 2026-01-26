@@ -36,7 +36,9 @@ from src.infrastructure.di.container import (
     create_search_history_repository_port,
     create_cache_port,
     create_process_query_use_case,
+    create_get_channel_summaries_use_case,
 )
+from src.application.use_cases.document_summary import GetChannelDocumentSummariesUseCase
 from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/channels", tags=["chat"])
@@ -70,6 +72,11 @@ def get_search_history_port(db: Session = Depends(get_db)) -> SearchHistoryRepos
 def get_cache_port() -> CachePort:
     """Get cache port instance."""
     return create_cache_port()
+
+
+def get_summaries_use_case(db: Session = Depends(get_db)) -> GetChannelDocumentSummariesUseCase:
+    """Get channel summaries use case instance."""
+    return create_get_channel_summaries_use_case(db)
 
 
 # =============================================================================
@@ -129,6 +136,7 @@ def _run_agent_chat(
     query: str,
     conversation_history: list[dict[str, str]] | None = None,
     max_iterations: int = 15,
+    document_context: str | None = None,
 ) -> dict:
     """Run the agent to answer a query using documents in the channel.
 
@@ -142,6 +150,7 @@ def _run_agent_chat(
         query: User's question
         conversation_history: Previous conversation for context
         max_iterations: Maximum agent iterations (default 15)
+        document_context: Optional document summaries to inject into system prompt
 
     Returns:
         Dict with 'response', 'sources', 'iterations', and 'session_id'
@@ -157,6 +166,7 @@ def _run_agent_chat(
         channel_id=channel_id,
         conversation_history=conversation_history,
         max_iterations=max_iterations,
+        document_context=document_context,
     )
 
     # Convert QueryResult to dict for backward compatibility
@@ -174,6 +184,7 @@ def _run_agent_chat_stream(
     query: str,
     conversation_history: list[dict[str, str]] | None = None,
     max_iterations: int = 15,
+    document_context: str | None = None,
 ) -> Generator[dict, None, dict]:
     """Run the agent with streaming, yielding events for SSE.
 
@@ -187,6 +198,7 @@ def _run_agent_chat_stream(
         query: User's question
         conversation_history: Previous conversation for context
         max_iterations: Maximum agent iterations (default 15)
+        document_context: Optional document summaries to inject into system prompt
 
     Yields:
         Event dicts for SSE: {"chunk": text}, {"sources": [...]}, etc.
@@ -204,6 +216,7 @@ def _run_agent_chat_stream(
         channel_id=channel_id,
         conversation_history=conversation_history,
         max_iterations=max_iterations,
+        document_context=document_context,
     )
 
     accumulated_content = ""
@@ -297,6 +310,7 @@ def send_message(
     session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
     search_history: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
     cache: Annotated[CachePort, Depends(get_cache_port)],
+    summaries_use_case: Annotated[GetChannelDocumentSummariesUseCase, Depends(get_summaries_use_case)],
 ) -> ChatResponse:
     """Send a question and get an AI-generated answer.
 
@@ -338,6 +352,10 @@ def send_message(
     # Get conversation history for context
     conversation_history = _get_conversation_history(chat_history, session_id_response)
 
+    # Get document summaries for agent context
+    # This helps the agent choose the right tool (search_documents vs web_search)
+    document_context = summaries_use_case.build_context_string(channel_id)
+
     # Check cache for non-session queries
     cached_response = None
     use_cache = not body.session_id  # Only cache when no session
@@ -368,6 +386,7 @@ def send_message(
             channel_id=channel_id,
             query=body.query,
             conversation_history=conversation_history,
+            document_context=document_context,
         )
 
         if "error" in result and result["error"]:
@@ -450,6 +469,7 @@ def send_message_stream(
     chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
     session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
     search_history: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
+    summaries_use_case: Annotated[GetChannelDocumentSummariesUseCase, Depends(get_summaries_use_case)],
 ) -> StreamingResponse:
     """Send a question and get a streaming AI-generated answer.
 
@@ -492,6 +512,9 @@ def send_message_stream(
     # Get conversation history for context
     conversation_history = _get_conversation_history(chat_history, session_id_response)
 
+    # Get document summaries for agent context
+    document_context = summaries_use_case.build_context_string(channel_id)
+
     def generate_stream() -> Generator[str, None, None]:
         """Generate SSE events using Clean Architecture ProcessQueryUseCase.
 
@@ -510,6 +533,7 @@ def send_message_stream(
             channel_id=channel_id,
             query=body.query,
             conversation_history=conversation_history,
+            document_context=document_context,
         )
 
         final_result = None
