@@ -304,6 +304,16 @@ class LangGraphAgentRunner(AgentRunnerPort):
             # Extract sources and iterations
             sources, iterations, tool_calls = self._extract_metadata(result)
 
+            # Count tokens from final response (for non-streaming dashboard update)
+            total_tokens = 0
+            if self._token_counter and response_text:
+                total_tokens = self._token_counter.count_tokens(response_text)
+                if self._dashboard_middleware:
+                    self._dashboard_middleware.update_realtime_tokens(
+                        total_tokens,
+                        {"channel_id": channel_id},
+                    )
+
             # Emit: Agent Completed
             if self._event_sink:
                 self._event_sink.emit(AgentCompletedEvent(
@@ -637,6 +647,9 @@ class LangGraphAgentRunner(AgentRunnerPort):
         After streaming completes, we analyze the collected messages to extract
         token information and retroactively update the corresponding LLM steps.
 
+        If usage_metadata is not available, we use the token counter to estimate
+        tokens based on message content.
+
         Args:
             final_messages: List of all messages from streaming.
             llm_phase_message_indices: List of (message_index, llm_role) tuples.
@@ -645,29 +658,74 @@ class LangGraphAgentRunner(AgentRunnerPort):
         if not self._dashboard_middleware:
             return
 
-        # Scan messages for usage_metadata
-        # AIMessage objects (not chunks) after streaming may have usage_metadata
-        # We need to match them to the LLM phases tracked during streaming
-        ai_messages_with_usage = []
+        logger.debug(
+            f"[TokenExtract] Starting extraction - "
+            f"messages={len(final_messages)}, "
+            f"phases={llm_phase_message_indices}, "
+            f"has_token_counter={self._token_counter is not None}"
+        )
+
+        # Build a map of AI messages with their tokens (from usage_metadata or estimated)
+        ai_messages_with_tokens: list[tuple[int, int]] = []
         for idx, msg in enumerate(final_messages):
             msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
             if "ai" in str(msg_type).lower():
+                # Try usage_metadata first
                 usage = getattr(msg, "usage_metadata", None)
-                if usage:
+                if usage and isinstance(usage, dict):
                     tokens = usage.get("total_tokens")
-                    if tokens:
-                        ai_messages_with_usage.append((idx, tokens))
+                    if isinstance(tokens, int) and tokens > 0:
+                        ai_messages_with_tokens.append((idx, tokens))
+                        logger.debug(f"[TokenExtract] Msg {idx}: usage_metadata tokens={tokens}")
+                        continue
 
-        # Match usage data to LLM phases
-        # Strategy: For each LLM phase, find the closest AI message with usage data
-        for phase_idx, llm_role in llm_phase_message_indices:
-            # Find usage data from messages at or after this phase's start
-            for msg_idx, tokens in ai_messages_with_usage:
-                if msg_idx >= phase_idx:
-                    self._dashboard_middleware.update_step_tokens(llm_role, tokens)
-                    # Remove used entry to avoid duplicate assignment
-                    ai_messages_with_usage.remove((msg_idx, tokens))
-                    break
+                # Fallback: estimate tokens from content using token counter
+                if self._token_counter:
+                    content = getattr(msg, "content", "")
+                    if isinstance(content, list):
+                        content = "".join(
+                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            for part in content
+                        )
+                    if content and isinstance(content, str):
+                        estimated_tokens = self._token_counter.count_tokens(content)
+                        if isinstance(estimated_tokens, int) and estimated_tokens > 0:
+                            ai_messages_with_tokens.append((idx, estimated_tokens))
+                            logger.debug(f"[TokenExtract] Msg {idx}: estimated tokens={estimated_tokens} from {len(content)} chars")
+                    else:
+                        logger.debug(f"[TokenExtract] Msg {idx}: empty content, skipping")
+                else:
+                    logger.debug(f"[TokenExtract] Msg {idx}: no token_counter, skipping")
+
+        logger.debug(f"[TokenExtract] AI messages with tokens: {ai_messages_with_tokens}")
+
+        # Match token data to LLM phases
+        # Strategy: For each LLM phase, sum ALL tokens from phase start to next phase (or end)
+        # This handles streaming mode where each chunk has small partial content
+        sorted_phases = sorted(llm_phase_message_indices, key=lambda x: x[0])
+
+        for i, (phase_idx, llm_role) in enumerate(sorted_phases):
+            # Determine the end index for this phase
+            if i + 1 < len(sorted_phases):
+                next_phase_idx = sorted_phases[i + 1][0]
+            else:
+                next_phase_idx = len(final_messages)
+
+            # Sum all tokens from chunks in this phase's range
+            phase_tokens = sum(
+                tokens
+                for msg_idx, tokens in ai_messages_with_tokens
+                if phase_idx <= msg_idx < next_phase_idx
+            )
+
+            logger.debug(
+                f"[TokenExtract] Phase '{llm_role}': idx={phase_idx}-{next_phase_idx}, "
+                f"tokens={phase_tokens}"
+            )
+
+            if phase_tokens > 0:
+                self._dashboard_middleware.update_step_tokens(llm_role, phase_tokens, channel_id)
+                logger.debug(f"[TokenExtract] Updated step tokens for {llm_role}: {phase_tokens}")
 
     def _extract_metadata(self, result: dict) -> tuple[list[dict], int, list[dict]]:
         """Extract sources, iterations, and tool calls from result.

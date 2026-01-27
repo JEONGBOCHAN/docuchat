@@ -18,6 +18,37 @@ from structlog.types import Processor
 from src.core.config import Environment, get_settings
 
 
+class SafeStreamHandler(logging.StreamHandler):
+    """A StreamHandler that handles encoding errors gracefully.
+
+    On Windows with Korean locale (cp949), certain Unicode characters
+    like em-dash (—) cannot be encoded. This handler replaces
+    unencodable characters instead of raising an error.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            stream = self.stream
+            # Handle encoding errors by replacing problematic characters
+            if hasattr(stream, "encoding") and stream.encoding:
+                try:
+                    stream.write(msg + self.terminator)
+                except UnicodeEncodeError:
+                    # Encode with replacement for problematic characters
+                    safe_msg = msg.encode(stream.encoding, errors="replace").decode(
+                        stream.encoding
+                    )
+                    stream.write(safe_msg + self.terminator)
+            else:
+                stream.write(msg + self.terminator)
+            self.flush()
+        except RecursionError:
+            raise
+        except Exception:
+            self.handleError(record)
+
+
 def get_log_level() -> int:
     """Get logging level from settings."""
     settings = get_settings()
@@ -71,12 +102,18 @@ def setup_logging() -> None:
 
     log_level = get_log_level()
 
-    # Configure standard library logging
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=log_level,
-    )
+    # Configure standard library logging with encoding-safe handler
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+
+    # Remove existing handlers to avoid duplicates
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # Add our safe stream handler
+    handler = SafeStreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger.addHandler(handler)
 
     # Set third-party loggers to WARNING to reduce noise
     logging.getLogger("uvicorn").setLevel(logging.WARNING)

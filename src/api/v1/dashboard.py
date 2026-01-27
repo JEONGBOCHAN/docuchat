@@ -41,10 +41,29 @@ async def get_dashboard():
 
 
 @router.get("/state")
-async def get_dashboard_state():
-    """Get current agent state as JSON."""
+async def get_dashboard_state(channel_id: str | None = None):
+    """Get current agent state as JSON.
+
+    Args:
+        channel_id: Optional channel ID to get state for.
+                   If not provided, returns the most recently active channel's state
+                   or default idle state if none.
+    """
     state_store = get_global_state_store()
-    return JSONResponse(content=state_store.get_state())
+
+    # If no channel_id provided, try to get the most recently active channel
+    if channel_id is None:
+        all_states = state_store.get_all_states()
+        if all_states:
+            # Find the most recently active (running or just completed)
+            for cid, state in all_states.items():
+                if state.get("status") in ["running", "complete"]:
+                    return JSONResponse(content=state)
+            # Fall back to first channel's state
+            first_channel = next(iter(all_states.keys()))
+            return JSONResponse(content=all_states[first_channel])
+
+    return JSONResponse(content=state_store.get_state(channel_id))
 
 
 @router.post("/reset")

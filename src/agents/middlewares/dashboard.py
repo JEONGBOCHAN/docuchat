@@ -369,7 +369,9 @@ class DashboardMiddleware:
             return delta.total_seconds() * 1000
         return None
 
-    def update_step_tokens(self, llm_role: str, tokens: int | None) -> None:
+    def update_step_tokens(
+        self, llm_role: str, tokens: int | None, channel_id: str | None = None
+    ) -> None:
         """Update token count for a completed LLM step.
 
         This is used to retroactively add token information to steps when
@@ -378,6 +380,7 @@ class DashboardMiddleware:
         Args:
             llm_role: Role of the LLM step to update (e.g., llm_response).
             tokens: Total token count for this LLM call (optional).
+            channel_id: Channel ID for the state update (optional).
         """
         if tokens is None:
             return
@@ -387,6 +390,17 @@ class DashboardMiddleware:
             if step.node == llm_role:
                 step.data["tokens"] = tokens
                 break
+
+        # Publish step_token_update event to state_store
+        if self._state_store and hasattr(self._state_store, "update"):
+            event = {
+                "event": "step_token_update",
+                "timestamp": datetime.now().isoformat(),
+                "node": llm_role,
+                "tokens": tokens,
+                "channel_id": channel_id,
+            }
+            self._state_store.update(event)
 
     def update_realtime_tokens(
         self,

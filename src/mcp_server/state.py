@@ -305,6 +305,11 @@ class AgentStateStore:
                         if tokens is not None:
                             step.data["tokens"] = tokens
                         break
+                # Recalculate current_tokens as sum of all step tokens
+                if tokens is not None:
+                    state.current_tokens = sum(
+                        step.data.get("tokens", 0) for step in state.steps
+                    )
 
             # Handle tool events
             elif event_type == "tool_start":
@@ -349,6 +354,21 @@ class AgentStateStore:
             elif event_type == "token_update":
                 tokens = event.get("tokens", 0)
                 state.current_tokens = tokens
+
+            # Handle step token update events (post-streaming token assignment to steps)
+            elif event_type == "step_token_update":
+                node = event.get("node", "")
+                tokens = event.get("tokens")
+                if node and tokens is not None:
+                    # Update the most recent step with this node name
+                    for step in reversed(state.steps):
+                        if step.node == node:
+                            step.data["tokens"] = tokens
+                            break
+                    # Recalculate current_tokens as sum of all step tokens
+                    state.current_tokens = sum(
+                        step.data.get("tokens", 0) for step in state.steps
+                    )
 
         # Notify subscribers outside the lock
         self._notify_subscribers(channel_id)
