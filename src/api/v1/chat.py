@@ -369,6 +369,8 @@ def send_message(
             GroundingSource(
                 source=s.get("source", "unknown"),
                 content=s.get("content", ""),
+                url=s.get("url"),
+                source_type=s.get("source_type", "document"),
             )
             for s in cached_response.get("sources", [])
         ]
@@ -400,6 +402,8 @@ def send_message(
             GroundingSource(
                 source=s.get("source", "unknown"),
                 content=s.get("content", ""),
+                url=s.get("url"),
+                source_type=s.get("source_type", "document"),
             )
             for s in result.get("sources", [])
         ]
@@ -427,7 +431,15 @@ def send_message(
                 body.query,
                 {
                     "response": response.response,
-                    "sources": [{"source": s.source, "content": s.content} for s in sources],
+                    "sources": [
+                        {
+                            "source": s.source,
+                            "content": s.content,
+                            "url": s.url,
+                            "source_type": s.source_type,
+                        }
+                        for s in sources
+                    ],
                 },
             )
 
@@ -448,7 +460,15 @@ def send_message(
         channel_id=channel_meta.id,
         role="assistant",
         content=response.response,
-        sources=[{"source": s.source, "content": s.content} for s in sources],
+        sources=[
+            {
+                "source": s.source,
+                "content": s.content,
+                "url": s.url,
+                "source_type": s.source_type,
+            }
+            for s in sources
+        ],
         session_id=session_id_response,
     )
 
@@ -635,7 +655,12 @@ def get_chat_history(
             role=msg.role,
             content=msg.content,
             sources=[
-                GroundingSource(source=s.get("source", ""), content=s.get("content", ""))
+                GroundingSource(
+                    source=s.get("source", ""),
+                    content=s.get("content", ""),
+                    url=s.get("url"),
+                    source_type=s.get("source_type", "document"),
+                )
                 for s in msg.sources
             ],
             created_at=msg.created_at,
@@ -805,7 +830,12 @@ def get_session_history(
             role=msg.role,
             content=msg.content,
             sources=[
-                GroundingSource(source=s.get("source", ""), content=s.get("content", ""))
+                GroundingSource(
+                    source=s.get("source", ""),
+                    content=s.get("content", ""),
+                    url=s.get("url"),
+                    source_type=s.get("source_type", "document"),
+                )
                 for s in msg.sources
             ],
             created_at=msg.created_at,

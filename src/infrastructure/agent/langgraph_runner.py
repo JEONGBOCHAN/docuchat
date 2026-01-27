@@ -750,20 +750,131 @@ class LangGraphAgentRunner(AgentRunnerPort):
                         "args": tc.get("args", {}),
                     })
 
-            # Extract sources from search results
+            # Extract sources from search results (document, web, arxiv)
             if hasattr(msg, "content") and isinstance(msg.content, str):
-                if "[Source" in msg.content and "Found" in msg.content:
-                    lines = msg.content.split("\n")
+                content = msg.content
+
+                # Extract document sources: [Source X: filename]
+                if "[Source" in content and "Found" in content:
+                    lines = content.split("\n")
                     for line in lines:
                         if line.startswith("[Source"):
                             try:
                                 source_part = line.split(":")[1].strip().rstrip("]")
                                 if source_part and source_part not in [s.get("source") for s in sources]:
-                                    sources.append({"source": source_part, "content": ""})
+                                    sources.append({
+                                        "source": source_part,
+                                        "content": "",
+                                        "source_type": "document",
+                                        "url": None,
+                                    })
                             except (IndexError, AttributeError):
                                 pass
 
+                # Extract web sources: [Web X] title\nURL: url\nsnippet
+                if "[Web" in content and "Found" in content:
+                    self._extract_web_sources(content, sources)
+
+                # Extract arxiv sources: [Paper X] title\n...PDF: url
+                if "[Paper" in content and "Found" in content:
+                    self._extract_arxiv_sources(content, sources)
+
         return sources, iterations, tool_calls
+
+    def _extract_web_sources(self, content: str, sources: list[dict]) -> None:
+        """Extract web search sources from tool output.
+
+        Parses format:
+        [Web 1] Title
+        URL: https://example.com
+        Snippet text...
+
+        Args:
+            content: Tool output content.
+            sources: List to append extracted sources to.
+        """
+        import re
+
+        # Split by --- separator to get individual results
+        sections = content.split("\n---\n")
+
+        for section in sections:
+            # Match [Web N] pattern
+            web_match = re.search(r"\[Web \d+\]\s*(.+)", section)
+            if not web_match:
+                continue
+
+            title = web_match.group(1).strip()
+
+            # Extract URL
+            url_match = re.search(r"URL:\s*(\S+)", section)
+            url = url_match.group(1).strip() if url_match else None
+
+            # Extract snippet (everything after URL line)
+            snippet = ""
+            lines = section.split("\n")
+            capture_snippet = False
+            for line in lines:
+                if capture_snippet and line.strip():
+                    snippet = line.strip()
+                    break
+                if line.startswith("URL:"):
+                    capture_snippet = True
+
+            # Avoid duplicates
+            if title and title not in [s.get("source") for s in sources]:
+                sources.append({
+                    "source": title,
+                    "content": snippet,
+                    "source_type": "web",
+                    "url": url,
+                })
+
+    def _extract_arxiv_sources(self, content: str, sources: list[dict]) -> None:
+        """Extract arxiv paper sources from tool output.
+
+        Parses format:
+        [Paper 1] Title
+        Authors: ...
+        arXiv ID: ...
+        Category: ...
+        Published: ...
+        PDF: https://arxiv.org/pdf/...
+        Summary: ...
+
+        Args:
+            content: Tool output content.
+            sources: List to append extracted sources to.
+        """
+        import re
+
+        # Split by --- separator to get individual results
+        sections = content.split("\n---\n")
+
+        for section in sections:
+            # Match [Paper N] pattern
+            paper_match = re.search(r"\[Paper \d+\]\s*(.+)", section)
+            if not paper_match:
+                continue
+
+            title = paper_match.group(1).strip()
+
+            # Extract PDF URL
+            pdf_match = re.search(r"PDF:\s*(\S+)", section)
+            pdf_url = pdf_match.group(1).strip() if pdf_match else None
+
+            # Extract summary for content
+            summary_match = re.search(r"Summary:\s*(.+)", section, re.DOTALL)
+            summary = summary_match.group(1).strip()[:200] if summary_match else ""
+
+            # Avoid duplicates
+            if title and title not in [s.get("source") for s in sources]:
+                sources.append({
+                    "source": title,
+                    "content": summary,
+                    "source_type": "arxiv",
+                    "url": pdf_url,
+                })
 
     def get_available_tools(self) -> list[AgentTool]:
         """Get list of tools available to this agent.

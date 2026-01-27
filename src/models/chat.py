@@ -13,9 +13,11 @@ def _utc_now() -> datetime:
 class GroundingSource(BaseModel):
     """Source information for grounded response."""
 
-    source: str = Field(..., description="Source file name")
+    source: str = Field(..., description="Source file name or title")
     page: int | None = Field(default=None, description="Page number if available")
     content: str = Field(default="", description="Relevant content snippet")
+    url: str | None = Field(default=None, description="URL for web or arxiv sources")
+    source_type: str = Field(default="document", description="Source type: document, web, or arxiv")
 
 
 class ChatRequest(BaseModel):
