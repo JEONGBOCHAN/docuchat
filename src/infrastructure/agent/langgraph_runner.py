@@ -237,6 +237,24 @@ class LangGraphAgentRunner(AgentRunnerPort):
                 llm_call_count = 0
                 tool_call_count = 0
 
+                # Count LLM phases first to distribute duration
+                llm_phases = []
+                for msg in result_messages:
+                    msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
+                    if "human" in str(msg_type).lower():
+                        continue
+                    if "ai" in str(msg_type).lower():
+                        has_tool_calls = hasattr(msg, "tool_calls") and msg.tool_calls
+                        content = getattr(msg, "content", "")
+                        if has_tool_calls:
+                            llm_phases.append("tool_selection")
+                        elif content:
+                            llm_phases.append("response")
+
+                # Distribute duration among LLM phases (equal distribution)
+                num_phases = len(llm_phases) if llm_phases else 1
+                duration_per_phase_ms = agent_duration_ms / num_phases
+
                 for msg in result_messages:
                     # Get message type - support both real messages and mocks
                     msg_type = getattr(msg, "type", None) or type(msg).__name__.lower()
@@ -259,7 +277,13 @@ class LangGraphAgentRunner(AgentRunnerPort):
                         tokens = usage.get("total_tokens") if usage else None
 
                         self._dashboard_middleware.on_llm_start(llm_role, {"channel_id": channel_id})
-                        self._dashboard_middleware.on_llm_end(llm_role, {"channel_id": channel_id}, tokens=tokens)
+                        # Use distributed duration for non-streaming mode
+                        self._dashboard_middleware.on_llm_end(
+                            llm_role,
+                            {"channel_id": channel_id},
+                            tokens=tokens,
+                            duration_override_ms=duration_per_phase_ms
+                        )
                         llm_call_count += 1
                         tool_call_count += len(msg.tool_calls)
 
@@ -275,7 +299,13 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
                             # Final response with content
                             self._dashboard_middleware.on_llm_start("llm_response", {"channel_id": channel_id})
-                            self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id}, tokens=tokens)
+                            # Use distributed duration for non-streaming mode
+                            self._dashboard_middleware.on_llm_end(
+                                "llm_response",
+                                {"channel_id": channel_id},
+                                tokens=tokens,
+                                duration_override_ms=duration_per_phase_ms
+                            )
 
             # Emit tool events based on actual tool calls in result
             if self._event_sink:
@@ -412,6 +442,8 @@ class LangGraphAgentRunner(AgentRunnerPort):
             llm_observation_started = False
             llm_response_started = False
             tool_just_completed = False  # Flag to detect observation phase
+            last_tool_completed_time: datetime | None = None  # Track when last tool completed
+            stream_start_time = datetime.now()  # Track stream start for reasoning duration
 
             # Track LLM phases for post-streaming token extraction
             # Maps message index to LLM role (for token extraction after streaming)
@@ -464,17 +496,36 @@ class LangGraphAgentRunner(AgentRunnerPort):
                                 llm_phase_message_indices.append((current_ai_message_index, llm_role))
                                 self._dashboard_middleware.on_llm_start(llm_role, {"channel_id": channel_id})
 
+                        # End current LLM phase before tool execution starts
+                        # This should happen once per phase, not per tool call
+                        # Calculate duration from the appropriate start time
+                        if llm_reasoning_started and not tool_just_completed and self._dashboard_middleware:
+                            # For reasoning, measure from stream start to now
+                            reasoning_duration_ms = (datetime.now() - stream_start_time).total_seconds() * 1000
+                            self._dashboard_middleware.on_llm_end(
+                                "llm_reasoning",
+                                {"channel_id": channel_id},
+                                tokens=None,
+                                duration_override_ms=reasoning_duration_ms
+                            )
+                            llm_reasoning_started = False
+                        elif llm_observation_started and self._dashboard_middleware:
+                            # For observation, measure from last tool completion to now
+                            if last_tool_completed_time:
+                                observation_duration_ms = (datetime.now() - last_tool_completed_time).total_seconds() * 1000
+                            else:
+                                observation_duration_ms = None
+                            self._dashboard_middleware.on_llm_end(
+                                "llm_observation",
+                                {"channel_id": channel_id},
+                                tokens=None,
+                                duration_override_ms=observation_duration_ms
+                            )
+                            llm_observation_started = False
+
                         for tc in tool_calls:
                             tool_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
                             if tool_name and tool_name not in active_tools:
-                                # End the current LLM phase before tool starts (tokens extracted post-streaming)
-                                if llm_reasoning_started and not tool_just_completed and self._dashboard_middleware:
-                                    self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=None)
-                                    llm_reasoning_started = False
-                                elif llm_observation_started and self._dashboard_middleware:
-                                    self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=None)
-                                    llm_observation_started = False
-
                                 active_tools.add(tool_name)
                                 tool_start_times[tool_name] = datetime.now()
 
@@ -507,6 +558,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
                         # Mark that a tool just completed (for observation phase detection)
                         tool_just_completed = True
+                        last_tool_completed_time = datetime.now()
                     continue  # Skip tool message content from final response
 
                 # Get content from the message chunk
@@ -565,9 +617,12 @@ class LangGraphAgentRunner(AgentRunnerPort):
                 self._dashboard_middleware.on_llm_end("llm_response", {"channel_id": channel_id}, tokens=None)
 
             # Clean up any incomplete LLM phases (edge cases)
+            # These should rarely happen, but if they do, we measure from their start time
             if llm_reasoning_started and self._dashboard_middleware:
+                # If reasoning is still started, use natural duration calculation
                 self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=None)
             if llm_observation_started and self._dashboard_middleware:
+                # If observation is still started, use natural duration calculation
                 self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=None)
 
             # Post-streaming token extraction: extract tokens from final_messages

@@ -1061,3 +1061,102 @@ class TestDashboardMiddlewareRealtimeTokens:
         # Last call should have 300 tokens
         last_event = mock_state_store.update.call_args_list[2][0][0]
         assert last_event["tokens"] == 300
+
+
+class TestDashboardMiddlewareDurationOverride:
+    """Tests for duration_override_ms parameter in on_llm_end."""
+
+    def test_on_llm_end_duration_override_is_used(self):
+        """Test that duration_override_ms overrides calculated duration."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_reasoning")
+        # Immediately call end with override (no time passes)
+        middleware.on_llm_end("llm_reasoning", duration_override_ms=500.0)
+
+        step = middleware.state.steps[0]
+        assert step.duration_ms == 500.0
+
+    def test_on_llm_end_duration_override_zero(self):
+        """Test that zero duration_override is used and not treated as None."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_test")
+        middleware.on_llm_end("llm_test", duration_override_ms=0.0)
+
+        step = middleware.state.steps[0]
+        assert step.duration_ms == 0.0
+
+    def test_on_llm_end_no_override_calculates_duration(self):
+        """Test that duration is calculated when override is not provided."""
+        import time
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_test")
+        time.sleep(0.02)  # 20ms delay
+        middleware.on_llm_end("llm_test")
+
+        step = middleware.state.steps[0]
+        assert step.duration_ms is not None
+        assert step.duration_ms >= 15  # At least 15ms (allowing for timing variance)
+
+    def test_on_llm_end_override_with_none_calculates_duration(self):
+        """Test that None override causes duration to be calculated."""
+        import time
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_test")
+        time.sleep(0.015)  # 15ms delay
+        middleware.on_llm_end("llm_test", duration_override_ms=None)
+
+        step = middleware.state.steps[0]
+        assert step.duration_ms is not None
+        assert step.duration_ms >= 10  # Should be calculated, not None
+
+    def test_on_llm_end_override_with_data_and_tokens(self):
+        """Test that duration_override works with other parameters."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_response", {"prompt_length": 100})
+        middleware.on_llm_end(
+            "llm_response",
+            data={"response_length": 500},
+            tokens=1200,
+            duration_override_ms=350.0
+        )
+
+        step = middleware.state.steps[0]
+        assert step.duration_ms == 350.0
+        assert step.data.get("tokens") == 1200
+        assert step.data.get("type") == "llm"
+        assert step.data.get("prompt_length") == 100
+
+    def test_on_llm_end_override_in_published_event(self):
+        """Test that overridden duration appears in published event."""
+        events = []
+        middleware = DashboardMiddleware(state_updater=lambda e: events.append(e))
+
+        middleware.on_llm_start("llm_reasoning")
+        events.clear()
+        middleware.on_llm_end("llm_reasoning", duration_override_ms=123.45)
+
+        assert len(events) == 1
+        assert events[0]["event"] == "llm_complete"
+        assert events[0]["data"]["duration_ms"] == 123.45
+
+    def test_on_llm_end_multiple_steps_different_durations(self):
+        """Test multiple LLM steps with different durations."""
+        middleware = DashboardMiddleware()
+
+        middleware.on_llm_start("llm_reasoning")
+        middleware.on_llm_end("llm_reasoning", duration_override_ms=100.0)
+
+        middleware.on_llm_start("llm_observation")
+        middleware.on_llm_end("llm_observation", duration_override_ms=200.0)
+
+        middleware.on_llm_start("llm_response")
+        middleware.on_llm_end("llm_response", duration_override_ms=300.0)
+
+        assert middleware.state.steps[0].duration_ms == 100.0
+        assert middleware.state.steps[1].duration_ms == 200.0
+        assert middleware.state.steps[2].duration_ms == 300.0

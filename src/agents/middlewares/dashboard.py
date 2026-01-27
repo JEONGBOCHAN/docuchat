@@ -322,6 +322,7 @@ class DashboardMiddleware:
         llm_role: str,
         data: dict[str, Any] | None = None,
         tokens: int | None = None,
+        duration_override_ms: float | None = None,
     ) -> None:
         """Called when an LLM call completes.
 
@@ -332,9 +333,12 @@ class DashboardMiddleware:
             llm_role: Role of the LLM that completed.
             data: Additional data about the completion (e.g., response_length).
             tokens: Total token count for this LLM call (optional).
+            duration_override_ms: Override duration in milliseconds (for non-streaming mode
+                where actual duration cannot be measured).
         """
         data = data or {}
-        duration = self._calculate_duration(llm_role)
+        # Use override duration if provided, otherwise calculate from start time
+        duration = duration_override_ms if duration_override_ms is not None else self._calculate_duration(llm_role)
 
         for step in reversed(self._state.steps):
             if step.node == llm_role and step.status == NodeStatus.RUNNING:
