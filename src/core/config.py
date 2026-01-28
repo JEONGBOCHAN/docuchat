@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     # Tavily Web Search
     tavily_api_key: str = ""
 
+    # arXiv MCP Server
+    arxiv_storage_path: str = "~/.arxiv-mcp-server/papers"
+
     # Google Drive Integration (OAuth)
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""

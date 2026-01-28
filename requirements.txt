@@ -34,6 +34,14 @@ youtube-transcript-api>=0.6.0
 
 # ArXiv API
 arxiv>=2.1.0
+arxiv-mcp-server>=0.3.0
+
+# Semantic Scholar API
+semanticscholar>=0.8.0
+semanticscholar-mcp-server>=0.1.0
+
+# Crossref API
+habanero>=2.0.0
 
 # Scheduler
 apscheduler>=3.10.0

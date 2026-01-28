@@ -133,6 +133,21 @@ class AgentStateStore:
         self._lock = Lock()
         self._subscribers: list[Callable[[dict[str, Any]], None]] = []
 
+    @staticmethod
+    def _normalize_channel_id(channel_id: str) -> str:
+        """Normalize channel_id format.
+
+        Frontend URLs use '~' as separator (URL-safe), but backend stores with '/'.
+        This ensures consistent lookup regardless of which format is used.
+
+        Args:
+            channel_id: The channel ID (may contain '~' or '/').
+
+        Returns:
+            Normalized channel ID with '/' as separator.
+        """
+        return channel_id.replace("~", "/")
+
     def _get_or_create_state(self, channel_id: str) -> AgentState:
         """Get or create state for a channel (must be called with lock held)."""
         if channel_id not in self._states:
@@ -144,6 +159,7 @@ class AgentStateStore:
 
         Args:
             channel_id: The channel ID to get state for. If None, returns idle state.
+                       Accepts both '~' and '/' separator formats.
 
         Returns:
             State dictionary for the channel.
@@ -152,10 +168,12 @@ class AgentStateStore:
             if channel_id is None:
                 # Return idle state if no channel specified
                 return AgentState().to_dict()
-            if channel_id not in self._states:
+            # Normalize channel_id to handle both URL-safe (~) and backend (/) formats
+            normalized_id = self._normalize_channel_id(channel_id)
+            if normalized_id not in self._states:
                 # Return idle state for unknown channel
                 return AgentState(channel_id=channel_id).to_dict()
-            return self._states[channel_id].to_dict()
+            return self._states[normalized_id].to_dict()
 
     def get_all_states(self) -> dict[str, dict[str, Any]]:
         """Get all channel states (for debugging)."""
@@ -167,12 +185,15 @@ class AgentStateStore:
 
         Args:
             channel_id: The channel to reset. If None, resets all channels.
+                       Accepts both '~' and '/' separator formats.
         """
         with self._lock:
             if channel_id is None:
                 self._states.clear()
-            elif channel_id in self._states:
-                self._states[channel_id] = AgentState(channel_id=channel_id)
+            else:
+                normalized_id = self._normalize_channel_id(channel_id)
+                if normalized_id in self._states:
+                    self._states[normalized_id] = AgentState(channel_id=normalized_id)
 
     def subscribe(self, callback: Callable[[dict[str, Any]], None]) -> None:
         """Subscribe to state changes.
@@ -297,6 +318,7 @@ class AgentStateStore:
                 event_data = event.get("data", {})
                 duration = event_data.get("duration_ms")
                 tokens = event_data.get("tokens")
+                print(f"[DEBUG state.update] llm_complete: node={node}, duration={duration}, event_data={event_data}")
                 # Update the last step for this node
                 for step in reversed(state.steps):
                     if step.node == node and step.status == "running":

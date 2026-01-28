@@ -13,6 +13,8 @@ from langchain_core.tools import tool
 from src.application.ports.document_search import DocumentSearchPort
 from src.application.ports.web_search import WebSearchPort
 from src.application.ports.arxiv_search import ArxivSearchPort
+from src.application.ports.semantic_scholar import SemanticScholarSearchPort
+from src.application.ports.crossref import CrossrefSearchPort
 
 
 def create_search_documents_tool(
@@ -188,3 +190,134 @@ def create_arxiv_search_tool(
             return "No papers found on arXiv for this query."
 
     return arxiv_search
+
+
+def create_semantic_scholar_search_tool(
+    semantic_scholar_port: SemanticScholarSearchPort,
+) -> Callable[[str], str]:
+    """Create a semantic_scholar_search tool for academic paper search.
+
+    Args:
+        semantic_scholar_port: SemanticScholarSearchPort for paper search.
+
+    Returns:
+        A tool function that searches Semantic Scholar.
+    """
+
+    @tool
+    def semantic_scholar_search(query: str) -> str:
+        """Search Semantic Scholar for academic papers with citation analysis.
+
+        Use this when the user asks about:
+        - Citation counts or impact of specific papers
+        - Highly cited papers on a topic
+        - Author profiles, h-index, or publication history
+        - Papers that cite or are cited by a specific paper
+        - Academic influence or impact analysis
+
+        Args:
+            query: The search query to find papers on Semantic Scholar.
+
+        Returns:
+            Search results with citation metrics and paper details.
+        """
+        results = semantic_scholar_port.search(query=query, max_results=5)
+
+        if results:
+            formatted_parts = []
+            for i, paper in enumerate(results, 1):
+                abstract = paper.abstract[:250] + "..." if paper.abstract and len(paper.abstract) > 250 else (paper.abstract or "No abstract available")
+                authors = ", ".join(paper.authors[:3])
+                if len(paper.authors) > 3:
+                    authors += f" et al. ({len(paper.authors)} authors)"
+
+                formatted_parts.append(
+                    f"[Scholar {i}] {paper.title}\n"
+                    f"Authors: {authors}\n"
+                    f"Year: {paper.year or 'N/A'}\n"
+                    f"Citations: {paper.citation_count}\n"
+                    f"Venue: {paper.venue or 'N/A'}\n"
+                    f"URL: {paper.url}\n"
+                    f"Abstract: {abstract}"
+                )
+            return f"Found {len(results)} papers on Semantic Scholar:\n\n" + "\n\n---\n\n".join(formatted_parts)
+        else:
+            return "No papers found on Semantic Scholar for this query. Note: Rate limits may apply without an API key."
+
+    return semantic_scholar_search
+
+
+def create_crossref_search_tool(
+    crossref_port: CrossrefSearchPort,
+) -> Callable[[str], str]:
+    """Create a crossref_search tool for publication metadata lookup.
+
+    Args:
+        crossref_port: CrossrefSearchPort for metadata lookup.
+
+    Returns:
+        A tool function that searches Crossref.
+    """
+
+    @tool
+    def crossref_search(query: str) -> str:
+        """Search Crossref for publication metadata and DOI information.
+
+        Use this when the user asks about:
+        - DOI lookup or verification
+        - Publication metadata (publisher, journal, volume, issue)
+        - Journal information or ISSN lookup
+        - Finding the official publication record of a paper
+        - Publisher or funding organization information
+
+        Args:
+            query: The search query or DOI to look up.
+
+        Returns:
+            Publication metadata from Crossref.
+        """
+        # Check if query looks like a DOI
+        if query.startswith("10.") or "doi.org" in query.lower():
+            work = crossref_port.get_work_by_doi(query)
+            if work:
+                authors = ", ".join(work.authors[:3])
+                if len(work.authors) > 3:
+                    authors += f" et al."
+                return (
+                    f"DOI: {work.doi}\n"
+                    f"Title: {work.title}\n"
+                    f"Authors: {authors}\n"
+                    f"Type: {work.type}\n"
+                    f"Published: {work.published_date}\n"
+                    f"Journal: {work.container_title}\n"
+                    f"Publisher: {work.publisher}\n"
+                    f"Volume: {work.volume}, Issue: {work.issue}, Page: {work.page}\n"
+                    f"Citations: {work.is_referenced_by_count}\n"
+                    f"URL: {work.url}"
+                )
+            else:
+                return f"No publication found for DOI: {query}"
+
+        results = crossref_port.search(query=query, max_results=5)
+
+        if results:
+            formatted_parts = []
+            for i, work in enumerate(results, 1):
+                authors = ", ".join(work.authors[:3])
+                if len(work.authors) > 3:
+                    authors += f" et al."
+
+                formatted_parts.append(
+                    f"[Crossref {i}] {work.title}\n"
+                    f"DOI: {work.doi}\n"
+                    f"Authors: {authors}\n"
+                    f"Published: {work.published_date}\n"
+                    f"Journal: {work.container_title}\n"
+                    f"Publisher: {work.publisher}\n"
+                    f"Citations: {work.is_referenced_by_count}"
+                )
+            return f"Found {len(results)} publications on Crossref:\n\n" + "\n\n---\n\n".join(formatted_parts)
+        else:
+            return "No publications found on Crossref for this query."
+
+    return crossref_search

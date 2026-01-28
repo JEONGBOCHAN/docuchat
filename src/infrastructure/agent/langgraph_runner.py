@@ -37,6 +37,8 @@ from src.agents.tools.search_tools import (
     create_search_documents_tool,
     create_web_search_tool,
     create_arxiv_search_tool,
+    create_semantic_scholar_search_tool,
+    create_crossref_search_tool,
 )
 from src.core.config import get_settings, GeminiModels
 from src.application.ports.document_search import DocumentSearchPort
@@ -64,19 +66,33 @@ RAG_SYSTEM_PROMPT = """You are an intelligent assistant with access to multiple 
    - Use for technical papers in AI, ML, physics, math, computer science, etc.
    - Returns paper titles, authors, summaries, and PDF links
 
+4. **semantic_scholar_search**: Search Semantic Scholar for citation analysis
+   - Use for citation counts, h-index, and paper impact
+   - Use for highly cited papers on a topic
+   - Use for author profiles and publication history
+   - Returns citation metrics and academic influence data
+
+5. **crossref_search**: Search Crossref for publication metadata
+   - Use for DOI lookup and verification
+   - Use for publication metadata (publisher, journal, volume, issue)
+   - Use for journal/publisher information
+   - Returns official publication records
+
 ## Instructions
 1. Analyze the user's question to determine which tool is most appropriate
-2. For document-related questions → use search_documents
-3. For real-world/current information → use web_search
-4. For academic research/papers → use arxiv_search
-5. You can use multiple tools if needed (e.g., search documents first, then arxiv for related research)
-6. Once you have enough information, respond directly to the user with a complete answer
-7. Always cite your sources in the answer
+2. For document-related questions -> use search_documents
+3. For real-world/current information -> use web_search
+4. For academic research/papers -> use arxiv_search
+5. For citation analysis/paper impact -> use semantic_scholar_search
+6. For DOI lookup/publication metadata -> use crossref_search
+7. You can use multiple tools if needed (e.g., arxiv for papers, then semantic_scholar for citations)
+8. Once you have enough information, respond directly to the user with a complete answer
+9. Always cite your sources in the answer
 
 ## Important Rules
 - Choose the right tool based on the question type
 - After gathering information, respond directly - do NOT call unnecessary tools
-- Include citations in your answer (e.g., [Source 1] for documents, [Web 1] for web results, [Paper 1] for arXiv)
+- Include citations in your answer (e.g., [Source 1] for documents, [Web 1] for web, [Paper 1] for arXiv, [Scholar 1] for Semantic Scholar, [Crossref 1] for Crossref)
 - If no relevant information is found, inform the user honestly
 - Do not make up information - only use what you find from the tools
 - Be efficient: gather what you need and provide your answer. Do not keep searching endlessly.
@@ -155,7 +171,12 @@ class LangGraphAgentRunner(AgentRunnerPort):
         )
 
         # Create web search tool (import locally to avoid circular dependency)
-        from src.infrastructure.di import create_web_search, create_arxiv_search
+        from src.infrastructure.di import (
+            create_web_search,
+            create_arxiv_search,
+            create_semantic_scholar_search,
+            create_crossref_search,
+        )
         web_search_adapter = create_web_search()
         web_tool = create_web_search_tool(web_search_port=web_search_adapter)
 
@@ -163,7 +184,17 @@ class LangGraphAgentRunner(AgentRunnerPort):
         arxiv_search_adapter = create_arxiv_search()
         arxiv_tool = create_arxiv_search_tool(arxiv_search_port=arxiv_search_adapter)
 
-        tools = [search_tool, web_tool, arxiv_tool]
+        # Create semantic scholar search tool
+        semantic_scholar_adapter = create_semantic_scholar_search()
+        semantic_scholar_tool = create_semantic_scholar_search_tool(
+            semantic_scholar_port=semantic_scholar_adapter
+        )
+
+        # Create crossref search tool
+        crossref_adapter = create_crossref_search()
+        crossref_tool = create_crossref_search_tool(crossref_port=crossref_adapter)
+
+        tools = [search_tool, web_tool, arxiv_tool, semantic_scholar_tool, crossref_tool]
 
         # Use custom system prompt if provided
         system_prompt = config.system_prompt or RAG_SYSTEM_PROMPT
@@ -501,7 +532,8 @@ class LangGraphAgentRunner(AgentRunnerPort):
                         # Calculate duration from the appropriate start time
                         if llm_reasoning_started and not tool_just_completed and self._dashboard_middleware:
                             # For reasoning, measure from stream start to now
-                            reasoning_duration_ms = (datetime.now() - stream_start_time).total_seconds() * 1000
+                            _now = datetime.now()
+                            reasoning_duration_ms = (_now - stream_start_time).total_seconds() * 1000
                             self._dashboard_middleware.on_llm_end(
                                 "llm_reasoning",
                                 {"channel_id": channel_id},
@@ -619,10 +651,8 @@ class LangGraphAgentRunner(AgentRunnerPort):
             # Clean up any incomplete LLM phases (edge cases)
             # These should rarely happen, but if they do, we measure from their start time
             if llm_reasoning_started and self._dashboard_middleware:
-                # If reasoning is still started, use natural duration calculation
                 self._dashboard_middleware.on_llm_end("llm_reasoning", {"channel_id": channel_id}, tokens=None)
             if llm_observation_started and self._dashboard_middleware:
-                # If observation is still started, use natural duration calculation
                 self._dashboard_middleware.on_llm_end("llm_observation", {"channel_id": channel_id}, tokens=None)
 
             # Post-streaming token extraction: extract tokens from final_messages
@@ -965,6 +995,26 @@ class LangGraphAgentRunner(AgentRunnerPort):
                     "query": {
                         "type": "string",
                         "description": "The search query for academic papers",
+                    }
+                },
+            ),
+            AgentTool(
+                name="semantic_scholar_search",
+                description="Search Semantic Scholar for citation counts, h-index, and paper impact analysis",
+                parameters={
+                    "query": {
+                        "type": "string",
+                        "description": "The search query for citation analysis",
+                    }
+                },
+            ),
+            AgentTool(
+                name="crossref_search",
+                description="Search Crossref for DOI lookup and publication metadata",
+                parameters={
+                    "query": {
+                        "type": "string",
+                        "description": "The DOI or search query for publication metadata",
                     }
                 },
             ),

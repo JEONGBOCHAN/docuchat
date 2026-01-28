@@ -49,6 +49,17 @@ from src.application.ports.observability import AgentEventSinkPort
 from src.application.ports.document_search import DocumentSearchPort, SearchResult
 from src.application.ports.web_search import WebSearchPort, WebSearchResult
 from src.application.ports.arxiv_search import ArxivSearchPort, ArxivPaperResult
+from src.application.ports.semantic_scholar import (
+    SemanticScholarSearchPort,
+    SemanticScholarPaper,
+    SemanticScholarAuthor,
+)
+from src.application.ports.crossref import (
+    CrossrefSearchPort,
+    CrossrefWork,
+    CrossrefJournal,
+    CrossrefFunder,
+)
 from src.application.ports.llm import LLMPort, LLMMessage, LLMResponse
 from src.application.ports.agent_runner import (
     AgentRunnerPort,
@@ -160,6 +171,15 @@ __all__ = [
     # arXiv Search
     "ArxivSearchPort",
     "ArxivPaperResult",
+    # Semantic Scholar Search
+    "SemanticScholarSearchPort",
+    "SemanticScholarPaper",
+    "SemanticScholarAuthor",
+    # Crossref Search
+    "CrossrefSearchPort",
+    "CrossrefWork",
+    "CrossrefJournal",
+    "CrossrefFunder",
     # LLM
     "LLMPort",
     "LLMMessage",

@@ -20,6 +20,8 @@ from src.application.ports import (
     DocumentSearchPort,
     WebSearchPort,
     ArxivSearchPort,
+    SemanticScholarSearchPort,
+    CrossrefSearchPort,
     FAQGenerationPort,
     SummarizationPort,
     TimelinePort,
@@ -88,7 +90,9 @@ from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
 from src.infrastructure.external.gemini.document_summary import GeminiDocumentSummaryAdapter
 from src.infrastructure.external.gemini.token_counter import GeminiTokenCounterAdapter
 from src.infrastructure.external.mcp.web_search import McpWebSearchAdapter
-from src.infrastructure.external.arxiv.adapter import ArxivAdapter
+from src.infrastructure.external.arxiv.mcp_adapter import ArxivMcpAdapter
+from src.infrastructure.external.semantic_scholar.adapter import SemanticScholarAdapter
+from src.infrastructure.external.crossref.adapter import CrossrefAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
 from src.agents.middlewares.dashboard import DashboardMiddleware
@@ -216,9 +220,33 @@ def create_arxiv_search() -> ArxivSearchPort:
     """Create an arXiv search adapter.
 
     Returns:
-        ArxivSearchPort implementation (ArxivAdapter).
+        ArxivSearchPort implementation (ArxivMcpAdapter).
     """
-    return ArxivAdapter()
+    return ArxivMcpAdapter()
+
+
+def create_semantic_scholar_search(api_key: str | None = None) -> SemanticScholarSearchPort:
+    """Create a Semantic Scholar search adapter.
+
+    Args:
+        api_key: Optional API key for higher rate limits.
+
+    Returns:
+        SemanticScholarSearchPort implementation (SemanticScholarAdapter).
+    """
+    return SemanticScholarAdapter(api_key=api_key)
+
+
+def create_crossref_search(email: str | None = None) -> CrossrefSearchPort:
+    """Create a Crossref search adapter.
+
+    Args:
+        email: Optional email for polite pool access (higher API priority).
+
+    Returns:
+        CrossrefSearchPort implementation (CrossrefAdapter).
+    """
+    return CrossrefAdapter(email=email)
 
 
 def create_citation_search() -> CitationSearchPort:

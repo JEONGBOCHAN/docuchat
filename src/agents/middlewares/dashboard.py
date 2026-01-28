@@ -340,12 +340,14 @@ class DashboardMiddleware:
         # Use override duration if provided, otherwise calculate from start time
         duration = duration_override_ms if duration_override_ms is not None else self._calculate_duration(llm_role)
 
+        step_found = False
         for step in reversed(self._state.steps):
             if step.node == llm_role and step.status == NodeStatus.RUNNING:
                 step.status = NodeStatus.COMPLETE
                 step.duration_ms = duration
                 if tokens is not None:
                     step.data["tokens"] = tokens
+                step_found = True
                 break
 
         event_data = {"type": "llm", "duration_ms": duration, **data}
