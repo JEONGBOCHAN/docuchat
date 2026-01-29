@@ -147,6 +147,13 @@ def list_channels(
             if local_meta and local_meta.is_deleted:
                 continue
 
+            # Auto-create metadata if not exists to persist timestamp
+            if not local_meta:
+                local_meta = channel_repo.create(
+                    gemini_store_id=store_id,
+                    name=store.get("display_name", ""),
+                )
+
             # Get actual file count from document port
             files = document_port.list_documents(store_id)
             actual_file_count = len(files)
@@ -159,8 +166,8 @@ def list_channels(
                 ChannelResponse(
                     id=store_id,
                     name=store.get("display_name", ""),
-                    description=local_meta.description if local_meta else None,
-                    created_at=local_meta.created_at if local_meta else datetime.now(UTC),
+                    description=local_meta.description,
+                    created_at=local_meta.created_at,
                     file_count=actual_file_count,
                     is_favorited=store_id in favorited_ids,
                 )
@@ -248,6 +255,13 @@ def get_channel(
     # Get actual file count from document port
     files = document_port.list_documents(channel_id)
     actual_file_count = len(files)
+
+    # Auto-create metadata if not exists to persist timestamp
+    if not local_meta:
+        local_meta = channel_repo.create(
+            gemini_store_id=channel_id,
+            name=channel.display_name,
+        )
 
     # Update last accessed time and sync file_count in local DB
     local_meta = channel_repo.touch(channel_id)

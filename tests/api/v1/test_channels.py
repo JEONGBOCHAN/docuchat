@@ -377,3 +377,155 @@ class TestUpdateChannel:
         assert "At least one" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_channel_port, None)
+
+
+class TestAutoCreateMetadata:
+    """Tests for CHA-118: auto-create metadata when local_meta is None."""
+
+    def test_list_channels_auto_creates_metadata_when_none(
+        self, client_with_db: TestClient, test_db
+    ):
+        """list_channels() should auto-create local metadata for channels without it.
+
+        Before the fix, channels without local_meta would use datetime.now(UTC)
+        on every request, showing the current time instead of a persisted one.
+        """
+        mock_channel_port = MagicMock()
+        mock_channel_port.list_channels.return_value = [
+            ChannelDTO(
+                name="fileSearchStores/no-meta-store",
+                display_name="No Meta Channel",
+            ),
+        ]
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+
+        response = client_with_db.get("/api/v1/channels")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+
+        # Verify metadata was auto-created in the DB
+        created_meta = (
+            test_db.query(ChannelMetadata)
+            .filter(ChannelMetadata.gemini_store_id == "fileSearchStores/no-meta-store")
+            .first()
+        )
+        assert created_meta is not None
+        assert created_meta.name == "No Meta Channel"
+        assert created_meta.created_at is not None
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
+
+    def test_list_channels_persists_timestamp_across_calls(
+        self, client_with_db: TestClient, test_db
+    ):
+        """Subsequent list_channels() calls should return the same persisted timestamp,
+        not a fresh datetime.now(UTC) each time.
+        """
+        mock_channel_port = MagicMock()
+        mock_channel_port.list_channels.return_value = [
+            ChannelDTO(
+                name="fileSearchStores/persist-store",
+                display_name="Persist Channel",
+            ),
+        ]
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+
+        # First call - auto-creates metadata
+        response1 = client_with_db.get("/api/v1/channels")
+        assert response1.status_code == 200
+        created_at_1 = response1.json()["channels"][0]["created_at"]
+
+        # Second call - should use persisted timestamp
+        response2 = client_with_db.get("/api/v1/channels")
+        assert response2.status_code == 200
+        created_at_2 = response2.json()["channels"][0]["created_at"]
+
+        # Timestamps must be identical (persisted, not regenerated)
+        assert created_at_1 == created_at_2
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
+
+    def test_get_channel_auto_creates_metadata_when_none(
+        self, client_with_db: TestClient, test_db
+    ):
+        """get_channel() should auto-create local metadata for a channel without it."""
+        channel_id = "fileSearchStores/no-meta-detail"
+
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name=channel_id,
+            display_name="Detail No Meta",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+
+        response = client_with_db.get(f"/api/v1/channels/{channel_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == channel_id
+        assert "created_at" in data
+
+        # Verify metadata was auto-created in the DB
+        created_meta = (
+            test_db.query(ChannelMetadata)
+            .filter(ChannelMetadata.gemini_store_id == channel_id)
+            .first()
+        )
+        assert created_meta is not None
+        assert created_meta.name == "Detail No Meta"
+        assert created_meta.created_at is not None
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
+
+    def test_get_channel_persists_timestamp_across_calls(
+        self, client_with_db: TestClient, test_db
+    ):
+        """Subsequent get_channel() calls should return the same persisted timestamp."""
+        channel_id = "fileSearchStores/persist-detail"
+
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name=channel_id,
+            display_name="Persist Detail",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = []
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+
+        # First call - auto-creates metadata
+        response1 = client_with_db.get(f"/api/v1/channels/{channel_id}")
+        assert response1.status_code == 200
+        created_at_1 = response1.json()["created_at"]
+
+        # Second call - should use persisted timestamp
+        response2 = client_with_db.get(f"/api/v1/channels/{channel_id}")
+        assert response2.status_code == 200
+        created_at_2 = response2.json()["created_at"]
+
+        assert created_at_1 == created_at_2
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
