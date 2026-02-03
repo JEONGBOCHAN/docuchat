@@ -144,6 +144,10 @@ export const chatApi = {
                 }
                 try {
                   const parsed = JSON.parse(data);
+                  if (parsed.error) {
+                    callbacks.onError?.(new Error(parsed.error));
+                    return;
+                  }
                   if (parsed.chunk) {
                     callbacks.onChunk(parsed.chunk);
                   }

@@ -23,9 +23,9 @@ FROM python:3.12-slim as production
 
 WORKDIR /app
 
-# Create non-root user for security
+# Create non-root user for security (with home directory for ~ expansion)
 RUN groupadd --gid 1000 appgroup && \
-    useradd --uid 1000 --gid 1000 --shell /bin/bash appuser
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash appuser
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
