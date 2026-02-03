@@ -184,7 +184,12 @@ class CapacityService:
         """
         channel = self.repo.get_by_gemini_id(channel_id)
         if not channel:
-            return None
+            # Auto-create local metadata if not exists
+            # This ensures file_count is tracked even for newly created channels
+            channel = self.repo.create(
+                gemini_store_id=channel_id,
+                name="",  # Name will be synced on next channel list
+            )
 
         # Update stats
         new_file_count = channel.file_count + file_count

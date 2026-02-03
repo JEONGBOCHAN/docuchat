@@ -6,6 +6,7 @@ Clean Architecture based implementation of MCP tools.
 All tools use ProcessQueryUseCase and other application layer components.
 """
 
+from datetime import datetime, UTC
 from typing import Any
 import uuid
 
@@ -169,7 +170,7 @@ async def create_session(channel_id: str) -> dict[str, Any]:
     _sessions[session_id] = {
         "session_id": session_id,
         "channel_id": channel_id,
-        "created_at": __import__("datetime").datetime.now().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     _chat_histories[session_id] = []
 

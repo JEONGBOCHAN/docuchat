@@ -7,7 +7,7 @@ for real-time visualization in external dashboards (e.g., MCP Apps).
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Any, Callable, Protocol
 
@@ -56,7 +56,7 @@ class StepRecord:
     node: str
     status: NodeStatus
     data: dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     duration_ms: float | None = None
 
 
@@ -202,7 +202,7 @@ class DashboardMiddleware:
         """
         event = {
             "event": event_type.value,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "node": node,
             "data": data or {},
             "state": self._state.to_dict(),
@@ -227,14 +227,14 @@ class DashboardMiddleware:
         """Called when agent execution starts."""
         self.reset()
         self._state.status = AgentStatus.RUNNING
-        self._state.metrics.start_time = datetime.now().isoformat()
+        self._state.metrics.start_time = datetime.now(UTC).isoformat()
         self._publish_event(EventType.AGENT_START, data=data)
 
     def on_agent_end(self, data: dict[str, Any]) -> None:
         """Called when agent execution completes successfully."""
         self._state.status = AgentStatus.COMPLETE
         self._state.current_node = None
-        self._state.metrics.end_time = datetime.now().isoformat()
+        self._state.metrics.end_time = datetime.now(UTC).isoformat()
 
         if self._state.metrics.start_time:
             start = datetime.fromisoformat(self._state.metrics.start_time)
@@ -247,7 +247,7 @@ class DashboardMiddleware:
         """Called when agent execution fails."""
         self._state.status = AgentStatus.ERROR
         self._state.current_node = None
-        self._state.metrics.end_time = datetime.now().isoformat()
+        self._state.metrics.end_time = datetime.now(UTC).isoformat()
 
         if self._state.metrics.start_time:
             start = datetime.fromisoformat(self._state.metrics.start_time)
@@ -401,7 +401,7 @@ class DashboardMiddleware:
         if self._state_store and hasattr(self._state_store, "update"):
             event = {
                 "event": "step_token_update",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "node": llm_role,
                 "tokens": tokens,
                 "channel_id": channel_id,
@@ -425,7 +425,7 @@ class DashboardMiddleware:
         data = data or {}
         event = {
             "event": EventType.TOKEN_UPDATE.value,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "tokens": tokens,
             "data": data,
         }
@@ -481,7 +481,7 @@ class DashboardMiddleware:
         self.reset()
 
         self._state.status = AgentStatus.RUNNING
-        self._state.metrics.start_time = datetime.now().isoformat()
+        self._state.metrics.start_time = datetime.now(UTC).isoformat()
 
         # Extract query from messages if available
         messages = state.get("messages", [])
@@ -523,7 +523,7 @@ class DashboardMiddleware:
         if error:
             self._state.status = AgentStatus.ERROR
             self._state.current_node = None
-            self._state.metrics.end_time = datetime.now().isoformat()
+            self._state.metrics.end_time = datetime.now(UTC).isoformat()
 
             if self._state.metrics.start_time:
                 start = datetime.fromisoformat(self._state.metrics.start_time)
@@ -537,7 +537,7 @@ class DashboardMiddleware:
         else:
             self._state.status = AgentStatus.COMPLETE
             self._state.current_node = None
-            self._state.metrics.end_time = datetime.now().isoformat()
+            self._state.metrics.end_time = datetime.now(UTC).isoformat()
 
             if self._state.metrics.start_time:
                 start = datetime.fromisoformat(self._state.metrics.start_time)

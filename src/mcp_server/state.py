@@ -7,7 +7,7 @@ and allows MCP tools to query and update agent execution state.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from threading import Lock
 from typing import Any, Callable
@@ -45,7 +45,7 @@ class StepRecord:
 
     node: str
     status: str
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     duration_ms: float | None = None
     data: dict[str, Any] = field(default_factory=dict)
 
@@ -283,7 +283,7 @@ class AgentStateStore:
                     StepRecord(
                         node=node,
                         status="running",
-                        timestamp=event.get("timestamp", datetime.now().isoformat()),
+                        timestamp=event.get("timestamp", datetime.now(UTC).isoformat()),
                         data=event.get("data", {}),
                     )
                 )
@@ -308,7 +308,7 @@ class AgentStateStore:
                     StepRecord(
                         node=node,
                         status="running",
-                        timestamp=event.get("timestamp", datetime.now().isoformat()),
+                        timestamp=event.get("timestamp", datetime.now(UTC).isoformat()),
                         data=event.get("data", {}),
                     )
                 )
@@ -343,7 +343,7 @@ class AgentStateStore:
                     StepRecord(
                         node=node,
                         status="running",
-                        timestamp=event.get("timestamp", datetime.now().isoformat()),
+                        timestamp=event.get("timestamp", datetime.now(UTC).isoformat()),
                         data=event.get("data", {}),
                     )
                 )

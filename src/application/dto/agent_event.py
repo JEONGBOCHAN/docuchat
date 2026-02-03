@@ -8,7 +8,7 @@ so they live in the application layer (not domain).
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Any
 import uuid
@@ -37,7 +37,7 @@ class AgentEvent:
 
     event_type: EventType
     session_id: str
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     data: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
