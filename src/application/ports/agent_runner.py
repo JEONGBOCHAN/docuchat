@@ -66,6 +66,7 @@ class AgentConfig:
     temperature: float = 0.0
     tools: list[str] = field(default_factory=list)
     system_prompt: str | None = None
+    document_context: str | None = None
 
 
 class AgentRunnerPort(ABC):

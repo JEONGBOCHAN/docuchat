@@ -205,6 +205,17 @@ class LangGraphAgentRunner(AgentRunnerPort):
         # Use custom system prompt if provided, otherwise build from available tools
         system_prompt = config.system_prompt or self._build_system_prompt(tools)
 
+        # Append document context if provided
+        if config.document_context:
+            system_prompt += f"""
+
+## Channel Document Context
+{config.document_context}
+
+When the user asks about topics related to these documents, prioritize using search_documents tool.
+If the question is clearly about external/current events not covered in these documents, use web_search.
+"""
+
         # Create the agent with prompt parameter
         agent = create_react_agent(
             model=llm,
