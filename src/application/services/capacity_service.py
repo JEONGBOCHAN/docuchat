@@ -9,16 +9,7 @@ from dataclasses import dataclass
 
 from src.core.config import get_settings
 from src.application.ports.persistence import ChannelRepositoryPort, ChannelMetadataDTO
-
-
-class CapacityExceededError(Exception):
-    """Raised when a capacity limit would be exceeded."""
-
-    def __init__(self, message: str, limit_type: str, current: float, limit: float):
-        super().__init__(message)
-        self.limit_type = limit_type
-        self.current = current
-        self.limit = limit
+from src.domain.exceptions import CapacityExceededError
 
 
 @dataclass
