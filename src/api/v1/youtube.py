@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 
+from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.models.youtube import (
     YouTubeSourceRequest,
@@ -46,9 +47,9 @@ def get_youtube_port() -> YouTubePort:
     return create_youtube_port()
 
 
-def get_capacity_service() -> CapacityService:
+def get_capacity_service(db=Depends(get_db)) -> CapacityService:
     """Get capacity service instance."""
-    return create_capacity_service()
+    return create_capacity_service(db)
 
 
 @router.post(

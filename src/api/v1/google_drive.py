@@ -14,6 +14,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 from src.core.config import get_settings
+from src.core.database import get_db
 from src.core.logging import get_logger
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
@@ -48,9 +49,9 @@ def get_cache_port() -> CachePort:
     return create_cache_port()
 
 
-def get_capacity_service() -> CapacityService:
+def get_capacity_service(db=Depends(get_db)) -> CapacityService:
     """Get capacity service instance."""
-    return create_capacity_service()
+    return create_capacity_service(db)
 
 
 # OAuth 2.0 scopes for Google Drive

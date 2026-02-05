@@ -61,9 +61,9 @@ def get_cache_port() -> CachePort:
     return create_cache_port()
 
 
-def get_capacity_service() -> CapacityService:
+def get_capacity_service(db: Session = Depends(get_db)) -> CapacityService:
     """Get capacity service instance."""
-    return create_capacity_service()
+    return create_capacity_service(db)
 
 
 def get_summary_use_case(db: Session = Depends(get_db)) -> GenerateDocumentSummaryUseCase:
