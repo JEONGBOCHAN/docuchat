@@ -2,7 +2,6 @@
 """Chat API endpoints."""
 
 import json
-import re
 from datetime import datetime, UTC
 from typing import Annotated, Generator
 
@@ -77,58 +76,6 @@ def get_cache_port() -> CachePort:
 def get_summaries_use_case(db: Session = Depends(get_db)) -> GetChannelDocumentSummariesUseCase:
     """Get channel summaries use case instance."""
     return create_get_channel_summaries_use_case(db)
-
-
-# =============================================================================
-# Query Routing - Determine if RAG is needed
-# =============================================================================
-
-# Patterns that indicate simple questions not needing RAG
-SIMPLE_QUERY_PATTERNS = [
-    # Math expressions
-    r"^\d+\s*[\+\-\*\/\^]\s*\d+",  # 1+1, 2*3, etc.
-    r"^[\d\s\+\-\*\/\^\(\)\.]+[=\?]?$",  # pure math expression
-    # Greetings
-    r"^(안녕|하이|헬로|hi|hello|hey)\s*[\?!\.]*$",
-    # Simple factual questions
-    r"^(오늘|지금)\s*(날짜|시간|몇\s*시)",
-    # Yes/no questions about capabilities
-    r"^(너|you)\s*(는|are)\s*(뭐|무엇|who|what)",
-]
-
-# Keywords that indicate document-related questions (need RAG)
-RAG_KEYWORDS = [
-    "문서", "파일", "업로드", "자료", "내용", "찾아", "검색",
-    "document", "file", "upload", "content", "search", "find",
-    "어디", "무엇이", "설명해", "알려줘", "요약", "정리",
-    "according to", "based on", "in the", "from the",
-]
-
-
-def needs_rag(query: str) -> bool:
-    """Determine if a query needs RAG (document retrieval).
-
-    Args:
-        query: The user's question
-
-    Returns:
-        True if RAG is needed, False for simple questions
-    """
-    query_lower = query.lower().strip()
-
-    # Check for RAG keywords first - these always need RAG
-    for keyword in RAG_KEYWORDS:
-        if keyword in query_lower:
-            return True
-
-    # Check for simple query patterns - these don't need RAG
-    for pattern in SIMPLE_QUERY_PATTERNS:
-        if re.match(pattern, query_lower, re.IGNORECASE):
-            return False
-
-    # Default: assume RAG is needed for ambiguous queries
-    # This is safer for a document Q&A application
-    return True
 
 
 def _run_agent_chat(
