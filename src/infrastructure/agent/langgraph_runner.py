@@ -164,40 +164,46 @@ class LangGraphAgentRunner(AgentRunnerPort):
             streaming=streaming,
         )
 
-        # Create tools
-        search_tool = create_search_documents_tool(
-            channel_id=channel_id,
-            document_search=self._document_search,
-        )
+        # Determine which tools to register based on config.tools
+        # If config.tools is empty, register all tools (backward compatibility)
+        # If config.tools is non-empty, only register listed tools
+        enabled_tools = set(config.tools) if config.tools else None
 
-        # Create web search tool (import locally to avoid circular dependency)
-        from src.infrastructure.di import (
-            create_web_search,
-            create_arxiv_search,
-            create_semantic_scholar_search,
-            create_crossref_search,
-        )
-        web_search_adapter = create_web_search()
-        web_tool = create_web_search_tool(web_search_port=web_search_adapter)
+        tools = []
 
-        # Create arxiv search tool
-        arxiv_search_adapter = create_arxiv_search()
-        arxiv_tool = create_arxiv_search_tool(arxiv_search_port=arxiv_search_adapter)
+        # search_documents is always available if enabled or no filter
+        if enabled_tools is None or "search_documents" in enabled_tools:
+            search_tool = create_search_documents_tool(
+                channel_id=channel_id,
+                document_search=self._document_search,
+            )
+            tools.append(search_tool)
 
-        # Create semantic scholar search tool
-        semantic_scholar_adapter = create_semantic_scholar_search()
-        semantic_scholar_tool = create_semantic_scholar_search_tool(
-            semantic_scholar_port=semantic_scholar_adapter
-        )
+        # External search tools: only create if enabled
+        if enabled_tools is None or "web_search" in enabled_tools:
+            from src.infrastructure.di import create_web_search
+            web_search_adapter = create_web_search()
+            tools.append(create_web_search_tool(web_search_port=web_search_adapter))
 
-        # Create crossref search tool
-        crossref_adapter = create_crossref_search()
-        crossref_tool = create_crossref_search_tool(crossref_port=crossref_adapter)
+        if enabled_tools is None or "arxiv_search" in enabled_tools:
+            from src.infrastructure.di import create_arxiv_search
+            arxiv_search_adapter = create_arxiv_search()
+            tools.append(create_arxiv_search_tool(arxiv_search_port=arxiv_search_adapter))
 
-        tools = [search_tool, web_tool, arxiv_tool, semantic_scholar_tool, crossref_tool]
+        if enabled_tools is None or "semantic_scholar_search" in enabled_tools:
+            from src.infrastructure.di import create_semantic_scholar_search
+            semantic_scholar_adapter = create_semantic_scholar_search()
+            tools.append(create_semantic_scholar_search_tool(
+                semantic_scholar_port=semantic_scholar_adapter
+            ))
 
-        # Use custom system prompt if provided
-        system_prompt = config.system_prompt or RAG_SYSTEM_PROMPT
+        if enabled_tools is None or "crossref_search" in enabled_tools:
+            from src.infrastructure.di import create_crossref_search
+            crossref_adapter = create_crossref_search()
+            tools.append(create_crossref_search_tool(crossref_port=crossref_adapter))
+
+        # Use custom system prompt if provided, otherwise build from available tools
+        system_prompt = config.system_prompt or self._build_system_prompt(tools)
 
         # Create the agent with prompt parameter
         agent = create_react_agent(
@@ -207,6 +213,122 @@ class LangGraphAgentRunner(AgentRunnerPort):
         )
 
         return agent
+
+    @staticmethod
+    def _build_system_prompt(tools: list) -> str:
+        """Build a system prompt that only describes the actually registered tools.
+
+        Args:
+            tools: List of LangChain tool objects that are registered.
+
+        Returns:
+            System prompt string matching the available tools.
+        """
+        tool_names = {getattr(t, "name", "") for t in tools}
+
+        # Build tool descriptions section dynamically
+        tool_sections = []
+        tool_number = 1
+
+        if "search_documents" in tool_names:
+            tool_sections.append(
+                f"{tool_number}. **search_documents**: Search for relevant information in the uploaded documents\n"
+                f"   - Use for questions about uploaded files, papers, or documents\n"
+                f"   - Returns excerpts with source citations"
+            )
+            tool_number += 1
+
+        if "web_search" in tool_names:
+            tool_sections.append(
+                f"{tool_number}. **web_search**: Search the internet for current information\n"
+                f"   - Use for current events, news, real-world facts\n"
+                f"   - Use for restaurants, places, weather, locations\n"
+                f"   - Use for anything requiring up-to-date web data"
+            )
+            tool_number += 1
+
+        if "arxiv_search" in tool_names:
+            tool_sections.append(
+                f"{tool_number}. **arxiv_search**: Search arXiv for academic papers and research\n"
+                f"   - Use for academic papers, research, scientific studies\n"
+                f"   - Use for latest research on specific topics\n"
+                f"   - Returns paper titles, authors, summaries, and PDF links"
+            )
+            tool_number += 1
+
+        if "semantic_scholar_search" in tool_names:
+            tool_sections.append(
+                f"{tool_number}. **semantic_scholar_search**: Search Semantic Scholar for citation analysis\n"
+                f"   - Use for citation counts, h-index, and paper impact\n"
+                f"   - Use for highly cited papers on a topic\n"
+                f"   - Returns citation metrics and academic influence data"
+            )
+            tool_number += 1
+
+        if "crossref_search" in tool_names:
+            tool_sections.append(
+                f"{tool_number}. **crossref_search**: Search Crossref for publication metadata\n"
+                f"   - Use for DOI lookup and verification\n"
+                f"   - Use for publication metadata (publisher, journal, volume, issue)\n"
+                f"   - Returns official publication records"
+            )
+            tool_number += 1
+
+        # Build routing instructions based on available tools
+        instructions = []
+        instructions.append("1. Analyze the user's question to determine which tool is most appropriate")
+        inst_num = 2
+        if "search_documents" in tool_names:
+            instructions.append(f"{inst_num}. For document-related questions -> use search_documents")
+            inst_num += 1
+        if "web_search" in tool_names:
+            instructions.append(f"{inst_num}. For real-world/current information -> use web_search")
+            inst_num += 1
+        if "arxiv_search" in tool_names:
+            instructions.append(f"{inst_num}. For academic research/papers -> use arxiv_search")
+            inst_num += 1
+        if "semantic_scholar_search" in tool_names:
+            instructions.append(f"{inst_num}. For citation analysis/paper impact -> use semantic_scholar_search")
+            inst_num += 1
+        if "crossref_search" in tool_names:
+            instructions.append(f"{inst_num}. For DOI lookup/publication metadata -> use crossref_search")
+            inst_num += 1
+        instructions.append(f"{inst_num}. You can use multiple tools if needed")
+        inst_num += 1
+        instructions.append(f"{inst_num}. Once you have enough information, respond directly to the user with a complete answer")
+        inst_num += 1
+        instructions.append(f"{inst_num}. Always cite your sources in the answer")
+
+        # Build citation examples based on available tools
+        cite_parts = []
+        if "search_documents" in tool_names:
+            cite_parts.append("[Source 1] for documents")
+        if "web_search" in tool_names:
+            cite_parts.append("[Web 1] for web")
+        if "arxiv_search" in tool_names:
+            cite_parts.append("[Paper 1] for arXiv")
+        if "semantic_scholar_search" in tool_names:
+            cite_parts.append("[Scholar 1] for Semantic Scholar")
+        if "crossref_search" in tool_names:
+            cite_parts.append("[Crossref 1] for Crossref")
+        cite_example = ", ".join(cite_parts) if cite_parts else ""
+
+        return f"""You are an intelligent assistant with access to multiple tools. Choose the appropriate tool based on the user's question.
+
+## Available Tools
+{chr(10).join(tool_sections)}
+
+## Instructions
+{chr(10).join(instructions)}
+
+## Important Rules
+- Choose the right tool based on the question type
+- After gathering information, respond directly - do NOT call unnecessary tools
+- Include citations in your answer (e.g., {cite_example})
+- If no relevant information is found, inform the user honestly
+- Do not make up information - only use what you find from the tools
+- Be efficient: gather what you need and provide your answer. Do not keep searching endlessly.
+"""
 
     def run(
         self,
