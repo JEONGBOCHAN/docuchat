@@ -177,7 +177,7 @@ class ProcessQueryUseCase:
                 sources=agent_result.sources,
                 session_id=session_id,
                 iterations=agent_result.iterations,
-                tools_used=[tc.get("tool", "") for tc in agent_result.tool_calls],
+                tools_used=[tc.get("name", "") for tc in agent_result.tool_calls],
                 metadata=agent_result.metadata,
             )
 
@@ -298,7 +298,7 @@ class ProcessQueryUseCase:
                 sources=agent_result.sources,
                 session_id=session_id,
                 iterations=agent_result.iterations,
-                tools_used=[tc.get("tool", "") for tc in agent_result.tool_calls],
+                tools_used=[tc.get("name", "") for tc in agent_result.tool_calls],
                 metadata=agent_result.metadata,
             )
 
