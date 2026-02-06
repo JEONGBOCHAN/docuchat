@@ -76,69 +76,6 @@ class MessageContentError(ChatMessageValidationError):
 
 
 # =============================================================================
-# YouTube Exceptions
-# =============================================================================
-
-
-class YouTubeServiceError(DomainException):
-    """Base exception for YouTube service errors."""
-
-    pass
-
-
-class InvalidVideoError(YouTubeServiceError):
-    """Raised when a YouTube video URL or ID is invalid."""
-
-    pass
-
-
-class TranscriptNotAvailableError(YouTubeServiceError):
-    """Raised when no transcript is available for a video."""
-
-    pass
-
-
-# =============================================================================
-# Crawler Exceptions
-# =============================================================================
-
-
-class CrawlerError(DomainException):
-    """Base exception for crawler errors."""
-
-    pass
-
-
-class URLFetchError(CrawlerError):
-    """Raised when URL fetch fails."""
-
-    pass
-
-
-class ContentParseError(CrawlerError):
-    """Raised when content parsing fails."""
-
-    pass
-
-
-# =============================================================================
-# TTS Exceptions
-# =============================================================================
-
-
-class TTSError(DomainException):
-    """Base exception for TTS errors."""
-
-    pass
-
-
-class VoiceSynthesisError(TTSError):
-    """Raised when voice synthesis fails."""
-
-    pass
-
-
-# =============================================================================
 # Capacity Exceptions
 # =============================================================================
 

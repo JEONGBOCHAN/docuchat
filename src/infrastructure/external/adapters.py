@@ -30,11 +30,7 @@ class YouTubeAdapter(YouTubePort):
 
     def extract_video_id(self, url: str) -> str:
         """Extract video ID from YouTube URL."""
-        from src.infrastructure.external.youtube.youtube_service import InvalidVideoError
-        try:
-            return self._service.extract_video_id(url)
-        except InvalidVideoError as e:
-            raise ValueError(str(e))
+        return self._service.extract_video_id(url)
 
     def get_transcript(
         self,
@@ -42,26 +38,17 @@ class YouTubeAdapter(YouTubePort):
         preferred_languages: list[str] | None = None,
     ) -> YouTubeTranscriptDTO:
         """Get transcript for a YouTube video."""
-        from src.infrastructure.external.youtube.youtube_service import (
-            TranscriptNotAvailableError,
-            YouTubeServiceError,
+        transcript = self._service.get_transcript(video_id, preferred_languages)
+        return YouTubeTranscriptDTO(
+            video_id=transcript.video_id,
+            language=transcript.language,
+            full_text=transcript.full_text,
+            formatted_text=transcript.formatted_text,
+            segments=[
+                {"text": s.text, "start": s.start, "duration": s.duration}
+                for s in transcript.segments
+            ],
         )
-        try:
-            transcript = self._service.get_transcript(video_id, preferred_languages)
-            return YouTubeTranscriptDTO(
-                video_id=transcript.video_id,
-                language=transcript.language,
-                full_text=transcript.full_text,
-                formatted_text=transcript.formatted_text,
-                segments=[
-                    {"text": s.text, "start": s.start, "duration": s.duration}
-                    for s in transcript.segments
-                ],
-            )
-        except TranscriptNotAvailableError as e:
-            raise ValueError(str(e))
-        except YouTubeServiceError as e:
-            raise ValueError(str(e))
 
     def get_video_metadata(self, video_id: str) -> YouTubeMetadataDTO:
         """Get basic video metadata."""

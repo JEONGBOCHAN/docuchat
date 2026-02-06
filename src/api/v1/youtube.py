@@ -16,11 +16,11 @@ from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
 from src.application.ports.external_services import YouTubePort
 from src.application.services.capacity_service import CapacityService
-from src.domain.exceptions import (
+from src.domain.exceptions import CapacityExceededError
+from src.infrastructure.external.youtube import (
     YouTubeServiceError,
     TranscriptNotAvailableError,
     InvalidVideoError,
-    CapacityExceededError,
 )
 from src.infrastructure.di.container import (
     create_channel_port,

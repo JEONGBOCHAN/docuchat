@@ -72,7 +72,7 @@ class YouTubePort(ABC):
             Video ID string
 
         Raises:
-            ValueError: If URL format is invalid
+            InvalidVideoError: If URL format is invalid
         """
         ...
 
@@ -92,7 +92,8 @@ class YouTubePort(ABC):
             YouTubeTranscriptDTO with transcript data
 
         Raises:
-            ValueError: If transcript is not available
+            TranscriptNotAvailableError: If transcript is not available
+            YouTubeServiceError: If YouTube service fails
         """
         ...
 
