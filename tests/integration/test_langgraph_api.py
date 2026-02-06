@@ -5,8 +5,16 @@ This test verifies that create_react_agent is called with correct parameters
 without mocking, to catch API changes like state_modifier -> prompt.
 """
 
+import warnings
+
 import pytest
 from unittest.mock import Mock, patch
+
+# Suppress langgraph 1.0 deprecation warning (langchain package not installed)
+warnings.filterwarnings(
+    "ignore",
+    message="create_react_agent has been moved",
+)
 
 
 class TestLangGraphAPICompatibility:
@@ -35,11 +43,13 @@ class TestLangGraphAPICompatibility:
         # This should NOT raise TypeError about 'state_modifier'
         # If it does, the API has changed and we need to update our code
         try:
-            agent = create_react_agent(
-                model=mock_llm,
-                tools=[dummy_tool],
-                prompt="You are a helpful assistant.",
-            )
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="create_react_agent has been moved")
+                agent = create_react_agent(
+                    model=mock_llm,
+                    tools=[dummy_tool],
+                    prompt="You are a helpful assistant.",
+                )
             assert agent is not None
         except TypeError as e:
             if "state_modifier" in str(e):

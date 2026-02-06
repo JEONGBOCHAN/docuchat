@@ -112,7 +112,7 @@ def capture_exception(error: Exception, **extra_context) -> str | None:
     try:
         import sentry_sdk
 
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             for key, value in extra_context.items():
                 scope.set_extra(key, value)
             return sentry_sdk.capture_exception(error)
@@ -134,7 +134,7 @@ def capture_message(message: str, level: str = "info", **extra_context) -> str |
     try:
         import sentry_sdk
 
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             for key, value in extra_context.items():
                 scope.set_extra(key, value)
             return sentry_sdk.capture_message(message, level=level)

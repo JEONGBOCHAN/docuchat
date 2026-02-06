@@ -123,17 +123,17 @@ class ExportService:
 
     def export_note_pdf(self, note: NoteDTO) -> bytes:
         """Export a single note as PDF."""
-        from fpdf import FPDF
+        from fpdf import FPDF, XPos, YPos
 
         pdf = FPDF()
         pdf.add_page()
 
         # Add Unicode font for Korean support
-        pdf.add_font("NanumGothic", "", "C:/Windows/Fonts/malgun.ttf", uni=True)
+        pdf.add_font("NanumGothic", "", "C:/Windows/Fonts/malgun.ttf")
         pdf.set_font("NanumGothic", size=16)
 
         # Title
-        pdf.cell(0, 10, note.title, ln=True)
+        pdf.cell(0, 10, note.title, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(5)
 
         # Content
@@ -144,7 +144,7 @@ class ExportService:
         sources = self._sources_from_list(note.sources)
         if sources:
             pdf.set_font("NanumGothic", size=12)
-            pdf.cell(0, 10, "Sources", ln=True)
+            pdf.cell(0, 10, "Sources", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("NanumGothic", size=10)
             for i, src in enumerate(sources, 1):
                 page_info = f" (p.{src.page})" if src.page else ""
@@ -153,8 +153,8 @@ class ExportService:
         # Metadata
         pdf.ln(10)
         pdf.set_font("NanumGothic", size=9)
-        pdf.cell(0, 5, f"Created: {note.created_at.isoformat()}", ln=True)
-        pdf.cell(0, 5, f"Updated: {note.updated_at.isoformat()}", ln=True)
+        pdf.cell(0, 5, f"Created: {note.created_at.isoformat()}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(0, 5, f"Updated: {note.updated_at.isoformat()}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         return bytes(pdf.output())
 

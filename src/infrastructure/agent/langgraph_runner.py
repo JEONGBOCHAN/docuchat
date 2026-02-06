@@ -10,9 +10,16 @@ details from leaking into the application layer.
 """
 
 import logging
+import warnings
 from datetime import datetime
 from typing import Any, Generator
 
+# langgraph 1.0 deprecated this path in favor of langchain.agents.create_agent,
+# but langchain package is not installed. Suppress until migration to LangGraph 2.0.
+warnings.filterwarnings(
+    "ignore",
+    message="create_react_agent has been moved",
+)
 from langgraph.prebuilt import create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -166,11 +173,14 @@ If the question is clearly about external/current events not covered in these do
 """
 
         # Create the agent with prompt parameter
-        agent = create_react_agent(
-            model=llm,
-            tools=tools,
-            prompt=system_prompt,
-        )
+        # Suppress LangGraph 1.0 deprecation at call site (pytest resets module-level filters)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="create_react_agent has been moved")
+            agent = create_react_agent(
+                model=llm,
+                tools=tools,
+                prompt=system_prompt,
+            )
 
         return agent
 

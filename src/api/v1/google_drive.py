@@ -7,7 +7,7 @@ import tempfile
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -81,6 +81,8 @@ class TokenResponse(BaseModel):
 
 class DriveFile(BaseModel):
     """Google Drive file metadata."""
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     name: str
     mime_type: str = Field(..., alias="mimeType")
@@ -89,9 +91,6 @@ class DriveFile(BaseModel):
     icon_link: Optional[str] = Field(None, alias="iconLink")
     thumbnail_link: Optional[str] = Field(None, alias="thumbnailLink")
     parents: Optional[list[str]] = None
-
-    class Config:
-        populate_by_name = True
 
 
 class DriveFilesResponse(BaseModel):

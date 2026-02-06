@@ -202,12 +202,16 @@ async def generate_audio_task(
         db.close()
 
 
-def run_async_task(coro):
-    """Run async task in background."""
+def run_async_task(coro_fn, **kwargs):
+    """Run async task in background thread.
+
+    Creates the coroutine inside the thread to avoid 'coroutine never awaited'
+    warnings when Thread.start() is mocked in tests.
+    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(coro)
+        loop.run_until_complete(coro_fn(**kwargs))
     finally:
         loop.close()
 
@@ -270,18 +274,17 @@ def generate_audio_overview(
     import threading
     thread = threading.Thread(
         target=run_async_task,
-        args=(
-            generate_audio_task(
-                audio_id=audio_dto.audio_id,
-                store_name=channel_id,
-                duration_minutes=body.duration_minutes,
-                style=body.style,
-                language=body.language,
-                host_a_voice=body.host_a_voice,
-                host_b_voice=body.host_b_voice,
-                db_url=db_url,
-            ),
-        ),
+        kwargs={
+            "coro_fn": generate_audio_task,
+            "audio_id": audio_dto.audio_id,
+            "store_name": channel_id,
+            "duration_minutes": body.duration_minutes,
+            "style": body.style,
+            "language": body.language,
+            "host_a_voice": body.host_a_voice,
+            "host_b_voice": body.host_b_voice,
+            "db_url": db_url,
+        },
     )
     thread.start()
 
