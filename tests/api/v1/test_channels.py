@@ -1,17 +1,37 @@
 # -*- coding: utf-8 -*-
 """Tests for Channel CRUD API."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from datetime import datetime, UTC
 import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.channels import get_channel_port, get_document_port
+from src.api.v1.channels import get_channel_crud_use_case
+from src.application.use_cases.channel_crud import ChannelCrudUseCase
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 from src.core.database import get_db
 from src.models.db_models import ChannelMetadata
+
+
+def _make_use_case(test_db, channel_port=None, document_port=None, cache=None):
+    """Create a ChannelCrudUseCase with mocked external ports and real DB repos."""
+    from src.infrastructure.di.container import (
+        create_channel_repository_port,
+        create_favorite_repository_port,
+    )
+    if cache is None:
+        cache = MagicMock()
+        cache.get_store_list.return_value = None
+        cache.get_channel_info.return_value = None
+    return ChannelCrudUseCase(
+        channel_port=channel_port or MagicMock(),
+        document_port=document_port or MagicMock(),
+        channel_repo=create_channel_repository_port(test_db),
+        fav_repo=create_favorite_repository_port(test_db),
+        cache=cache,
+    )
 
 
 class TestCreateChannel:
@@ -25,7 +45,8 @@ class TestCreateChannel:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels",
@@ -40,10 +61,13 @@ class TestCreateChannel:
         assert "created_at" in data
 
         # Cleanup
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_create_channel_empty_name(self, client_with_db: TestClient, test_db):
         """Test channel creation with empty name fails."""
+        use_case = _make_use_case(test_db)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
+
         response = client_with_db.post(
             "/api/v1/channels",
             json={"name": ""},
@@ -51,12 +75,15 @@ class TestCreateChannel:
 
         assert response.status_code == 422  # Validation error
 
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
+
     def test_create_channel_api_error(self, client_with_db: TestClient, test_db):
         """Test channel creation handles API errors."""
         mock_channel_port = MagicMock()
         mock_channel_port.create_channel.side_effect = Exception("API Error")
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels",
@@ -66,7 +93,7 @@ class TestCreateChannel:
         assert response.status_code == 500
         assert "Failed to create channel" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
 
 class TestListChannels:
@@ -83,8 +110,10 @@ class TestListChannels:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            test_db, channel_port=mock_channel_port, document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.get("/api/v1/channels")
 
@@ -96,15 +125,15 @@ class TestListChannels:
         channel_names = {c["name"] for c in data["channels"]}
         assert channel_names == {"Channel 1", "Channel 2"}
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_list_channels_empty(self, client_with_db: TestClient, test_db):
         """Test listing when no channels exist."""
         mock_channel_port = MagicMock()
         mock_channel_port.list_channels.return_value = []
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.get("/api/v1/channels")
 
@@ -113,21 +142,22 @@ class TestListChannels:
         assert data["total"] == 0
         assert data["channels"] == []
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_list_channels_api_error(self, client_with_db: TestClient, test_db):
         """Test listing channels handles API errors."""
         mock_channel_port = MagicMock()
         mock_channel_port.list_channels.side_effect = Exception("API Error")
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.get("/api/v1/channels")
 
         assert response.status_code == 500
         assert "Failed to list channels" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
 
 class TestGetChannel:
@@ -144,8 +174,10 @@ class TestGetChannel:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            test_db, channel_port=mock_channel_port, document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.get("/api/v1/channels/fileSearchStores/store-123")
 
@@ -154,22 +186,22 @@ class TestGetChannel:
         assert data["id"] == "fileSearchStores/store-123"
         assert data["name"] == "My Channel"
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_get_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test getting non-existent channel returns 404."""
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.get("/api/v1/channels/fileSearchStores/not-exists")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
 
 class TestDeleteChannel:
@@ -197,7 +229,8 @@ class TestDeleteChannel:
         )
         mock_channel_port.delete_channel.return_value = True
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.delete(f"/api/v1/channels/{channel_id}")
 
@@ -212,20 +245,21 @@ class TestDeleteChannel:
         # Verify channel port delete was called
         mock_channel_port.delete_channel.assert_called_once_with(channel_id, force=True)
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_delete_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test deleting non-existent channel returns 404."""
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.delete("/api/v1/channels/fileSearchStores/not-exists")
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_delete_channel_no_local_metadata(self, client_with_db: TestClient, test_db):
         """Test delete succeeds even when no local metadata exists.
@@ -243,14 +277,15 @@ class TestDeleteChannel:
         )
         mock_channel_port.delete_channel.return_value = True
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.delete(f"/api/v1/channels/{channel_id}")
 
         assert response.status_code == 204
         mock_channel_port.delete_channel.assert_called_once_with(channel_id, force=True)
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_delete_channel_gemini_error(self, client_with_db: TestClient, test_db):
         """Test delete returns 500 when Gemini deletion fails."""
@@ -263,14 +298,15 @@ class TestDeleteChannel:
         )
         mock_channel_port.delete_channel.side_effect = Exception("Gemini API Error")
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.delete(f"/api/v1/channels/{channel_id}")
 
         assert response.status_code == 500
         assert "Failed to delete channel from Gemini" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
 
 class TestUpdateChannel:
@@ -284,7 +320,8 @@ class TestUpdateChannel:
             display_name="Old Name",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.put(
             "/api/v1/channels/fileSearchStores/store-123",
@@ -296,7 +333,7 @@ class TestUpdateChannel:
         assert data["id"] == "fileSearchStores/store-123"
         assert data["name"] == "New Name"
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_update_channel_description_success(self, client_with_db: TestClient, test_db):
         """Test updating channel description."""
@@ -306,7 +343,8 @@ class TestUpdateChannel:
             display_name="My Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.put(
             "/api/v1/channels/fileSearchStores/store-123",
@@ -317,7 +355,7 @@ class TestUpdateChannel:
         data = response.json()
         assert data["description"] == "New description"
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_update_channel_both_fields(self, client_with_db: TestClient, test_db):
         """Test updating both name and description."""
@@ -327,7 +365,8 @@ class TestUpdateChannel:
             display_name="Old Name",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.put(
             "/api/v1/channels/fileSearchStores/store-123",
@@ -339,14 +378,15 @@ class TestUpdateChannel:
         assert data["name"] == "New Name"
         assert data["description"] == "New description"
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_update_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test updating non-existent channel returns 404."""
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db, channel_port=mock_channel_port)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.put(
             "/api/v1/channels/fileSearchStores/not-exists",
@@ -356,17 +396,12 @@ class TestUpdateChannel:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_update_channel_empty_body(self, client_with_db: TestClient, test_db):
         """Test updating with no fields returns 400."""
-        mock_channel_port = MagicMock()
-        mock_channel_port.get_channel.return_value = ChannelDTO(
-            name="fileSearchStores/store-123",
-            display_name="My Channel",
-        )
-
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(test_db)
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.put(
             "/api/v1/channels/fileSearchStores/store-123",
@@ -376,7 +411,7 @@ class TestUpdateChannel:
         assert response.status_code == 400
         assert "At least one" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
 
 class TestAutoCreateMetadata:
@@ -401,8 +436,10 @@ class TestAutoCreateMetadata:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            test_db, channel_port=mock_channel_port, document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.get("/api/v1/channels")
 
@@ -420,8 +457,7 @@ class TestAutoCreateMetadata:
         assert created_meta.name == "No Meta Channel"
         assert created_meta.created_at is not None
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_list_channels_persists_timestamp_across_calls(
         self, client_with_db: TestClient, test_db
@@ -440,8 +476,10 @@ class TestAutoCreateMetadata:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            test_db, channel_port=mock_channel_port, document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         # First call - auto-creates metadata
         response1 = client_with_db.get("/api/v1/channels")
@@ -456,8 +494,7 @@ class TestAutoCreateMetadata:
         # Timestamps must be identical (persisted, not regenerated)
         assert created_at_1 == created_at_2
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_get_channel_auto_creates_metadata_when_none(
         self, client_with_db: TestClient, test_db
@@ -474,8 +511,10 @@ class TestAutoCreateMetadata:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            test_db, channel_port=mock_channel_port, document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         response = client_with_db.get(f"/api/v1/channels/{channel_id}")
 
@@ -494,8 +533,7 @@ class TestAutoCreateMetadata:
         assert created_meta.name == "Detail No Meta"
         assert created_meta.created_at is not None
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_get_channel_persists_timestamp_across_calls(
         self, client_with_db: TestClient, test_db
@@ -512,8 +550,10 @@ class TestAutoCreateMetadata:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            test_db, channel_port=mock_channel_port, document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         # First call - auto-creates metadata
         response1 = client_with_db.get(f"/api/v1/channels/{channel_id}")
@@ -527,5 +567,4 @@ class TestAutoCreateMetadata:
 
         assert created_at_1 == created_at_2
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)

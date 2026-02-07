@@ -1,54 +1,39 @@
 # -*- coding: utf-8 -*-
-"""Channel CRUD API endpoints."""
+"""Channel CRUD API endpoints.
 
-from datetime import datetime, UTC
+Thin controller: delegates all business logic to ChannelCrudUseCase.
+Only handles HTTP concerns (status codes, error mapping, DTO→Pydantic conversion).
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from src.models.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelList
-from src.models.favorite import TargetType
-from src.application.ports.channel import ChannelPort
-from src.application.ports.document import DocumentPort
-from src.application.ports.persistence import ChannelRepositoryPort, FavoriteRepositoryPort
-from src.application.ports.cache import CachePort
+from src.application.use_cases.channel_crud import ChannelCrudUseCase, ChannelDetailDTO
 from src.core.database import get_db
-from src.infrastructure.di.container import (
-    create_channel_port,
-    create_document_port,
-    create_channel_repository_port,
-    create_favorite_repository_port,
-    create_cache_port,
-)
 from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 
 
-def get_channel_port() -> ChannelPort:
-    """Get channel port instance."""
-    return create_channel_port()
+def get_channel_crud_use_case(db: Session = Depends(get_db)) -> ChannelCrudUseCase:
+    """Get channel CRUD use case instance with all dependencies wired."""
+    from src.infrastructure.di.container import create_channel_crud_use_case
+    return create_channel_crud_use_case(db)
 
 
-def get_document_port() -> DocumentPort:
-    """Get document port instance."""
-    return create_document_port()
-
-
-def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
-    """Get channel repository port instance."""
-    return create_channel_repository_port(db)
-
-
-def get_favorite_repo_port(db: Session = Depends(get_db)) -> FavoriteRepositoryPort:
-    """Get favorite repository port instance."""
-    return create_favorite_repository_port(db)
-
-
-def get_cache_port() -> CachePort:
-    """Get cache port instance."""
-    return create_cache_port()
+def _dto_to_response(dto: ChannelDetailDTO) -> ChannelResponse:
+    """Convert application-layer DTO to API response model."""
+    return ChannelResponse(
+        id=dto.id,
+        name=dto.name,
+        description=dto.description,
+        created_at=dto.created_at,
+        file_count=dto.file_count,
+        is_favorited=dto.is_favorited,
+    )
 
 
 @router.post(
@@ -61,35 +46,15 @@ def get_cache_port() -> CachePort:
 def create_channel(
     request: Request,
     data: ChannelCreate,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    cache: Annotated[CachePort, Depends(get_cache_port)],
+    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
 ) -> ChannelResponse:
     """Create a new channel (Gemini File Search Store).
 
     A channel is a container for documents that can be searched together.
     """
     try:
-        channel = channel_port.create_channel(data.name)
-        store_id = channel.name
-
-        # Save to local metadata DB
-        local_channel = channel_repo.create(
-            gemini_store_id=store_id,
-            name=data.name,
-            description=data.description,
-        )
-
-        # Invalidate store list cache
-        cache.invalidate_store_cache()
-
-        return ChannelResponse(
-            id=store_id,
-            name=data.name,
-            description=local_channel.description if local_channel else data.description,
-            created_at=local_channel.created_at if local_channel else datetime.now(UTC),
-            file_count=0,
-        )
+        dto = use_case.create(data.name, data.description)
+        return _dto_to_response(dto)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -105,11 +70,7 @@ def create_channel(
 @limiter.limit(RateLimits.DEFAULT)
 def list_channels(
     request: Request,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
-    cache: Annotated[CachePort, Depends(get_cache_port)],
+    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
     limit: Annotated[int | None, Query(description="Maximum number of channels", ge=1, le=100)] = None,
     offset: Annotated[int, Query(description="Number of channels to skip", ge=0)] = 0,
     sort_by: Annotated[str, Query(description="Sort by field: created_at or name")] = "created_at",
@@ -117,89 +78,13 @@ def list_channels(
 ) -> ChannelList:
     """List all channels (File Search Stores)."""
     try:
-        # Try to get from cache first
-        stores_cache = cache.get_store_list()
-        if stores_cache is None:
-            channels_list = channel_port.list_channels()
-            # Convert to dict format for cache compatibility
-            stores = [{"name": ch.name, "display_name": ch.display_name} for ch in channels_list]
-            cache.set_store_list(stores)
-        else:
-            stores = stores_cache
-
-        favorited_ids = fav_repo.get_favorited_ids(TargetType.CHANNEL.value)
-
-        # Get all deleted channel IDs to filter them out
-        # This prevents "resurrection" of deleted channels when DB doesn't have metadata
-        deleted_store_ids = channel_repo.get_deleted_store_ids()
-
-        channels = []
-        for store in stores:
-            store_id = store["name"]
-
-            # Skip if channel is in the deleted list (even if no local metadata)
-            if store_id in deleted_store_ids:
-                continue
-
-            # Get local metadata if exists
-            local_meta = channel_repo.get_by_gemini_id(store_id)
-            # Skip if channel is soft-deleted (redundant check but kept for safety)
-            if local_meta and local_meta.is_deleted:
-                continue
-
-            # Auto-create metadata if not exists to persist timestamp
-            if not local_meta:
-                local_meta = channel_repo.create(
-                    gemini_store_id=store_id,
-                    name=store.get("display_name", ""),
-                )
-
-            # Get actual file count from document port
-            files = document_port.list_documents(store_id)
-            actual_file_count = len(files)
-
-            # Sync file_count if different
-            if local_meta and local_meta.file_count != actual_file_count:
-                channel_repo.update_stats(store_id, file_count=actual_file_count)
-
-            channels.append(
-                ChannelResponse(
-                    id=store_id,
-                    name=store.get("display_name", ""),
-                    description=local_meta.description,
-                    created_at=local_meta.created_at,
-                    file_count=actual_file_count,
-                    is_favorited=store_id in favorited_ids,
-                )
-            )
-
-        # Sort: favorited channels first, then by specified field
-        # Handle timezone-naive/aware datetime comparison (SQLite doesn't preserve timezone)
-        def get_naive_ts(c):
-            ts = c.created_at
-            if ts and ts.tzinfo is not None:
-                return ts.replace(tzinfo=None)
-            return ts if ts else datetime.min
-
-        # Two-step stable sort: first by field, then by favorited
-        # This ensures favorited channels always come first regardless of sort direction
-        reverse = sort_order == "desc"
-        if sort_by == "name":
-            channels.sort(key=lambda c: c.name.lower(), reverse=reverse)
-        else:  # created_at (default)
-            channels.sort(key=lambda c: get_naive_ts(c), reverse=reverse)
-
-        # Stable sort by favorited (favorited first) - preserves field order within each group
-        channels.sort(key=lambda c: not c.is_favorited)
-
-        # Apply pagination
-        total = len(channels)
-        if offset:
-            channels = channels[offset:]
-        if limit:
-            channels = channels[:limit]
-
-        return ChannelList(channels=channels, total=total)
+        result = use_case.list(
+            limit=limit, offset=offset, sort_by=sort_by, sort_order=sort_order,
+        )
+        return ChannelList(
+            channels=[_dto_to_response(ch) for ch in result.channels],
+            total=result.total,
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -216,72 +101,19 @@ def list_channels(
 def get_channel(
     request: Request,
     channel_id: str,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
-    cache: Annotated[CachePort, Depends(get_cache_port)],
+    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
 ) -> ChannelResponse:
     """Get a specific channel by its ID.
 
     Note: channel_id should be the full store name (e.g., "fileSearchStores/xxx")
     """
-    # Check if channel is soft-deleted
-    local_meta = channel_repo.get_by_gemini_id(channel_id)
-    if local_meta and local_meta.is_deleted:
+    dto = use_case.get(channel_id)
+    if not dto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
-
-    # Check if favorited (not cached as it can change frequently)
-    is_favorited = fav_repo.is_favorited(TargetType.CHANNEL.value, channel_id)
-
-    # Try to get from cache first
-    cached_info = cache.get_channel_info(channel_id)
-    if cached_info:
-        # Update last accessed time in local DB
-        channel_repo.touch(channel_id)
-        cached_info["is_favorited"] = is_favorited
-        return ChannelResponse(**cached_info)
-
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Channel not found: {channel_id}",
-        )
-
-    # Get actual file count from document port
-    files = document_port.list_documents(channel_id)
-    actual_file_count = len(files)
-
-    # Auto-create metadata if not exists to persist timestamp
-    if not local_meta:
-        local_meta = channel_repo.create(
-            gemini_store_id=channel_id,
-            name=channel.display_name,
-        )
-
-    # Update last accessed time and sync file_count in local DB
-    local_meta = channel_repo.touch(channel_id)
-    if local_meta and local_meta.file_count != actual_file_count:
-        channel_repo.update_stats(channel_id, file_count=actual_file_count)
-        local_meta = channel_repo.get_by_gemini_id(channel_id)
-
-    response = ChannelResponse(
-        id=channel.name,
-        name=channel.display_name,
-        description=local_meta.description if local_meta else None,
-        created_at=local_meta.created_at if local_meta else datetime.now(UTC),
-        file_count=actual_file_count,
-        is_favorited=is_favorited,
-    )
-
-    # Cache the response
-    cache.set_channel_info(channel_id, response.model_dump(mode="json"))
-
-    return response
+    return _dto_to_response(dto)
 
 
 @router.put(
@@ -294,58 +126,26 @@ def update_channel(
     request: Request,
     channel_id: str,
     data: ChannelUpdate,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    cache: Annotated[CachePort, Depends(get_cache_port)],
+    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
 ) -> ChannelResponse:
     """Update a channel's name and/or description.
 
     Note: channel_id should be the full store name (e.g., "fileSearchStores/xxx")
     """
-    # Check if channel exists in Gemini
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Channel not found: {channel_id}",
-        )
-
-    # Check if at least one field is provided
+    # Validation stays in the router (HTTP concern)
     if data.name is None and data.description is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one of 'name' or 'description' must be provided",
         )
 
-    # Update local metadata
-    local_meta = channel_repo.get_by_gemini_id(channel_id)
-
-    if not local_meta:
-        # Create local metadata if not exists
-        local_meta = channel_repo.create(
-            gemini_store_id=channel_id,
-            name=data.name or channel.display_name,
-            description=data.description,
+    dto = use_case.update(channel_id, name=data.name, description=data.description)
+    if not dto:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Channel not found: {channel_id}",
         )
-    else:
-        # Update existing metadata
-        local_meta = channel_repo.update(
-            gemini_store_id=channel_id,
-            name=data.name,
-            description=data.description,
-        )
-
-    # Invalidate channel and store caches
-    cache.invalidate_channel_cache(channel_id)
-    cache.invalidate_store_cache()
-
-    return ChannelResponse(
-        id=channel_id,
-        name=local_meta.name if local_meta else data.name or "",
-        description=local_meta.description if local_meta else data.description,
-        created_at=local_meta.created_at if local_meta else datetime.now(UTC),
-        file_count=local_meta.file_count if local_meta else 0,
-    )
+    return _dto_to_response(dto)
 
 
 @router.delete(
@@ -357,43 +157,30 @@ def update_channel(
 def delete_channel(
     request: Request,
     channel_id: str,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    cache: Annotated[CachePort, Depends(get_cache_port)],
+    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
 ):
     """Delete a channel permanently.
 
     This deletes the channel from both Gemini and the local database.
     Note: When trash UI is implemented, this will change to soft delete.
     """
-    # First check if channel exists
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Channel not found: {channel_id}",
-        )
-
-    # Delete from Gemini first
     try:
-        success = channel_port.delete_channel(channel_id, force=True)
+        success = use_case.delete(channel_id)
         if not success:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete channel from Gemini",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Channel not found: {channel_id}",
             )
+        return None
     except HTTPException:
         raise
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete channel from Gemini: {str(e)}",
         )
-
-    # Delete from local DB
-    channel_repo.delete(channel_id)
-
-    # Invalidate all caches related to this channel
-    cache.invalidate_channel(channel_id)
-
-    return None

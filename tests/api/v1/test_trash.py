@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.models.db_models import ChannelMetadata, NoteDB
 from src.api.v1.trash import get_channel_port
-from src.api.v1.channels import get_channel_port as channels_get_channel_port
-from src.api.v1.channels import get_document_port as channels_get_document_port
+from src.api.v1.channels import get_channel_crud_use_case
 from src.api.v1.notes import get_channel_port as notes_get_channel_port
+from src.application.use_cases.channel_crud import ChannelCrudUseCase
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 
@@ -342,8 +342,21 @@ class TestSoftDeleteIntegration:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        app.dependency_overrides[channels_get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[channels_get_document_port] = lambda: mock_document_port
+        from src.infrastructure.di.container import (
+            create_channel_repository_port,
+            create_favorite_repository_port,
+        )
+        mock_cache = MagicMock()
+        mock_cache.get_store_list.return_value = None
+        mock_cache.get_channel_info.return_value = None
+        use_case = ChannelCrudUseCase(
+            channel_port=mock_channel_port,
+            document_port=mock_document_port,
+            channel_repo=create_channel_repository_port(test_db),
+            fav_repo=create_favorite_repository_port(test_db),
+            cache=mock_cache,
+        )
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         # Create a soft-deleted channel in DB
         deleted_channel = ChannelMetadata(
@@ -362,8 +375,7 @@ class TestSoftDeleteIntegration:
         channel_ids = [c["id"] for c in data["channels"]]
         assert "fileSearchStores/deleted" not in channel_ids
 
-        app.dependency_overrides.pop(channels_get_channel_port, None)
-        app.dependency_overrides.pop(channels_get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_deleted_note_not_in_list(self, client_with_db: TestClient, test_db):
         """Test that soft-deleted notes are not shown in note list."""

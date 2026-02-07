@@ -502,8 +502,12 @@ class TestChannelListWithFavorites:
 
     def test_list_channels_with_favorites(self, client_with_db: TestClient, test_db):
         """Test that channel list includes is_favorited field."""
-        from src.api.v1.channels import get_channel_port as channels_get_channel_port
-        from src.api.v1.channels import get_document_port as channels_get_document_port
+        from src.api.v1.channels import get_channel_crud_use_case
+        from src.application.use_cases.channel_crud import ChannelCrudUseCase
+        from src.infrastructure.di.container import (
+            create_channel_repository_port,
+            create_favorite_repository_port,
+        )
 
         mock_channel_port = MagicMock()
         mock_channel_port.list_channels.return_value = [
@@ -518,9 +522,19 @@ class TestChannelListWithFavorites:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
+        mock_cache = MagicMock()
+        mock_cache.get_store_list.return_value = None
+        mock_cache.get_channel_info.return_value = None
+        use_case = ChannelCrudUseCase(
+            channel_port=mock_channel_port,
+            document_port=mock_document_port,
+            channel_repo=create_channel_repository_port(test_db),
+            fav_repo=create_favorite_repository_port(test_db),
+            cache=mock_cache,
+        )
+
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[channels_get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[channels_get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         # Favorite only channel 1
         client_with_db.post("/api/v1/favorites/channels/fileSearchStores/store-1")
@@ -537,13 +551,16 @@ class TestChannelListWithFavorites:
         assert data["channels"][1]["is_favorited"] is False
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(channels_get_channel_port, None)
-        app.dependency_overrides.pop(channels_get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)
 
     def test_get_channel_with_favorite_status(self, client_with_db: TestClient, test_db):
         """Test that get channel includes is_favorited field."""
-        from src.api.v1.channels import get_channel_port as channels_get_channel_port
-        from src.api.v1.channels import get_document_port as channels_get_document_port
+        from src.api.v1.channels import get_channel_crud_use_case
+        from src.application.use_cases.channel_crud import ChannelCrudUseCase
+        from src.infrastructure.di.container import (
+            create_channel_repository_port,
+            create_favorite_repository_port,
+        )
 
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
@@ -554,9 +571,19 @@ class TestChannelListWithFavorites:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
+        mock_cache = MagicMock()
+        mock_cache.get_store_list.return_value = None
+        mock_cache.get_channel_info.return_value = None
+        use_case = ChannelCrudUseCase(
+            channel_port=mock_channel_port,
+            document_port=mock_document_port,
+            channel_repo=create_channel_repository_port(test_db),
+            fav_repo=create_favorite_repository_port(test_db),
+            cache=mock_cache,
+        )
+
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[channels_get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[channels_get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_channel_crud_use_case] = lambda: use_case
 
         # Not favorited
         response1 = client_with_db.get("/api/v1/channels/fileSearchStores/store-123")
@@ -572,5 +599,4 @@ class TestChannelListWithFavorites:
         assert response2.json()["is_favorited"] is True
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(channels_get_channel_port, None)
-        app.dependency_overrides.pop(channels_get_document_port, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case, None)

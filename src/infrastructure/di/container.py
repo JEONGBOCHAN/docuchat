@@ -613,6 +613,25 @@ def create_channel_port() -> ChannelPort:
     return GeminiChannelAdapter()
 
 
+def create_channel_crud_use_case(db=None):
+    """Create ChannelCrudUseCase with all dependencies wired.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        Fully configured ChannelCrudUseCase.
+    """
+    from src.application.use_cases.channel_crud import ChannelCrudUseCase
+    return ChannelCrudUseCase(
+        channel_port=create_channel_port(),
+        document_port=create_document_port(),
+        channel_repo=create_channel_repository_port(db),
+        fav_repo=create_favorite_repository_port(db),
+        cache=create_cache_port(),
+    )
+
+
 # ============================================================
 # Document Factory Functions
 # ============================================================
