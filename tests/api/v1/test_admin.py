@@ -4,6 +4,9 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+from src.main import app
+from src.api.deps import require_admin_key
+
 
 class TestGetSystemStats:
     """Tests for GET /api/v1/admin/stats endpoint."""
@@ -162,6 +165,13 @@ class TestGetApiMetrics:
 
 class TestResetApiMetrics:
     """Tests for POST /api/v1/admin/api-metrics/reset endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def bypass_admin_key(self):
+        """Bypass admin key check in tests."""
+        app.dependency_overrides[require_admin_key] = lambda: "test-key"
+        yield
+        app.dependency_overrides.pop(require_admin_key, None)
 
     def test_reset_api_metrics(self, client_with_db):
         """Test resetting API metrics."""
