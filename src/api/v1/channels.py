@@ -5,10 +5,13 @@ Thin controller: delegates all business logic to ChannelCrudUseCase.
 Only handles HTTP concerns (status codes, error mapping, DTO→Pydantic conversion).
 """
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from src.models.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelList
 from src.application.use_cases.channel_crud import ChannelCrudUseCase, ChannelDetailDTO
@@ -56,9 +59,10 @@ def create_channel(
         dto = use_case.create(data.name, data.description)
         return _dto_to_response(dto)
     except Exception as e:
+        logger.error("Failed to create channel", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create channel: {str(e)}",
+            detail="Failed to create channel",
         )
 
 
@@ -86,9 +90,10 @@ def list_channels(
             total=result.total,
         )
     except Exception as e:
+        logger.error("Failed to list channels", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list channels: {str(e)}",
+            detail="Failed to list channels",
         )
 
 
@@ -175,12 +180,14 @@ def delete_channel(
     except HTTPException:
         raise
     except RuntimeError as e:
+        logger.error("Failed to delete channel", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to delete channel",
         )
     except Exception as e:
+        logger.error("Failed to delete channel from Gemini", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete channel from Gemini: {str(e)}",
+            detail="Failed to delete channel",
         )

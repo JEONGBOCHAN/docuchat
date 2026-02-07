@@ -304,7 +304,7 @@ class TestDeleteChannel:
         response = client_with_db.delete(f"/api/v1/channels/{channel_id}")
 
         assert response.status_code == 500
-        assert "Failed to delete channel from Gemini" in response.json()["detail"]
+        assert "Failed to delete channel" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_channel_crud_use_case, None)
 

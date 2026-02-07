@@ -97,9 +97,10 @@ async def upload_document(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Failed to upload document", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload document: {str(e)}",
+            detail="Failed to upload document",
         )
     finally:
         if "tmp_path" in locals():
@@ -160,9 +161,10 @@ def upload_from_url(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Failed to upload from URL", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload from URL: {str(e)}",
+            detail="Failed to upload from URL",
         )
 
 
@@ -206,9 +208,10 @@ def list_documents(
             detail=f"Channel not found: {channel_id}",
         )
     except Exception as e:
+        logger.error("Failed to list documents", exc_info=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list documents: {str(e)}",
+            detail="Failed to list documents",
         )
 
 

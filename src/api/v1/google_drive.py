@@ -146,7 +146,7 @@ async def get_auth_url():
         raise
     except Exception as e:
         logger.error("Failed to generate OAuth URL", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to generate OAuth authorization URL")
 
 
 @router.post("/token", response_model=TokenResponse)
@@ -178,7 +178,7 @@ async def exchange_token(request: TokenRequest):
         logger.error("Failed to exchange OAuth code", error=str(e))
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to exchange authorization code: {str(e)}"
+            detail="Failed to exchange authorization code"
         )
 
 
@@ -244,7 +244,7 @@ async def list_files(
                 status_code=401,
                 detail="Access token is invalid or expired. Please re-authenticate."
             )
-        raise HTTPException(status_code=500, detail=f"Failed to list files: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to list files from Google Drive")
 
 
 @router.post("/import/{channel_id}", response_model=ImportFileResponse)
@@ -371,7 +371,7 @@ async def import_file(
                 status_code=401,
                 detail="Access token is invalid or expired. Please re-authenticate."
             )
-        raise HTTPException(status_code=500, detail=f"Failed to import file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to import file from Google Drive")
 
 
 @router.post("/refresh-token", response_model=TokenResponse)
