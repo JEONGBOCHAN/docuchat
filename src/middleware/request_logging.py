@@ -60,10 +60,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         start_time = time.time()
 
-        # Log incoming request
+        # Log incoming request (redact sensitive query params)
+        query_params = dict(request.query_params) if request.query_params else None
+        if query_params:
+            for key in ("access_token", "token", "refresh_token", "api_key"):
+                if key in query_params:
+                    query_params[key] = "***REDACTED***"
+
         logger.info(
             "Request started",
-            query_params=dict(request.query_params) if request.query_params else None,
+            query_params=query_params,
             user_agent=request.headers.get("user-agent"),
         )
 

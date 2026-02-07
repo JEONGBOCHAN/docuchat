@@ -126,23 +126,25 @@ export const googleDriveApi = {
     }
 
     const params = new URLSearchParams();
-    params.set('access_token', token);
     if (folderId) params.set('folder_id', folderId);
     if (pageToken) params.set('page_token', pageToken);
     params.set('page_size', String(pageSize));
 
+    const authHeaders = { headers: { Authorization: `Bearer ${token}` } };
+
     try {
       return await apiClient.get<DriveFilesResponse>(
-        `/api/v1/integrations/google-drive/files?${params.toString()}`
+        `/api/v1/integrations/google-drive/files?${params.toString()}`,
+        authHeaders
       );
     } catch (error: unknown) {
       // Try to refresh token on 401
       if (error instanceof Error && error.message.includes('401')) {
         const refreshed = await googleDriveApi.refreshToken();
         if (refreshed) {
-          params.set('access_token', refreshed.access_token);
           return await apiClient.get<DriveFilesResponse>(
-            `/api/v1/integrations/google-drive/files?${params.toString()}`
+            `/api/v1/integrations/google-drive/files?${params.toString()}`,
+            { headers: { Authorization: `Bearer ${refreshed.access_token}` } }
           );
         }
       }
