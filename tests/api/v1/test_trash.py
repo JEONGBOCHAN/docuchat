@@ -10,7 +10,7 @@ from src.main import app
 from src.models.db_models import ChannelMetadata, NoteDB
 from src.api.v1.trash import get_channel_port
 from src.api.v1.channels import get_channel_crud_use_case
-from src.api.v1.notes import get_channel_port as notes_get_channel_port
+from src.api.v1.notes import get_note_crud_use_case
 from src.application.use_cases.channel_crud import ChannelCrudUseCase
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
@@ -379,13 +379,26 @@ class TestSoftDeleteIntegration:
 
     def test_deleted_note_not_in_list(self, client_with_db: TestClient, test_db):
         """Test that soft-deleted notes are not shown in note list."""
+        from src.application.use_cases.note_crud import NoteCrudUseCase
+        from src.infrastructure.di.container import (
+            create_channel_repository_port,
+            create_note_repository_port,
+            create_trash_repository_port,
+        )
+
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
             name="fileSearchStores/test",
             display_name="Test",
         )
 
-        app.dependency_overrides[notes_get_channel_port] = lambda: mock_channel_port
+        note_use_case = NoteCrudUseCase(
+            channel_port=mock_channel_port,
+            channel_repo=create_channel_repository_port(test_db),
+            note_repo=create_note_repository_port(test_db),
+            trash_repo=create_trash_repository_port(test_db),
+        )
+        app.dependency_overrides[get_note_crud_use_case] = lambda: note_use_case
 
         # Create channel
         channel = ChannelMetadata(
@@ -423,4 +436,4 @@ class TestSoftDeleteIntegration:
         assert data["total"] == 1
         assert data["notes"][0]["title"] == "Active Note"
 
-        app.dependency_overrides.pop(notes_get_channel_port, None)
+        app.dependency_overrides.pop(get_note_crud_use_case, None)

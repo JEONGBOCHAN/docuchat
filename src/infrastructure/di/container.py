@@ -632,6 +632,58 @@ def create_channel_crud_use_case(db=None):
     )
 
 
+def create_note_crud_use_case(db=None):
+    """Create NoteCrudUseCase with all dependencies wired.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        Fully configured NoteCrudUseCase.
+    """
+    from src.application.use_cases.note_crud import NoteCrudUseCase
+    return NoteCrudUseCase(
+        channel_port=create_channel_port(),
+        channel_repo=create_channel_repository_port(db),
+        note_repo=create_note_repository_port(db),
+        trash_repo=create_trash_repository_port(db),
+    )
+
+
+def create_favorite_crud_use_case(db=None):
+    """Create FavoriteCrudUseCase with all dependencies wired.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        Fully configured FavoriteCrudUseCase.
+    """
+    from src.application.use_cases.favorite_crud import FavoriteCrudUseCase
+    return FavoriteCrudUseCase(
+        channel_port=create_channel_port(),
+        fav_repo=create_favorite_repository_port(db),
+        note_repo=create_note_repository_port(db),
+    )
+
+
+def create_search_history_use_case(db=None):
+    """Create SearchHistoryUseCase with all dependencies wired.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        Fully configured SearchHistoryUseCase.
+    """
+    from src.application.use_cases.search_history import SearchHistoryUseCase
+    return SearchHistoryUseCase(
+        channel_port=create_channel_port(),
+        channel_repo=create_channel_repository_port(db),
+        search_history_repo=create_search_history_repository_port(db),
+    )
+
+
 # ============================================================
 # Document Factory Functions
 # ============================================================

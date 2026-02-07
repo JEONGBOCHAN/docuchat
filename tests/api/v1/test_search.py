@@ -6,11 +6,25 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.search import get_channel_port
+from src.api.v1.search import get_search_history_use_case
 from src.api.v1.chat import get_channel_port as get_chat_channel_port
 from src.application.ports.channel import ChannelDTO
 from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.infrastructure.persistence.search_repository import SearchHistoryRepository
+
+
+def _make_use_case(test_db, channel_port=None):
+    """Create a SearchHistoryUseCase with real DB repos and mocked external port."""
+    from src.application.use_cases.search_history import SearchHistoryUseCase
+    from src.infrastructure.di.container import (
+        create_channel_repository_port,
+        create_search_history_repository_port,
+    )
+    return SearchHistoryUseCase(
+        channel_port=channel_port or MagicMock(),
+        channel_repo=create_channel_repository_port(test_db),
+        search_history_repo=create_search_history_repository_port(test_db),
+    )
 
 
 class TestGetSearchHistory:
@@ -24,7 +38,8 @@ class TestGetSearchHistory:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/search/history",
@@ -36,7 +51,7 @@ class TestGetSearchHistory:
         assert data["history"] == []
         assert data["total"] == 0
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
     def test_get_history_with_entries(self, client_with_db: TestClient, test_db):
         """Test getting search history with entries."""
@@ -46,7 +61,8 @@ class TestGetSearchHistory:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         # Create channel and add search history directly
         channel_repo = ChannelRepository(test_db)
@@ -69,14 +85,15 @@ class TestGetSearchHistory:
         assert data["total"] == 2
         assert len(data["history"]) == 2
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
     def test_get_history_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test getting history for non-existent channel."""
         mock_port = MagicMock()
         mock_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/search/history",
@@ -85,7 +102,7 @@ class TestGetSearchHistory:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
 
 class TestGetSearchSuggestions:
@@ -99,7 +116,8 @@ class TestGetSearchSuggestions:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/search/suggestions",
@@ -111,7 +129,7 @@ class TestGetSearchSuggestions:
         assert data["suggestions"] == []
         assert data["query"] == "test"
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
     def test_get_suggestions_with_prefix(self, client_with_db: TestClient, test_db):
         """Test getting suggestions with matching prefix."""
@@ -121,7 +139,8 @@ class TestGetSearchSuggestions:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         # Create channel and add search history
         channel_repo = ChannelRepository(test_db)
@@ -145,7 +164,7 @@ class TestGetSearchSuggestions:
         assert len(data["suggestions"]) == 2
         assert all("what" in s["query"].lower() for s in data["suggestions"])
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
     def test_get_suggestions_popular_when_no_prefix(self, client_with_db: TestClient, test_db):
         """Test getting popular suggestions when no prefix."""
@@ -155,7 +174,8 @@ class TestGetSearchSuggestions:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         # Create channel and add search history with different counts
         channel_repo = ChannelRepository(test_db)
@@ -183,7 +203,7 @@ class TestGetSearchSuggestions:
         assert data["suggestions"][0]["query"] == "popular query"
         assert data["suggestions"][0]["search_count"] == 3
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
 
 class TestGetPopularSearches:
@@ -197,7 +217,8 @@ class TestGetPopularSearches:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/search/popular",
@@ -208,7 +229,7 @@ class TestGetPopularSearches:
         data = response.json()
         assert data["suggestions"] == []
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
     def test_get_popular_sorted_by_count(self, client_with_db: TestClient, test_db):
         """Test that popular searches are sorted by count."""
@@ -218,7 +239,8 @@ class TestGetPopularSearches:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         # Create channel and add search history
         channel_repo = ChannelRepository(test_db)
@@ -250,7 +272,7 @@ class TestGetPopularSearches:
         assert data["suggestions"][2]["query"] == "query A"
         assert data["suggestions"][2]["search_count"] == 1
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
 
 class TestDeleteSearchHistory:
@@ -264,7 +286,8 @@ class TestDeleteSearchHistory:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         # Create channel and add search history
         channel_repo = ChannelRepository(test_db)
@@ -291,7 +314,7 @@ class TestDeleteSearchHistory:
         )
         assert list_response.json()["total"] == 0
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
     def test_delete_history_not_found(self, client_with_db: TestClient, test_db):
         """Test deleting non-existent history entry."""
@@ -301,7 +324,8 @@ class TestDeleteSearchHistory:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         response = client_with_db.delete(
             "/api/v1/search/history/99999",
@@ -310,7 +334,7 @@ class TestDeleteSearchHistory:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
 
 class TestClearSearchHistory:
@@ -324,7 +348,8 @@ class TestClearSearchHistory:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
 
         # Create channel and add search history
         channel_repo = ChannelRepository(test_db)
@@ -353,7 +378,7 @@ class TestClearSearchHistory:
         )
         assert list_response.json()["total"] == 0
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
 
 
 class TestSearchHistoryIntegration:
@@ -370,7 +395,8 @@ class TestSearchHistoryIntegration:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
         app.dependency_overrides[get_chat_channel_port] = lambda: mock_port
 
         # Mock the use case
@@ -399,7 +425,7 @@ class TestSearchHistoryIntegration:
         assert data["history"][0]["query"] == "What is the meaning of life?"
         assert data["history"][0]["search_count"] == 1
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
         app.dependency_overrides.pop(get_chat_channel_port, None)
 
     def test_repeated_query_increments_count(self, client_with_db: TestClient, test_db):
@@ -413,7 +439,8 @@ class TestSearchHistoryIntegration:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_port
+        use_case = _make_use_case(test_db, channel_port=mock_port)
+        app.dependency_overrides[get_search_history_use_case] = lambda: use_case
         app.dependency_overrides[get_chat_channel_port] = lambda: mock_port
 
         # Mock the use case
@@ -443,5 +470,5 @@ class TestSearchHistoryIntegration:
         assert data["history"][0]["query"] == "repeated question"
         assert data["history"][0]["search_count"] == 3
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_search_history_use_case, None)
         app.dependency_overrides.pop(get_chat_channel_port, None)

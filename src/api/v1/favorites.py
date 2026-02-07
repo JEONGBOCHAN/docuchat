@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Favorites API endpoints."""
+"""Favorites API endpoints.
+
+Thin controller: delegates all business logic to FavoriteCrudUseCase.
+"""
 
 from typing import Annotated
 
@@ -15,71 +18,45 @@ from src.models.favorite import (
     FavoriteResponse,
     TargetType,
 )
-from src.application.ports.channel import ChannelPort
-from src.application.ports.persistence import (
-    FavoriteRepositoryPort,
-    NoteRepositoryPort,
-)
-from src.infrastructure.di.container import (
-    create_channel_port,
-    create_favorite_repository_port,
-    create_note_repository_port,
+from src.application.use_cases.favorite_crud import FavoriteCrudUseCase, FavoriteDetailDTO
+from src.application.use_cases.exceptions import (
+    ChannelNotFoundError,
+    TargetNotFoundError,
+    InvalidTargetError,
 )
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 
 
-def get_channel_port() -> ChannelPort:
-    """Get channel port instance."""
-    return create_channel_port()
+def get_favorite_crud_use_case(db: Session = Depends(get_db)) -> FavoriteCrudUseCase:
+    """Get favorite CRUD use case instance with all dependencies wired."""
+    from src.infrastructure.di.container import create_favorite_crud_use_case
+    return create_favorite_crud_use_case(db)
 
 
-def get_favorite_repo_port(db: Session = Depends(get_db)) -> FavoriteRepositoryPort:
-    """Get favorite repository port instance."""
-    return create_favorite_repository_port(db)
+def _dto_to_response(dto: FavoriteDetailDTO) -> FavoriteResponse:
+    """Convert application-layer DTO to API response model."""
+    return FavoriteResponse(
+        id=dto.id,
+        target_type=TargetType(dto.target_type),
+        target_id=dto.target_id,
+        display_order=dto.display_order,
+        created_at=dto.created_at,
+    )
 
 
-def get_note_repo_port(db: Session = Depends(get_db)) -> NoteRepositoryPort:
-    """Get note repository port instance."""
-    return create_note_repository_port(db)
-
-
-def _validate_target(
-    target_type: TargetType,
-    target_id: str,
-    channel_port: ChannelPort,
-    note_repo: NoteRepositoryPort,
-) -> None:
-    """Validate that the target exists."""
-    if target_type == TargetType.CHANNEL:
-        channel = channel_port.get_channel(target_id)
-        if not channel:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Channel not found: {target_id}",
-            )
-    elif target_type == TargetType.DOCUMENT:
-        # Documents are stored in Gemini, validate by checking operation status
-        # For simplicity, we'll accept any document ID format
-        if not target_id or not target_id.startswith("files/"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid document ID format. Expected 'files/xxx'",
-            )
-    elif target_type == TargetType.NOTE:
-        try:
-            note_id = int(target_id)
-            note = note_repo.get_by_id(note_id)
-            if not note:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Note not found: {target_id}",
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid note ID format. Expected integer.",
-            )
+def _handle_validation_error(e: Exception):
+    """Convert use case exceptions to HTTP exceptions."""
+    if isinstance(e, (ChannelNotFoundError, TargetNotFoundError)):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    if isinstance(e, InvalidTargetError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
 
 
 @router.post(
@@ -92,24 +69,14 @@ def _validate_target(
 def add_favorite(
     request: Request,
     data: FavoriteCreate,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
-    note_repo: Annotated[NoteRepositoryPort, Depends(get_note_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
 ) -> FavoriteResponse:
     """Add a channel, document, or note to favorites."""
-    # Validate target exists
-    _validate_target(data.target_type, data.target_id, channel_port, note_repo)
-
-    # Add to favorites
-    favorite = fav_repo.add(data.target_type.value, data.target_id)
-
-    return FavoriteResponse(
-        id=favorite.id,
-        target_type=TargetType(favorite.target_type),
-        target_id=favorite.target_id,
-        display_order=favorite.display_order,
-        created_at=favorite.created_at,
-    )
+    try:
+        dto = use_case.add(data.target_type.value, data.target_id)
+        return _dto_to_response(dto)
+    except (ChannelNotFoundError, TargetNotFoundError, InvalidTargetError) as e:
+        _handle_validation_error(e)
 
 
 @router.delete(
@@ -122,15 +89,14 @@ def remove_favorite(
     request: Request,
     target_type: Annotated[TargetType, Query(description="Type of the target")],
     target_id: Annotated[str, Query(description="ID of the target")],
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
 ):
     """Remove a channel, document, or note from favorites."""
-    if not fav_repo.remove(target_type.value, target_id):
+    if not use_case.remove(target_type.value, target_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Favorite not found",
         )
-
     return None
 
 
@@ -142,28 +108,18 @@ def remove_favorite(
 @limiter.limit(RateLimits.DEFAULT)
 def list_favorites(
     request: Request,
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
     target_type: Annotated[TargetType | None, Query(description="Filter by target type")] = None,
     limit: Annotated[int, Query(description="Maximum number of favorites", ge=1, le=100)] = 50,
     offset: Annotated[int, Query(description="Number of favorites to skip", ge=0)] = 0,
 ) -> FavoriteListResponse:
     """List all favorites, optionally filtered by type."""
     type_value = target_type.value if target_type else None
-    favorites = fav_repo.list_all(target_type=type_value, limit=limit, offset=offset)
-    total = fav_repo.count(target_type=type_value)
+    result = use_case.list(target_type=type_value, limit=limit, offset=offset)
 
     return FavoriteListResponse(
-        favorites=[
-            FavoriteResponse(
-                id=f.id,
-                target_type=TargetType(f.target_type),
-                target_id=f.target_id,
-                display_order=f.display_order,
-                created_at=f.created_at,
-            )
-            for f in favorites
-        ],
-        total=total,
+        favorites=[_dto_to_response(f) for f in result.favorites],
+        total=result.total,
     )
 
 
@@ -176,11 +132,10 @@ def check_favorite(
     request: Request,
     target_type: Annotated[TargetType, Query(description="Type of the target")],
     target_id: Annotated[str, Query(description="ID of the target")],
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
 ) -> dict:
     """Check if a target is in favorites."""
-    is_favorited = fav_repo.is_favorited(target_type.value, target_id)
-
+    is_favorited = use_case.check(target_type.value, target_id)
     return {"is_favorited": is_favorited}
 
 
@@ -192,11 +147,10 @@ def check_favorite(
 def reorder_favorites(
     request: Request,
     data: FavoriteReorderRequest,
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
 ) -> dict:
     """Reorder favorites by providing a new order of IDs."""
-    fav_repo.reorder(data.favorite_ids)
-
+    use_case.reorder(data.favorite_ids)
     return {"message": "Favorites reordered successfully"}
 
 
@@ -211,22 +165,14 @@ def reorder_favorites(
 def favorite_channel(
     request: Request,
     channel_id: str,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
-    note_repo: Annotated[NoteRepositoryPort, Depends(get_note_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
 ) -> FavoriteResponse:
     """Add a channel to favorites."""
-    _validate_target(TargetType.CHANNEL, channel_id, channel_port, note_repo)
-
-    favorite = fav_repo.add(TargetType.CHANNEL.value, channel_id)
-
-    return FavoriteResponse(
-        id=favorite.id,
-        target_type=TargetType(favorite.target_type),
-        target_id=favorite.target_id,
-        display_order=favorite.display_order,
-        created_at=favorite.created_at,
-    )
+    try:
+        dto = use_case.add("channel", channel_id)
+        return _dto_to_response(dto)
+    except (ChannelNotFoundError, TargetNotFoundError, InvalidTargetError) as e:
+        _handle_validation_error(e)
 
 
 @router.delete(
@@ -238,15 +184,14 @@ def favorite_channel(
 def unfavorite_channel(
     request: Request,
     channel_id: str,
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
 ):
     """Remove a channel from favorites."""
-    if not fav_repo.remove(TargetType.CHANNEL.value, channel_id):
+    if not use_case.remove("channel", channel_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Channel is not in favorites",
         )
-
     return None
 
 
@@ -260,22 +205,14 @@ def unfavorite_channel(
 def favorite_note(
     request: Request,
     note_id: int,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
-    note_repo: Annotated[NoteRepositoryPort, Depends(get_note_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
 ) -> FavoriteResponse:
     """Add a note to favorites."""
-    _validate_target(TargetType.NOTE, str(note_id), channel_port, note_repo)
-
-    favorite = fav_repo.add(TargetType.NOTE.value, str(note_id))
-
-    return FavoriteResponse(
-        id=favorite.id,
-        target_type=TargetType(favorite.target_type),
-        target_id=favorite.target_id,
-        display_order=favorite.display_order,
-        created_at=favorite.created_at,
-    )
+    try:
+        dto = use_case.add("note", str(note_id))
+        return _dto_to_response(dto)
+    except (ChannelNotFoundError, TargetNotFoundError, InvalidTargetError) as e:
+        _handle_validation_error(e)
 
 
 @router.delete(
@@ -287,13 +224,12 @@ def favorite_note(
 def unfavorite_note(
     request: Request,
     note_id: int,
-    fav_repo: Annotated[FavoriteRepositoryPort, Depends(get_favorite_repo_port)],
+    use_case: Annotated[FavoriteCrudUseCase, Depends(get_favorite_crud_use_case)],
 ):
     """Remove a note from favorites."""
-    if not fav_repo.remove(TargetType.NOTE.value, str(note_id)):
+    if not use_case.remove("note", str(note_id)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Note is not in favorites",
         )
-
     return None

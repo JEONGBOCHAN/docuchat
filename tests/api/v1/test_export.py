@@ -10,9 +10,26 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.api.v1.export import get_channel_port
-from src.api.v1.notes import get_channel_port as notes_get_channel_port
+from src.api.v1.notes import get_note_crud_use_case
 from src.application.ports.channel import ChannelDTO
 from src.models.db_models import ChannelMetadata, NoteDB, ChatMessageDB
+
+
+def _make_note_use_case(test_db, channel_port=None):
+    """Create NoteCrudUseCase with real DB repos and optional mock channel port."""
+    from src.application.use_cases.note_crud import NoteCrudUseCase
+    from src.infrastructure.di.container import (
+        create_channel_repository_port,
+        create_note_repository_port,
+        create_trash_repository_port,
+    )
+
+    return NoteCrudUseCase(
+        channel_port=channel_port or MagicMock(),
+        channel_repo=create_channel_repository_port(test_db),
+        note_repo=create_note_repository_port(test_db),
+        trash_repo=create_trash_repository_port(test_db),
+    )
 
 
 class TestExportNote:
@@ -27,7 +44,8 @@ class TestExportNote:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[notes_get_channel_port] = lambda: mock_channel_port
+        note_uc = _make_note_use_case(test_db, mock_channel_port)
+        app.dependency_overrides[get_note_crud_use_case] = lambda: note_uc
 
         # Create a note first
         create_response = client_with_db.post(
@@ -58,7 +76,7 @@ class TestExportNote:
         assert "doc.pdf" in content
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(notes_get_channel_port, None)
+        app.dependency_overrides.pop(get_note_crud_use_case, None)
 
     def test_export_note_json(self, client_with_db: TestClient, test_db):
         """Test exporting a note as JSON."""
@@ -69,7 +87,8 @@ class TestExportNote:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[notes_get_channel_port] = lambda: mock_channel_port
+        note_uc = _make_note_use_case(test_db, mock_channel_port)
+        app.dependency_overrides[get_note_crud_use_case] = lambda: note_uc
 
         # Create a note first
         create_response = client_with_db.post(
@@ -98,7 +117,7 @@ class TestExportNote:
         assert data["content"] == "Content for JSON export."
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(notes_get_channel_port, None)
+        app.dependency_overrides.pop(get_note_crud_use_case, None)
 
     def test_export_note_pdf(self, client_with_db: TestClient, test_db):
         """Test exporting a note as PDF."""
@@ -109,7 +128,8 @@ class TestExportNote:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[notes_get_channel_port] = lambda: mock_channel_port
+        note_uc = _make_note_use_case(test_db, mock_channel_port)
+        app.dependency_overrides[get_note_crud_use_case] = lambda: note_uc
 
         # Create a note first
         create_response = client_with_db.post(
@@ -135,7 +155,7 @@ class TestExportNote:
         assert ".pdf" in response.headers["content-disposition"]
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(notes_get_channel_port, None)
+        app.dependency_overrides.pop(get_note_crud_use_case, None)
 
     def test_export_note_not_found(self, client_with_db: TestClient, test_db):
         """Test exporting non-existent note."""
