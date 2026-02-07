@@ -318,7 +318,6 @@ class AgentStateStore:
                 event_data = event.get("data", {})
                 duration = event_data.get("duration_ms")
                 tokens = event_data.get("tokens")
-                print(f"[DEBUG state.update] llm_complete: node={node}, duration={duration}, event_data={event_data}")
                 # Update the last step for this node
                 for step in reversed(state.steps):
                     if step.node == node and step.status == "running":
