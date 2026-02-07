@@ -13,20 +13,14 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
+from sqlalchemy.orm import Session
+
 from src.core.config import get_settings
 from src.core.database import get_db
 from src.core.logging import get_logger
-from src.application.ports.channel import ChannelPort
-from src.application.ports.document import DocumentPort
-from src.application.ports.cache import CachePort
-from src.application.services.capacity_service import CapacityService
+from src.application.use_cases.document_crud import DocumentCrudUseCase
+from src.application.use_cases.exceptions import ChannelNotFoundError
 from src.domain.exceptions import CapacityExceededError
-from src.infrastructure.di.container import (
-    create_channel_port,
-    create_document_port,
-    create_cache_port,
-    create_capacity_service,
-)
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -34,24 +28,12 @@ settings = get_settings()
 router = APIRouter(prefix="/integrations/google-drive", tags=["google-drive"])
 
 
-def get_channel_port() -> ChannelPort:
-    """Get channel port instance."""
-    return create_channel_port()
-
-
-def get_document_port() -> DocumentPort:
-    """Get document port instance."""
-    return create_document_port()
-
-
-def get_cache_port() -> CachePort:
-    """Get cache port instance."""
-    return create_cache_port()
-
-
-def get_capacity_service(db=Depends(get_db)) -> CapacityService:
-    """Get capacity service instance."""
-    return create_capacity_service(db)
+def get_document_crud_use_case(
+    db: Session = Depends(get_db),
+) -> DocumentCrudUseCase:
+    """Get document CRUD use case instance."""
+    from src.infrastructure.di.container import create_document_crud_use_case
+    return create_document_crud_use_case(db)
 
 
 # OAuth 2.0 scopes for Google Drive
@@ -269,10 +251,7 @@ async def list_files(
 async def import_file(
     channel_id: str,
     request: ImportFileRequest,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    cache: Annotated[CachePort, Depends(get_cache_port)],
-    capacity_service: Annotated[CapacityService, Depends(get_capacity_service)],
+    use_case: Annotated[DocumentCrudUseCase, Depends(get_document_crud_use_case)],
 ):
     """
     Import a file from Google Drive to a channel.
@@ -311,7 +290,6 @@ async def import_file(
 
         # Handle Google Docs export
         if mime_type.startswith("application/vnd.google-apps."):
-            # Google Docs need to be exported
             if mime_type == "application/vnd.google-apps.document":
                 export_mime = "application/pdf"
                 file_name = f"{file_name}.pdf"
@@ -326,7 +304,6 @@ async def import_file(
                 mimeType=export_mime,
             )
         else:
-            # Regular file download
             request_media = service.files().get_media(fileId=request.file_id)
 
         # Download file to memory
@@ -341,38 +318,14 @@ async def import_file(
         file_content = file_buffer.read()
         actual_size = len(file_content)
 
-        # Validate channel exists
-        channel = channel_port.get_channel(channel_id)
-        if not channel:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Channel not found: {channel_id}",
-            )
-
-        # Check capacity limits
-        try:
-            capacity_service.validate_upload(channel_id, actual_size)
-        except CapacityExceededError as e:
-            raise HTTPException(
-                status_code=413,
-                detail=str(e),
-            )
-
         # Save to temp file for upload
         with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file_name}") as tmp:
             tmp.write(file_content)
             tmp_path = tmp.name
 
         try:
-            # Upload to Gemini store
-            result = document_port.upload_document(channel_id, tmp_path)
-
-            # Update capacity tracking
-            capacity_service.update_after_upload(channel_id, actual_size)
-
-            # Invalidate caches
-            cache.invalidate_document_cache(channel_id)
-            cache.invalidate_chat_cache(channel_id)
+            # Delegate to use case (validates channel, capacity, uploads, etc.)
+            result = use_case.upload(channel_id, tmp_path, file_name, actual_size)
 
             logger.info(
                 "Successfully imported file from Google Drive",
@@ -389,12 +342,21 @@ async def import_file(
             )
 
         finally:
-            # Clean up temp file
             try:
                 os.unlink(tmp_path)
             except Exception:
                 pass
 
+    except ChannelNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Channel not found: {channel_id}",
+        )
+    except CapacityExceededError as e:
+        raise HTTPException(
+            status_code=413,
+            detail=str(e),
+        )
     except HTTPException:
         raise
     except Exception as e:

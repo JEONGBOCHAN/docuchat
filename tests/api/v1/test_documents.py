@@ -6,10 +6,36 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.documents import get_channel_port, get_document_port, get_crawler_port
+from src.api.v1.documents import get_document_crud_use_case
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO, UploadResultDTO
 from src.infrastructure.external.crawler.crawler import CrawlResult
+
+
+def _make_use_case(
+    channel_port=None,
+    document_port=None,
+    crawler_port=None,
+    allowed_extensions=None,
+    max_file_size_mb=50,
+):
+    """Create DocumentCrudUseCase with mock dependencies."""
+    from src.application.use_cases.document_crud import DocumentCrudUseCase
+
+    mock_cache = MagicMock()
+    # Ensure cache returns None (cache miss) by default so port is called
+    mock_cache.get_document_list.return_value = None
+
+    return DocumentCrudUseCase(
+        channel_port=channel_port or MagicMock(),
+        document_port=document_port or MagicMock(),
+        cache=mock_cache,
+        capacity_service=MagicMock(),
+        summary_use_case=MagicMock(),
+        crawler_port=crawler_port,
+        allowed_extensions=allowed_extensions,
+        max_file_size_mb=max_file_size_mb,
+    )
 
 
 class TestUploadDocument:
@@ -30,8 +56,11 @@ class TestUploadDocument:
             document_name=None,
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/documents",
@@ -45,15 +74,15 @@ class TestUploadDocument:
         assert data["filename"] == "test.pdf"
         assert data["status"] == "processing"
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_crud_use_case, None)
 
     def test_upload_document_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test upload to non-existent channel."""
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(channel_port=mock_channel_port)
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/documents",
@@ -63,7 +92,7 @@ class TestUploadDocument:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_crud_use_case, None)
 
     def test_upload_document_invalid_extension(self, client_with_db: TestClient, test_db):
         """Test upload with invalid file extension."""
@@ -73,7 +102,8 @@ class TestUploadDocument:
             display_name="Test Channel",
         )
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(channel_port=mock_channel_port)
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/documents",
@@ -84,23 +114,21 @@ class TestUploadDocument:
         assert response.status_code == 400
         assert "not allowed" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_crud_use_case, None)
 
     def test_upload_document_file_too_large(self, client_with_db: TestClient, test_db):
         """Test upload with file exceeding size limit."""
-        from src.core.config import get_settings, Settings
-
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
             name="fileSearchStores/test-store",
             display_name="Test Channel",
         )
 
-        # Create a mock settings with small file size limit
-        mock_settings = Settings(max_file_size_mb=1, google_api_key="test")
-
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_settings] = lambda: mock_settings
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            max_file_size_mb=1,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         # Create content larger than 1MB
         large_content = b"x" * (2 * 1024 * 1024)  # 2MB
@@ -114,8 +142,7 @@ class TestUploadDocument:
         assert response.status_code == 400
         assert "too large" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_settings, None)
+        app.dependency_overrides.pop(get_document_crud_use_case, None)
 
 
 class TestListDocuments:
@@ -135,8 +162,11 @@ class TestListDocuments:
             DocumentDTO(name="files/file-2", display_name="doc2.pdf", size_bytes=2048, state="ACTIVE"),
         ]
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client.get(
             "/api/v1/documents",
@@ -163,8 +193,11 @@ class TestListDocuments:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client.get(
             "/api/v1/documents",
@@ -183,7 +216,8 @@ class TestListDocuments:
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        use_case = _make_use_case(channel_port=mock_channel_port)
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client.get(
             "/api/v1/documents",
@@ -205,8 +239,11 @@ class TestListDocuments:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.side_effect = Exception("API Error")
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            document_port=mock_document_port,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client.get(
             "/api/v1/documents",
@@ -231,7 +268,8 @@ class TestGetDocumentStatus:
             document_name=None,
         )
 
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(document_port=mock_document_port)
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client.get("/api/v1/documents/operations/upload-123/status")
 
@@ -251,7 +289,8 @@ class TestGetDocumentStatus:
             document_name=None,
         )
 
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(document_port=mock_document_port)
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client.get("/api/v1/documents/operations/upload-123/status")
 
@@ -270,7 +309,8 @@ class TestDeleteDocument:
         mock_document_port = MagicMock()
         mock_document_port.delete_file.return_value = True
 
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(document_port=mock_document_port)
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client.delete("/api/v1/documents/files/file-123")
 
@@ -283,7 +323,8 @@ class TestDeleteDocument:
         mock_document_port = MagicMock()
         mock_document_port.delete_file.return_value = False
 
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        use_case = _make_use_case(document_port=mock_document_port)
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client.delete("/api/v1/documents/files/file-123")
 
@@ -295,10 +336,10 @@ class TestDeleteDocument:
 class TestUploadFromUrl:
     """Tests for POST /api/v1/documents/url."""
 
-    @patch("src.api.v1.documents.os.path.getsize")
+    @patch("src.application.use_cases.document_crud.os.path.getsize")
     def test_upload_from_url_success(self, mock_getsize, client_with_db: TestClient, test_db):
         """Test successful URL upload."""
-        mock_getsize.return_value = 1024  # Mock file size
+        mock_getsize.return_value = 1024
 
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
@@ -322,9 +363,12 @@ class TestUploadFromUrl:
         )
         mock_crawler.save_to_temp_file.return_value = "/tmp/test.md"
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
-        app.dependency_overrides[get_crawler_port] = lambda: mock_crawler
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            document_port=mock_document_port,
+            crawler_port=mock_crawler,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/documents/url",
@@ -338,16 +382,20 @@ class TestUploadFromUrl:
         assert data["filename"] == "Example Page.md"
         assert data["status"] == "processing"
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
-        app.dependency_overrides.pop(get_crawler_port, None)
+        app.dependency_overrides.pop(get_document_crud_use_case, None)
 
     def test_upload_from_url_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test URL upload to non-existent channel."""
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = None
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        mock_crawler = MagicMock()
+
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            crawler_port=mock_crawler,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/documents/url",
@@ -357,7 +405,7 @@ class TestUploadFromUrl:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_crud_use_case, None)
 
     def test_upload_from_url_invalid_url(self, client_with_db: TestClient, test_db):
         """Test URL upload with invalid URL."""
@@ -370,8 +418,11 @@ class TestUploadFromUrl:
         mock_crawler = MagicMock()
         mock_crawler.fetch_url.side_effect = ValueError("Invalid URL: not-a-url")
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_crawler_port] = lambda: mock_crawler
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            crawler_port=mock_crawler,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/documents/url",
@@ -382,8 +433,7 @@ class TestUploadFromUrl:
         assert response.status_code == 400
         assert "Invalid URL" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_crawler_port, None)
+        app.dependency_overrides.pop(get_document_crud_use_case, None)
 
     def test_upload_from_url_crawl_error(self, client_with_db: TestClient, test_db):
         """Test URL upload handles crawl errors."""
@@ -396,8 +446,11 @@ class TestUploadFromUrl:
         mock_crawler = MagicMock()
         mock_crawler.fetch_url.side_effect = Exception("Connection failed")
 
-        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_crawler_port] = lambda: mock_crawler
+        use_case = _make_use_case(
+            channel_port=mock_channel_port,
+            crawler_port=mock_crawler,
+        )
+        app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/documents/url",
@@ -408,8 +461,7 @@ class TestUploadFromUrl:
         assert response.status_code == 500
         assert "Failed to upload from URL" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_crawler_port, None)
+        app.dependency_overrides.pop(get_document_crud_use_case, None)
 
     def test_upload_from_url_empty_url(self, client_with_db: TestClient, test_db):
         """Test URL upload with empty URL."""

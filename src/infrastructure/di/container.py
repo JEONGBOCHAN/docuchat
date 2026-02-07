@@ -684,6 +684,30 @@ def create_search_history_use_case(db=None):
     )
 
 
+def create_document_crud_use_case(db=None):
+    """Create DocumentCrudUseCase with all dependencies wired.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        Fully configured DocumentCrudUseCase.
+    """
+    from src.application.use_cases.document_crud import DocumentCrudUseCase
+    from src.core.config import get_settings
+    settings = get_settings()
+    return DocumentCrudUseCase(
+        channel_port=create_channel_port(),
+        document_port=create_document_port(),
+        cache=create_cache_port(),
+        capacity_service=create_capacity_service(db),
+        summary_use_case=create_generate_document_summary_use_case(db),
+        crawler_port=create_crawler_port(),
+        allowed_extensions=settings.allowed_extensions,
+        max_file_size_mb=settings.max_file_size_mb,
+    )
+
+
 # ============================================================
 # Document Factory Functions
 # ============================================================

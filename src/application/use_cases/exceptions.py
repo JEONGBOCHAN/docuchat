@@ -22,3 +22,11 @@ class TargetNotFoundError(Exception):
 class InvalidTargetError(Exception):
     """Invalid target format. Maps to HTTP 400."""
     pass
+
+
+class FileValidationError(Exception):
+    """File validation failed (extension, size). Maps to HTTP 400."""
+
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
