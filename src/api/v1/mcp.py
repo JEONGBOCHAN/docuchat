@@ -9,6 +9,7 @@ Specification: https://modelcontextprotocol.io/specification/2025-03-26/basic/tr
 """
 
 import json
+import time
 import uuid
 from typing import Any
 
@@ -26,9 +27,22 @@ router = APIRouter(prefix="/mcp", tags=["mcp"])
 # Session Management
 # ============================================================
 
-# In-memory session store (for development/testing)
-# In production, consider using Redis or similar
+# In-memory session store with TTL and capacity limit
 _sessions: dict[str, dict[str, Any]] = {}
+
+SESSION_TTL_SECONDS = 3600  # 1 hour
+MAX_SESSIONS = 1000
+
+
+def _cleanup_expired_sessions() -> None:
+    """Remove sessions that have exceeded the TTL."""
+    now = time.monotonic()
+    expired = [
+        sid for sid, data in _sessions.items()
+        if now - data.get("_last_seen", 0) > SESSION_TTL_SECONDS
+    ]
+    for sid in expired:
+        del _sessions[sid]
 
 
 def get_or_create_session(session_id: str | None) -> tuple[str, dict[str, Any]]:
@@ -41,12 +55,23 @@ def get_or_create_session(session_id: str | None) -> tuple[str, dict[str, Any]]:
         Tuple of (session_id, session_data).
     """
     if session_id and session_id in _sessions:
+        _sessions[session_id]["_last_seen"] = time.monotonic()
         return session_id, _sessions[session_id]
+
+    # Cleanup before creating a new session
+    _cleanup_expired_sessions()
+
+    if len(_sessions) >= MAX_SESSIONS:
+        raise HTTPException(
+            status_code=503,
+            detail="Maximum number of MCP sessions reached. Try again later.",
+        )
 
     new_id = str(uuid.uuid4())
     _sessions[new_id] = {
         "initialized": False,
         "client_info": None,
+        "_last_seen": time.monotonic(),
     }
     return new_id, _sessions[new_id]
 
@@ -62,7 +87,10 @@ def validate_session(session_id: str | None) -> dict[str, Any] | None:
     """
     if not session_id:
         return None
-    return _sessions.get(session_id)
+    session = _sessions.get(session_id)
+    if session is not None:
+        session["_last_seen"] = time.monotonic()
+    return session
 
 
 # ============================================================
