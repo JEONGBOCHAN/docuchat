@@ -609,10 +609,10 @@ class TrashRepositoryAdapter(TrashRepositoryPort):
         self._repo = TrashRepository(self._db)
 
     def soft_delete_channel(self, channel_id: int) -> bool:
-        return self._repo.soft_delete_channel(channel_id)
+        return self._repo.soft_delete_channel(channel_id) is not None
 
     def soft_delete_note(self, note_id: int) -> bool:
-        return self._repo.soft_delete_note(note_id)
+        return self._repo.soft_delete_note(note_id) is not None
 
     def restore_channel(self, channel_id: int) -> ChannelMetadataDTO | None:
         channel = self._repo.restore_channel(channel_id)

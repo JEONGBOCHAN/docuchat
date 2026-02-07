@@ -20,17 +20,17 @@ class TrashRepository:
 
     # ========== Soft Delete Operations ==========
 
-    def soft_delete_channel(self, gemini_store_id: str) -> ChannelMetadata | None:
+    def soft_delete_channel(self, channel_id: int) -> ChannelMetadata | None:
         """Soft delete a channel by setting deleted_at.
 
         Args:
-            gemini_store_id: The Gemini File Search Store ID
+            channel_id: The database ID of the channel
 
         Returns:
             Soft-deleted ChannelMetadata or None if not found
         """
         channel = self.db.query(ChannelMetadata).filter(
-            ChannelMetadata.gemini_store_id == gemini_store_id,
+            ChannelMetadata.id == channel_id,
             ChannelMetadata.deleted_at.is_(None),
         ).first()
 
