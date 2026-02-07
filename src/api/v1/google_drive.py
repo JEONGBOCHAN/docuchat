@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Google Drive Integration API endpoints."""
 
-import io
 import os
 import tempfile
 from typing import Annotated, Optional
@@ -124,7 +123,7 @@ def _get_oauth_flow() -> Flow:
 
 
 @router.get("/auth-url", response_model=AuthUrlResponse)
-async def get_auth_url():
+def get_auth_url():
     """
     Get Google OAuth authorization URL.
 
@@ -150,7 +149,7 @@ async def get_auth_url():
 
 
 @router.post("/token", response_model=TokenResponse)
-async def exchange_token(request: TokenRequest):
+def exchange_token(request: TokenRequest):
     """
     Exchange authorization code for access token.
 
@@ -190,7 +189,7 @@ def _extract_bearer_token(authorization: str) -> str:
 
 
 @router.get("/files", response_model=DriveFilesResponse)
-async def list_files(
+def list_files(
     authorization: str = Header(..., description="Bearer access token"),
     folder_id: Optional[str] = Query(None, description="Folder ID to list (root if not specified)"),
     page_token: Optional[str] = Query(None, description="Token for next page of results"),
@@ -257,7 +256,7 @@ async def list_files(
 
 
 @router.post("/import/{channel_id}", response_model=ImportFileResponse)
-async def import_file(
+def import_file(
     channel_id: str,
     request: ImportFileRequest,
     use_case: Annotated[DocumentCrudUseCase, Depends(get_document_crud_use_case)],
@@ -379,7 +378,7 @@ async def import_file(
 
 
 @router.post("/refresh-token", response_model=TokenResponse)
-async def refresh_access_token(
+def refresh_access_token(
     refresh_token: str = Body(..., embed=True, description="OAuth refresh token"),
 ):
     """
