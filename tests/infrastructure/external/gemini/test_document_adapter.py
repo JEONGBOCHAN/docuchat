@@ -200,14 +200,13 @@ class TestGeminiDocumentAdapter:
         assert result[0].state == "ACTIVE"
 
     def test_list_documents_exception(self):
-        """Test document listing when exception occurs."""
+        """Test document listing when exception occurs raises instead of swallowing."""
         mock_client = self._create_mock_client()
         mock_client.file_search_stores.documents.list.side_effect = Exception("API error")
 
         adapter = GeminiDocumentAdapter(client=mock_client)
-        result = adapter.list_documents("fileSearchStores/ch-1")
-
-        assert result == []
+        with pytest.raises(Exception, match="API error"):
+            adapter.list_documents("fileSearchStores/ch-1")
 
     @patch('src.infrastructure.external.gemini.document.requests.delete')
     def test_delete_file_success(self, mock_delete):
