@@ -10,6 +10,9 @@ from google import genai
 
 from src.application.ports.document import DocumentPort, DocumentDTO, UploadResultDTO
 from src.core.config import get_settings
+from src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class GeminiDocumentAdapter(DocumentPort):
@@ -135,7 +138,8 @@ class GeminiDocumentAdapter(DocumentPort):
                     )
                 )
         except Exception:
-            pass
+            logger.error("Failed to list documents from Gemini", channel_id=channel_id)
+            raise
         return documents
 
     def delete_file(self, file_name: str) -> bool:
