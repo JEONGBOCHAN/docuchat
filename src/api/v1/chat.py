@@ -338,7 +338,7 @@ def delete_session(
 ):
     """Delete a chat session and its associated messages."""
     try:
-        use_case.delete_session(session_id)
+        use_case.delete_session(channel_id, session_id)
     except SessionNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

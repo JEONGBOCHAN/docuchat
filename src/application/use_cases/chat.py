@@ -132,6 +132,16 @@ class ChatUseCase:
             raise ChannelNotFoundError(channel_id)
         return channel
 
+    @staticmethod
+    def _verify_session_ownership(session_dto, channel_id: str) -> None:
+        """Verify session belongs to the given channel.
+
+        Returns SessionNotFoundError (not a distinct error) to avoid
+        leaking information about sessions in other channels.
+        """
+        if session_dto.channel_gemini_store_id != channel_id:
+            raise SessionNotFoundError(session_dto.session_id)
+
     def _get_or_create_channel_meta(self, channel_id: str, display_name: str | None = None):
         """Get or create local channel metadata."""
         meta = self._channel_repo.get_by_gemini_id(channel_id)
@@ -467,12 +477,14 @@ class ChatUseCase:
         """Get session info.
 
         Raises:
-            SessionNotFoundError: Session not found.
+            SessionNotFoundError: Session not found or belongs to another channel.
             SessionExpiredError: Session has expired.
         """
         session_dto = self._session_repo.get_by_session_id(session_id)
         if not session_dto:
             raise SessionNotFoundError(session_id)
+
+        self._verify_session_ownership(session_dto, channel_id)
 
         if self._session_repo.is_expired(session_id):
             raise SessionExpiredError(session_id)
@@ -491,11 +503,13 @@ class ChatUseCase:
         """Get chat history for a specific session.
 
         Raises:
-            SessionNotFoundError: Session not found.
+            SessionNotFoundError: Session not found or belongs to another channel.
         """
         session_dto = self._session_repo.get_by_session_id(session_id)
         if not session_dto:
             raise SessionNotFoundError(session_id)
+
+        self._verify_session_ownership(session_dto, channel_id)
 
         msg_dtos = self._chat_history.get_session_history(session_id, limit=limit)
         messages = [
@@ -512,12 +526,18 @@ class ChatUseCase:
             channel_id=channel_id, messages=messages, total=len(messages)
         )
 
-    def delete_session(self, session_id: str) -> bool:
+    def delete_session(self, channel_id: str, session_id: str) -> bool:
         """Delete a chat session.
 
         Raises:
-            SessionNotFoundError: Session not found.
+            SessionNotFoundError: Session not found or belongs to another channel.
         """
+        session_dto = self._session_repo.get_by_session_id(session_id)
+        if not session_dto:
+            raise SessionNotFoundError(session_id)
+
+        self._verify_session_ownership(session_dto, channel_id)
+
         if not self._session_repo.delete(session_id):
             raise SessionNotFoundError(session_id)
         return True
