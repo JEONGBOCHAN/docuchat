@@ -42,6 +42,8 @@ class CacheService:
             maxsize=chat_maxsize,
             ttl=CacheTTL.CHAT_RESPONSE,
         )
+        # Reverse index: channel_id → set of cache keys (for selective invalidation)
+        self._chat_channel_keys: dict[str, set[str]] = {}
 
         # Document list cache: key = channel_id
         self._document_cache: TTLCache = TTLCache(
@@ -129,6 +131,10 @@ class CacheService:
             **response,
             "_cached_at": datetime.now(UTC).isoformat(),
         }
+        # Track key for channel-level invalidation
+        if channel_id not in self._chat_channel_keys:
+            self._chat_channel_keys[channel_id] = set()
+        self._chat_channel_keys[channel_id].add(key)
 
     def invalidate_chat_cache(self, channel_id: str) -> int:
         """Invalidate all chat cache entries for a channel.
@@ -141,16 +147,12 @@ class CacheService:
         Returns:
             Number of entries invalidated
         """
-        keys_to_remove = [
-            key for key in self._chat_cache.keys()
-            if key.startswith(channel_id[:16])  # Prefix match
-        ]
-
-        # Since we can't easily match by channel_id in hash keys,
-        # we'll clear all entries for simplicity.
-        # In production, consider using a prefix-based key structure.
-        count = len(self._chat_cache)
-        self._chat_cache.clear()
+        keys = self._chat_channel_keys.pop(channel_id, set())
+        count = 0
+        for key in keys:
+            if key in self._chat_cache:
+                del self._chat_cache[key]
+                count += 1
         return count
 
     # ========== Document List Cache ==========
