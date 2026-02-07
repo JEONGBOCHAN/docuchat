@@ -6,7 +6,7 @@ import os
 import tempfile
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Body
 from pydantic import BaseModel, ConfigDict, Field
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -182,9 +182,16 @@ async def exchange_token(request: TokenRequest):
         )
 
 
+def _extract_bearer_token(authorization: str) -> str:
+    """Extract token from 'Bearer <token>' header value."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format. Expected: Bearer <token>")
+    return authorization[7:]
+
+
 @router.get("/files", response_model=DriveFilesResponse)
 async def list_files(
-    access_token: str = Query(..., description="OAuth access token"),
+    authorization: str = Header(..., description="Bearer access token"),
     folder_id: Optional[str] = Query(None, description="Folder ID to list (root if not specified)"),
     page_token: Optional[str] = Query(None, description="Token for next page of results"),
     page_size: int = Query(20, ge=1, le=100, description="Number of files per page"),
@@ -194,8 +201,10 @@ async def list_files(
 
     Returns files that can be imported (PDF, TXT, DOCX).
     Use folder_id to browse into folders.
+    Send the access token via Authorization header: `Bearer <token>`.
     """
     try:
+        access_token = _extract_bearer_token(authorization)
         credentials = Credentials(token=access_token)
         service = build("drive", "v3", credentials=credentials)
 
