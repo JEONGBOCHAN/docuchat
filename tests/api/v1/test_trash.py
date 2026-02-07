@@ -11,9 +11,18 @@ from src.models.db_models import ChannelMetadata, NoteDB
 from src.api.v1.trash import get_channel_port
 from src.api.v1.channels import get_channel_crud_use_case
 from src.api.v1.notes import get_note_crud_use_case
+from src.api.deps import require_admin_key
 from src.application.use_cases.channel_crud import ChannelCrudUseCase
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
+
+
+@pytest.fixture(autouse=True)
+def bypass_admin_key():
+    """Bypass admin key check in tests."""
+    app.dependency_overrides[require_admin_key] = lambda: "test-key"
+    yield
+    app.dependency_overrides.pop(require_admin_key, None)
 
 
 class TestListTrash:

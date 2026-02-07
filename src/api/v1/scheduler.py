@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from src.application.ports.infrastructure import SchedulerPort
 from src.infrastructure.di.container import create_scheduler_port
 from src.core.rate_limiter import limiter, RateLimits
+from src.api.deps import require_admin_key
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
@@ -124,6 +125,7 @@ def run_job_manually(
     request: Request,
     job_id: str,
     scheduler_port: Annotated[SchedulerPort, Depends(get_scheduler_port)],
+    _admin: Annotated[str, Depends(require_admin_key)],
 ) -> dict:
     """Manually trigger a scheduled job to run immediately.
 

@@ -18,6 +18,7 @@ from src.infrastructure.di.container import (
     create_admin_stats_service,
     create_api_metrics_port,
 )
+from src.api.deps import require_admin_key
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -210,6 +211,7 @@ def get_api_metrics_endpoint(
 def reset_api_metrics(
     request: Request,
     metrics_port: Annotated[ApiMetricsPort, Depends(get_api_metrics_port)],
+    _admin: Annotated[str, Depends(require_admin_key)],
 ) -> dict:
     """Reset all API metrics counters.
 

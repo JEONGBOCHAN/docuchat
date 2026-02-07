@@ -15,6 +15,7 @@ from src.infrastructure.di.container import (
     create_trash_repository_port,
 )
 from src.core.rate_limiter import limiter, RateLimits
+from src.api.deps import require_admin_key
 
 router = APIRouter(prefix="/trash", tags=["trash"])
 
@@ -119,6 +120,7 @@ def delete_item_permanently(
     item_id: int,
     trash_repo: Annotated[TrashRepositoryPort, Depends(get_trash_repo_port)],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    _admin: Annotated[str, Depends(require_admin_key)],
 ):
     """Permanently delete a trashed item. This cannot be undone.
 
@@ -173,6 +175,7 @@ def empty_trash(
     request: Request,
     trash_repo: Annotated[TrashRepositoryPort, Depends(get_trash_repo_port)],
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
+    _admin: Annotated[str, Depends(require_admin_key)],
     confirm: Annotated[bool, Query(description="Confirm permanent deletion")] = False,
 ) -> EmptyTrashResponse:
     """Permanently delete all items in the trash. This cannot be undone.

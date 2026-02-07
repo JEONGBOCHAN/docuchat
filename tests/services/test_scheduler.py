@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 import time
 
 from src.infrastructure.scheduler.scheduler import SchedulerService, get_scheduler
+from src.main import app
+from src.api.deps import require_admin_key
 
 
 class TestSchedulerService:
@@ -112,6 +114,13 @@ class TestSchedulerService:
 
 class TestSchedulerAPI:
     """Tests for Scheduler API endpoints."""
+
+    @pytest.fixture(autouse=True)
+    def bypass_admin_key(self):
+        """Bypass admin key check in tests."""
+        app.dependency_overrides[require_admin_key] = lambda: "test-key"
+        yield
+        app.dependency_overrides.pop(require_admin_key, None)
 
     def test_get_scheduler_status(self, client):
         """Test getting scheduler status."""

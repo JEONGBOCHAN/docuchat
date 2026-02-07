@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"  # "json" for production, "console" for development
 
+    # Admin API Key (required for destructive admin endpoints)
+    admin_api_key: str = ""
+
     # Sentry (Error Tracking)
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.1
