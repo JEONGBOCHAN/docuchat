@@ -2,12 +2,12 @@
 """Rate limiting tests."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from src.main import app
 from src.core.rate_limiter import RateLimits
-from src.api.v1.chat import get_channel_port
+from src.api.v1.chat import get_chat_use_case
 from src.application.ports.channel import ChannelDTO
 
 
@@ -19,23 +19,48 @@ def client():
 
 @pytest.fixture
 def mock_channel_port():
-    """Mock ChannelPort for chat endpoint."""
+    """Mock ChatUseCase via get_chat_use_case for chat endpoint."""
+    from src.application.use_cases.chat import ChatUseCase
+
     mock_port = MagicMock()
     mock_port.get_channel.return_value = ChannelDTO(
         name="test-store",
         display_name="Test",
     )
-    app.dependency_overrides[get_channel_port] = lambda: mock_port
+
+    mock_cache = MagicMock()
+    mock_cache.get_chat_response.return_value = None
+    mock_summaries = MagicMock()
+    mock_summaries.build_context_string.return_value = ""
+
+    mock_pq = MagicMock()
+    mock_pq.execute.return_value = MagicMock(
+        response="Test response",
+        sources=[],
+        iterations=1,
+        session_id="test-session",
+        error=None,
+    )
+
+    use_case = ChatUseCase(
+        channel_port=mock_port,
+        channel_repo=MagicMock(),
+        chat_history_repo=MagicMock(),
+        session_repo=MagicMock(),
+        search_history_repo=MagicMock(),
+        cache=mock_cache,
+        summaries_use_case=mock_summaries,
+        process_query_factory=lambda: mock_pq,
+    )
+    app.dependency_overrides[get_chat_use_case] = lambda: use_case
     yield mock_port
-    app.dependency_overrides.pop(get_channel_port, None)
+    app.dependency_overrides.pop(get_chat_use_case, None)
 
 
 @pytest.fixture
 def mock_db(test_db):
     """Mock database session."""
-    with patch("src.api.v1.chat.get_db") as mock:
-        mock.return_value = test_db
-        yield test_db
+    yield test_db
 
 
 class TestRateLimitingConfig:
@@ -59,28 +84,15 @@ class TestRateLimiting429Response:
 
     def test_rate_limit_exceeded_returns_429(self, client, mock_channel_port, mock_db):
         """Test that exceeding rate limit returns 429 status code."""
-        # This test verifies the rate limiter is properly configured
-        # by checking the endpoint responds with proper rate limit handling
-        with patch("src.infrastructure.di.container.create_process_query_use_case") as mock_uc:
-            mock_uc.return_value.execute.return_value = MagicMock(
-                response="Test response",
-                sources=[],
-                iterations=1,
-                session_id="test-session",
-                error=None,
-            )
+        # mock_channel_port fixture already overrides get_chat_use_case
+        # with a fully mocked ChatUseCase including process_query_factory
+        response = client.post(
+            "/api/v1/channels/test-store/chat",
+            json={"query": "test question"},
+        )
 
-            # Make multiple requests to trigger rate limit
-            # Note: In real test, you'd need to configure slowapi to use
-            # a lower limit for testing, or use time manipulation
-            response = client.post(
-                "/api/v1/chat?channel_id=test-store",
-                json={"query": "test question"},
-            )
-
-            # First request should succeed (status 200 or 404/500 depending on mock)
-            # The important thing is it's not 429 on first request
-            assert response.status_code != 429 or "Retry-After" in response.headers
+        # First request should succeed (not 429)
+        assert response.status_code != 429 or "Retry-After" in response.headers
 
 
 class TestRateLimitHeaders:

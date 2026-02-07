@@ -684,6 +684,32 @@ def create_search_history_use_case(db=None):
     )
 
 
+def create_chat_use_case(db=None):
+    """Create ChatUseCase with all dependencies wired.
+
+    Args:
+        db: Optional database session. If None, creates one from get_db().
+
+    Returns:
+        Fully configured ChatUseCase.
+    """
+    from src.application.use_cases.chat import ChatUseCase
+    return ChatUseCase(
+        channel_port=create_channel_port(),
+        channel_repo=create_channel_repository_port(db),
+        chat_history_repo=create_chat_history_repository_port(db),
+        session_repo=create_chat_session_repository_port(db),
+        search_history_repo=create_search_history_repository_port(db),
+        cache=create_cache_port(),
+        summaries_use_case=create_get_channel_summaries_use_case(db),
+        process_query_factory=lambda: create_process_query_use_case(
+            use_legacy_dashboard=True,
+            include_web_search=True,
+            include_academic_search=True,
+        ),
+    )
+
+
 def create_document_crud_use_case(db=None):
     """Create DocumentCrudUseCase with all dependencies wired.
 

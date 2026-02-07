@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Chat API endpoints."""
+"""Chat API endpoints (thin controller).
+
+All business logic is delegated to ChatUseCase.
+This router handles HTTP concerns: request parsing, response formatting,
+SSE streaming, and error code translation.
+"""
 
 import json
-from datetime import datetime, UTC
 from typing import Annotated, Generator
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
@@ -18,210 +22,24 @@ from src.models.chat import (
     CreateSessionRequest,
     GroundingSource,
 )
-from src.application.ports.channel import ChannelPort
-from src.application.ports.persistence import (
-    ChannelRepositoryPort,
-    ChatHistoryRepositoryPort,
-    ChatSessionRepositoryPort,
-    SearchHistoryRepositoryPort,
+from src.application.use_cases.chat import ChatUseCase, ChatAgentError
+from src.application.use_cases.exceptions import (
+    ChannelNotFoundError,
+    SessionNotFoundError,
+    SessionExpiredError,
 )
-from src.application.ports.cache import CachePort
 from src.core.database import get_db
-from src.infrastructure.di.container import (
-    create_channel_port,
-    create_channel_repository_port,
-    create_chat_history_repository_port,
-    create_chat_session_repository_port,
-    create_search_history_repository_port,
-    create_cache_port,
-    create_process_query_use_case,
-    create_get_channel_summaries_use_case,
-)
-from src.application.use_cases.document_summary import GetChannelDocumentSummariesUseCase
 from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/channels", tags=["chat"])
 
 
-def get_channel_port() -> ChannelPort:
-    """Get channel port instance."""
-    return create_channel_port()
-
-
-def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
-    """Get channel repository port instance."""
-    return create_channel_repository_port(db)
-
-
-def get_chat_history_port(db: Session = Depends(get_db)) -> ChatHistoryRepositoryPort:
-    """Get chat history repository port instance."""
-    return create_chat_history_repository_port(db)
-
-
-def get_chat_session_port(db: Session = Depends(get_db)) -> ChatSessionRepositoryPort:
-    """Get chat session repository port instance."""
-    return create_chat_session_repository_port(db)
-
-
-def get_search_history_port(db: Session = Depends(get_db)) -> SearchHistoryRepositoryPort:
-    """Get search history repository port instance."""
-    return create_search_history_repository_port(db)
-
-
-def get_cache_port() -> CachePort:
-    """Get cache port instance."""
-    return create_cache_port()
-
-
-def get_summaries_use_case(db: Session = Depends(get_db)) -> GetChannelDocumentSummariesUseCase:
-    """Get channel summaries use case instance."""
-    return create_get_channel_summaries_use_case(db)
-
-
-def _run_agent_chat(
-    channel_id: str,
-    query: str,
-    conversation_history: list[dict[str, str]] | None = None,
-    max_iterations: int = 15,
-    document_context: str | None = None,
-) -> dict:
-    """Run the agent to answer a query using documents in the channel.
-
-    Uses Clean Architecture ProcessQueryUseCase which:
-    - Abstracts LangGraph via AgentRunnerPort
-    - Emits events via AgentEventSinkPort
-    - Bridges to legacy dashboard via StateStoreAdapter
-
-    Args:
-        channel_id: The channel ID to search in
-        query: User's question
-        conversation_history: Previous conversation for context
-        max_iterations: Maximum agent iterations (default 15)
-        document_context: Optional document summaries to inject into system prompt
-
-    Returns:
-        Dict with 'response', 'sources', 'iterations', and 'session_id'
-    """
-    # Use Clean Architecture: ProcessQueryUseCase
-    use_case = create_process_query_use_case(
-        use_legacy_dashboard=True,
-        include_web_search=True,
-        include_academic_search=True,
-    )
-
-    result = use_case.execute(
-        query=query,
-        channel_id=channel_id,
-        conversation_history=conversation_history,
-        max_iterations=max_iterations,
-        document_context=document_context,
-    )
-
-    # Convert QueryResult to dict for backward compatibility
-    return {
-        "response": result.response,
-        "sources": result.sources,
-        "iterations": result.iterations,
-        "session_id": result.session_id,
-        "error": result.error,
-    }
-
-
-def _run_agent_chat_stream(
-    channel_id: str,
-    query: str,
-    conversation_history: list[dict[str, str]] | None = None,
-    max_iterations: int = 15,
-    document_context: str | None = None,
-) -> Generator[dict, None, dict]:
-    """Run the agent with streaming, yielding events for SSE.
-
-    Uses Clean Architecture ProcessQueryUseCase.execute_stream() which:
-    - Abstracts LangGraph streaming via AgentRunnerPort
-    - Emits events via AgentEventSinkPort
-    - Bridges to legacy dashboard via StateStoreAdapter
-
-    Args:
-        channel_id: The channel ID to search in
-        query: User's question
-        conversation_history: Previous conversation for context
-        max_iterations: Maximum agent iterations (default 15)
-        document_context: Optional document summaries to inject into system prompt
-
-    Yields:
-        Event dicts for SSE: {"chunk": text}, {"sources": [...]}, etc.
-
-    Returns:
-        Final result dict with 'response', 'sources', 'iterations', etc.
-    """
-    use_case = create_process_query_use_case(
-        use_legacy_dashboard=True,
-        include_web_search=True,
-        include_academic_search=True,
-    )
-
-    stream_gen = use_case.execute_stream(
-        query=query,
-        channel_id=channel_id,
-        conversation_history=conversation_history,
-        max_iterations=max_iterations,
-        document_context=document_context,
-    )
-
-    accumulated_content = ""
-    sources = []
-    result = None
-
-    try:
-        while True:
-            event = next(stream_gen)
-            event_type = event.get("event")
-
-            if event_type == "content":
-                # Yield content chunks for streaming text
-                content = event.get("content", "")
-                if content:
-                    accumulated_content += content
-                    yield {"type": "content", "chunk": content}
-
-            elif event_type == "agent_completed":
-                # Agent completed - will extract final result after loop
-                pass
-
-            elif event_type == "error":
-                # Yield error event
-                yield {"type": "error", "error": event.get("error", "Unknown error")}
-
-    except StopIteration as e:
-        # Generator returned final QueryResult
-        result = e.value
-
-    # Build final result dict
-    if result:
-        sources = result.sources or []
-        # Yield sources if any
-        if sources:
-            yield {"type": "sources", "sources": sources}
-
-        # Yield done signal
-        yield {"type": "done"}
-
-        return {
-            "response": result.response,
-            "sources": sources,
-            "iterations": result.iterations,
-            "session_id": result.session_id,
-            "error": result.error,
-        }
-    else:
-        yield {"type": "error", "error": "No result from agent"}
-        return {
-            "response": accumulated_content or "No response generated.",
-            "sources": [],
-            "iterations": 0,
-            "session_id": None,
-            "error": "No result from agent",
-        }
+def get_chat_use_case(
+    db: Session = Depends(get_db),
+) -> ChatUseCase:
+    """Get chat use case instance."""
+    from src.infrastructure.di.container import create_chat_use_case
+    return create_chat_use_case(db)
 
 
 def _format_sse_event(data: dict | str) -> str:
@@ -231,16 +49,30 @@ def _format_sse_event(data: dict | str) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _get_conversation_history(
-    chat_history_port: ChatHistoryRepositoryPort,
-    session_id: str | None,
-) -> list[dict[str, str]]:
-    """Get conversation history from session for context."""
-    if not session_id:
-        return []
+def _sources_to_grounding(sources):
+    """Convert SourceDTOs to GroundingSource models."""
+    return [
+        GroundingSource(
+            source=s.source,
+            content=s.content,
+            url=s.url,
+            source_type=s.source_type,
+        )
+        for s in sources
+    ]
 
-    messages = chat_history_port.get_session_history(session_id)
-    return [{"role": msg.role, "content": msg.content} for msg in messages]
+
+def _messages_to_chat_messages(messages):
+    """Convert ChatMessageInfoDTOs to ChatMessage models."""
+    return [
+        ChatMessage(
+            role=msg.role,
+            content=msg.content,
+            sources=_sources_to_grounding(msg.sources),
+            created_at=msg.created_at,
+        )
+        for msg in messages
+    ]
 
 
 @router.post(
@@ -253,13 +85,7 @@ def send_message(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
-    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
-    search_history: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
-    cache: Annotated[CachePort, Depends(get_cache_port)],
-    summaries_use_case: Annotated[GetChannelDocumentSummariesUseCase, Depends(get_summaries_use_case)],
+    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
 ) -> ChatResponse:
     """Send a question and get an AI-generated answer.
 
@@ -267,161 +93,25 @@ def send_message(
     Supports multi-turn conversations when session_id is provided in the request body.
     Responses are cached for 1 hour when no session is used.
     """
-    # Validate channel exists
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
+    try:
+        result = use_case.send_message(channel_id, body.query, body.session_id)
+        return ChatResponse(
+            query=result.query,
+            response=result.response,
+            sources=_sources_to_grounding(result.sources),
+            session_id=result.session_id,
+            created_at=result.created_at,
+        )
+    except ChannelNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
-
-    # Get or create local channel metadata
-    channel_meta = channel_repo.get_by_gemini_id(channel_id)
-    if not channel_meta:
-        # Create if not exists (for channels created before DB integration)
-        channel_meta = channel_repo.create(
-            gemini_store_id=channel_id,
-            name=channel.display_name or "unknown",
+    except ChatAgentError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
         )
-    else:
-        # Update last accessed time
-        channel_repo.touch(channel_id)
-
-    # Handle session for multi-turn conversation
-    session_dto = None
-    session_id_response = None
-
-    if body.session_id:
-        session_dto, _ = session_repo.get_or_create(
-            channel_id=channel_meta.id,
-            session_id=body.session_id,
-        )
-        session_id_response = session_dto.session_id if session_dto else body.session_id
-
-    # Get conversation history for context
-    conversation_history = _get_conversation_history(chat_history, session_id_response)
-
-    # Get document summaries for agent context
-    # This helps the agent choose the right tool (search_documents vs web_search)
-    document_context = summaries_use_case.build_context_string(channel_id)
-
-    # Check cache for non-session queries
-    cached_response = None
-    use_cache = not body.session_id  # Only cache when no session
-
-    if use_cache:
-        cached_response = cache.get_chat_response(channel_id, body.query)
-
-    if cached_response:
-        # Return cached response
-        sources = [
-            GroundingSource(
-                source=s.get("source", "unknown"),
-                content=s.get("content", ""),
-                url=s.get("url"),
-                source_type=s.get("source_type", "document"),
-            )
-            for s in cached_response.get("sources", [])
-        ]
-
-        response = ChatResponse(
-            query=body.query,
-            response=cached_response.get("response", ""),
-            sources=sources,
-            session_id=None,
-            created_at=datetime.now(UTC),
-        )
-    else:
-        # Use LangGraph agent for RAG
-        result = _run_agent_chat(
-            channel_id=channel_id,
-            query=body.query,
-            conversation_history=conversation_history,
-            document_context=document_context,
-        )
-
-        if "error" in result and result["error"]:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate response: {result['error']}",
-            )
-
-        # Convert sources to GroundingSource models
-        sources = [
-            GroundingSource(
-                source=s.get("source", "unknown"),
-                content=s.get("content", ""),
-                url=s.get("url"),
-                source_type=s.get("source_type", "document"),
-            )
-            for s in result.get("sources", [])
-        ]
-
-        # Handle response that might be a list (multipart message from LangGraph)
-        response_content = result.get("response", "")
-        if isinstance(response_content, list):
-            response_content = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in response_content
-            )
-
-        response = ChatResponse(
-            query=body.query,
-            response=response_content,
-            sources=sources,
-            session_id=session_id_response,
-            created_at=datetime.now(UTC),
-        )
-
-        # Cache the response for non-session queries
-        if use_cache:
-            cache.set_chat_response(
-                channel_id,
-                body.query,
-                {
-                    "response": response.response,
-                    "sources": [
-                        {
-                            "source": s.source,
-                            "content": s.content,
-                            "url": s.url,
-                            "source_type": s.source_type,
-                        }
-                        for s in sources
-                    ],
-                },
-            )
-
-    # Save to search history (using database ID)
-    search_history.add_or_update(channel_meta.id, body.query)
-
-    # Add user message
-    chat_history.add_message(
-        channel_id=channel_meta.id,
-        role="user",
-        content=body.query,
-        sources=None,
-        session_id=session_id_response,
-    )
-
-    # Add assistant message
-    chat_history.add_message(
-        channel_id=channel_meta.id,
-        role="assistant",
-        content=response.response,
-        sources=[
-            {
-                "source": s.source,
-                "content": s.content,
-                "url": s.url,
-                "source_type": s.source_type,
-            }
-            for s in sources
-        ],
-        session_id=session_id_response,
-    )
-
-    return response
 
 
 @router.post(
@@ -433,12 +123,7 @@ def send_message_stream(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
-    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
-    search_history: Annotated[SearchHistoryRepositoryPort, Depends(get_search_history_port)],
-    summaries_use_case: Annotated[GetChannelDocumentSummariesUseCase, Depends(get_summaries_use_case)],
+    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
 ) -> StreamingResponse:
     """Send a question and get a streaming AI-generated answer.
 
@@ -449,113 +134,39 @@ def send_message_stream(
     - done: Signals completion
     - error: Error information if something went wrong
     """
-    # Validate channel exists
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
+    try:
+        session_id_response, stream_gen = use_case.prepare_stream(
+            channel_id, body.query, body.session_id
+        )
+    except ChannelNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
 
-    # Get or create local channel metadata
-    channel_meta = channel_repo.get_by_gemini_id(channel_id)
-    if not channel_meta:
-        channel_meta = channel_repo.create(
-            gemini_store_id=channel_id,
-            name=channel.display_name or "unknown",
-        )
-    else:
-        channel_repo.touch(channel_id)
-
-    # Handle session for multi-turn conversation
-    session_dto = None
-    session_id_response = None
-
-    if body.session_id:
-        session_dto, _ = session_repo.get_or_create(
-            channel_id=channel_meta.id,
-            session_id=body.session_id,
-        )
-        session_id_response = session_dto.session_id if session_dto else body.session_id
-
-    # Get conversation history for context
-    conversation_history = _get_conversation_history(chat_history, session_id_response)
-
-    # Get document summaries for agent context
-    document_context = summaries_use_case.build_context_string(channel_id)
-
-    def generate_stream() -> Generator[str, None, None]:
-        """Generate SSE events using Clean Architecture ProcessQueryUseCase.
-
-        Dashboard state updates are handled automatically by the UseCase
-        via StateStoreAdapter (AgentEventSinkPort implementation).
-        """
-        full_response = ""
-        all_sources = []
-
-        # Send session ID first if available
+    def generate_sse() -> Generator[str, None, None]:
+        """Generate SSE events from use case stream."""
         if session_id_response:
             yield _format_sse_event({"session_id": session_id_response})
 
-        # Use Clean Architecture streaming
-        stream_gen = _run_agent_chat_stream(
-            channel_id=channel_id,
-            query=body.query,
-            conversation_history=conversation_history,
-            document_context=document_context,
-        )
-
-        final_result = None
         try:
             while True:
                 event = next(stream_gen)
                 event_type = event.get("type")
 
                 if event_type == "content":
-                    chunk = event.get("chunk", "")
-                    full_response += chunk
-                    # Send in format frontend expects: {"chunk": "..."}
-                    yield _format_sse_event({"chunk": chunk})
-
+                    yield _format_sse_event({"chunk": event.get("chunk", "")})
                 elif event_type == "sources":
-                    all_sources = event.get("sources", [])
-                    # Send sources in format frontend expects: {"sources": [...]}
-                    yield _format_sse_event({"sources": all_sources})
-
+                    yield _format_sse_event({"sources": event.get("sources", [])})
                 elif event_type == "done":
-                    # Store in DB before signaling done (using database ID)
-                    search_history.add_or_update(channel_meta.id, body.query)
-
-                    # Add user message
-                    chat_history.add_message(
-                        channel_id=channel_meta.id,
-                        role="user",
-                        content=body.query,
-                        sources=None,
-                        session_id=session_id_response,
-                    )
-
-                    # Add assistant message
-                    chat_history.add_message(
-                        channel_id=channel_meta.id,
-                        role="assistant",
-                        content=full_response,
-                        sources=all_sources,
-                        session_id=session_id_response,
-                    )
-
-                    # Send done signal in format frontend expects: [DONE]
                     yield _format_sse_event("[DONE]")
-
                 elif event_type == "error":
                     yield _format_sse_event({"error": event.get("error", "Unknown error")})
-
-        except StopIteration as e:
-            # Generator returned final result
-            final_result = e.value
+        except StopIteration:
+            pass
 
     return StreamingResponse(
-        generate_stream(),
+        generate_sse(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -574,54 +185,22 @@ def send_message_stream(
 def get_chat_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
+    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
 ) -> ChatHistory:
     """Get the chat history for a channel."""
-    # Validate channel exists
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
+    try:
+        result = use_case.get_history(channel_id, limit=limit)
+        return ChatHistory(
+            channel_id=result.channel_id,
+            messages=_messages_to_chat_messages(result.messages),
+            total=result.total,
+        )
+    except ChannelNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
-
-    # Get channel metadata
-    channel_meta = channel_repo.get_by_gemini_id(channel_id)
-
-    if not channel_meta:
-        # No local metadata means no chat history
-        return ChatHistory(channel_id=channel_id, messages=[], total=0)
-
-    # Get messages from DB (returns DTOs) - use database ID
-    msg_dtos = chat_history.get_history(channel_meta.id, limit=limit)
-
-    # Convert to ChatMessage models
-    messages = [
-        ChatMessage(
-            role=msg.role,
-            content=msg.content,
-            sources=[
-                GroundingSource(
-                    source=s.get("source", ""),
-                    content=s.get("content", ""),
-                    url=s.get("url"),
-                    source_type=s.get("source_type", "document"),
-                )
-                for s in msg.sources
-            ],
-            created_at=msg.created_at,
-        )
-        for msg in msg_dtos
-    ]
-
-    return ChatHistory(
-        channel_id=channel_id,
-        messages=messages,
-        total=len(messages),
-    )
 
 
 @router.delete(
@@ -633,26 +212,16 @@ def get_chat_history(
 def clear_chat_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
+    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
 ):
     """Clear the chat history for a channel."""
-    # Validate channel exists
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
+    try:
+        use_case.clear_history(channel_id)
+    except ChannelNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
-
-    # Get channel metadata
-    channel_meta = channel_repo.get_by_gemini_id(channel_id)
-
-    if channel_meta:
-        # Clear chat history from DB (use database ID)
-        chat_history.clear_history(channel_meta.id)
-
     return None
 
 
@@ -670,44 +239,27 @@ def create_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     body: CreateSessionRequest,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
+    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
 ) -> ChatSession:
     """Create a new chat session for multi-turn conversation.
 
     Returns a session_id that can be used in subsequent chat requests
     to maintain conversation context.
     """
-    # Validate channel exists
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
+    try:
+        result = use_case.create_session(channel_id, body.context_window)
+        return ChatSession(
+            session_id=result.session_id,
+            channel_id=result.channel_id,
+            created_at=result.created_at,
+            last_activity_at=result.last_activity_at,
+            context_window=result.context_window,
+        )
+    except ChannelNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Channel not found: {channel_id}",
         )
-
-    # Get or create local channel metadata
-    channel_meta = channel_repo.get_by_gemini_id(channel_id)
-    if not channel_meta:
-        channel_meta = channel_repo.create(
-            gemini_store_id=channel_id,
-            name=channel.display_name or "unknown",
-        )
-
-    # Create new session
-    session_dto = session_repo.create(
-        channel_id=channel_meta.id,
-        context_window=body.context_window,
-    )
-
-    return ChatSession(
-        session_id=session_dto.session_id,
-        channel_id=channel_id,
-        created_at=session_dto.created_at,
-        last_activity_at=session_dto.last_activity_at,
-        context_window=session_dto.context_window,
-    )
 
 
 @router.get(
@@ -720,31 +272,28 @@ def get_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
+    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
 ) -> ChatSession:
     """Get information about a chat session."""
-    session_dto = session_repo.get_by_session_id(session_id)
-
-    if not session_dto:
+    try:
+        result = use_case.get_session(channel_id, session_id)
+        return ChatSession(
+            session_id=result.session_id,
+            channel_id=result.channel_id,
+            created_at=result.created_at,
+            last_activity_at=result.last_activity_at,
+            context_window=result.context_window,
+        )
+    except SessionNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session not found: {session_id}",
         )
-
-    # Check if expired
-    if session_repo.is_expired(session_id):
+    except SessionExpiredError:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail=f"Session has expired: {session_id}",
         )
-
-    return ChatSession(
-        session_id=session_dto.session_id,
-        channel_id=channel_id,  # Use path param (gemini_store_id string), not DTO's database id
-        created_at=session_dto.created_at,
-        last_activity_at=session_dto.last_activity_at,
-        context_window=session_dto.context_window,
-    )
 
 
 @router.get(
@@ -757,46 +306,22 @@ def get_session_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
-    chat_history: Annotated[ChatHistoryRepositoryPort, Depends(get_chat_history_port)],
+    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
 ) -> ChatHistory:
     """Get the chat history for a specific session."""
-    session_dto = session_repo.get_by_session_id(session_id)
-
-    if not session_dto:
+    try:
+        result = use_case.get_session_history(channel_id, session_id, limit=limit)
+        return ChatHistory(
+            channel_id=result.channel_id,
+            messages=_messages_to_chat_messages(result.messages),
+            total=result.total,
+        )
+    except SessionNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session not found: {session_id}",
         )
-
-    # Get messages from DB (returns DTOs)
-    msg_dtos = chat_history.get_session_history(session_id, limit=limit)
-
-    # Convert to ChatMessage models
-    messages = [
-        ChatMessage(
-            role=msg.role,
-            content=msg.content,
-            sources=[
-                GroundingSource(
-                    source=s.get("source", ""),
-                    content=s.get("content", ""),
-                    url=s.get("url"),
-                    source_type=s.get("source_type", "document"),
-                )
-                for s in msg.sources
-            ],
-            created_at=msg.created_at,
-        )
-        for msg in msg_dtos
-    ]
-
-    return ChatHistory(
-        channel_id=channel_id,  # Use path param (gemini_store_id string), not DTO's database id
-        messages=messages,
-        total=len(messages),
-    )
 
 
 @router.delete(
@@ -809,13 +334,14 @@ def delete_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    session_repo: Annotated[ChatSessionRepositoryPort, Depends(get_chat_session_port)],
+    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
 ):
     """Delete a chat session and its associated messages."""
-    if not session_repo.delete(session_id):
+    try:
+        use_case.delete_session(session_id)
+    except SessionNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session not found: {session_id}",
         )
-
     return None

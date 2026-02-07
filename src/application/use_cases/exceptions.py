@@ -30,3 +30,19 @@ class FileValidationError(Exception):
     def __init__(self, message: str):
         self.message = message
         super().__init__(message)
+
+
+class SessionNotFoundError(Exception):
+    """Chat session not found. Maps to HTTP 404."""
+
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        super().__init__(f"Session not found: {session_id}")
+
+
+class SessionExpiredError(Exception):
+    """Chat session has expired. Maps to HTTP 410."""
+
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        super().__init__(f"Session has expired: {session_id}")
