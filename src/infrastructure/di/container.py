@@ -76,7 +76,6 @@ from src.application.use_cases.learning import (
 from src.application.use_cases.podcast import GeneratePodcastScriptUseCase
 
 # Infrastructure implementations
-from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
 from src.infrastructure.external.gemini.document_search import GeminiDocumentSearchAdapter
 from src.infrastructure.external.gemini.citation import GeminiCitationAdapter
 from src.infrastructure.external.gemini.faq import GeminiFAQAdapter
@@ -193,6 +192,7 @@ def create_agent_runner(
     Returns:
         AgentRunnerPort implementation (LangGraphAgentRunner).
     """
+    from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
     return LangGraphAgentRunner(
         event_sink=event_sink,
         dashboard_middleware=dashboard_middleware,
