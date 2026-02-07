@@ -306,22 +306,17 @@ async def import_file(
         else:
             request_media = service.files().get_media(fileId=request.file_id)
 
-        # Download file to memory
-        file_buffer = io.BytesIO()
-        downloader = MediaIoBaseDownload(file_buffer, request_media)
-
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-
-        file_buffer.seek(0)
-        file_content = file_buffer.read()
-        actual_size = len(file_content)
-
-        # Save to temp file for upload
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file_name}") as tmp:
-            tmp.write(file_content)
-            tmp_path = tmp.name
+        # Download file directly to temp file (avoids full memory buffering)
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file_name}")
+        tmp_path = tmp_file.name
+        try:
+            downloader = MediaIoBaseDownload(tmp_file, request_media)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+            actual_size = tmp_file.tell()
+        finally:
+            tmp_file.close()
 
         try:
             # Delegate to use case (validates channel, capacity, uploads, etc.)

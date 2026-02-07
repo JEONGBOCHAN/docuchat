@@ -69,10 +69,11 @@ async def upload_document(
         original_filename = os.path.basename(file.filename or "document")
         tmp_dir = tempfile.mkdtemp()
         tmp_path = os.path.join(tmp_dir, original_filename)
-        content = await file.read()
+        actual_size = 0
         with open(tmp_path, "wb") as tmp:
-            tmp.write(content)
-        actual_size = len(content)
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                tmp.write(chunk)
+                actual_size += len(chunk)
 
         result = use_case.upload(channel_id, tmp_path, original_filename, actual_size)
 
