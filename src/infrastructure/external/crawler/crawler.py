@@ -1,14 +1,37 @@
 # -*- coding: utf-8 -*-
 """URL Crawler service for fetching web content."""
 
+import ipaddress
 import re
+import socket
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 import requests
 from bs4 import BeautifulSoup
+
+# Safety limits
+MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_REDIRECTS = 5
+
+
+def _validate_not_private(hostname: str) -> None:
+    """Validate that hostname does not resolve to a private/reserved IP.
+
+    Raises:
+        ValueError: If hostname resolves to a blocked IP range.
+    """
+    try:
+        addr_info = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        raise ValueError(f"Cannot resolve hostname: {hostname}")
+
+    for _, _, _, _, sockaddr in addr_info:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise ValueError("URL resolves to a private or reserved IP address")
 
 
 @dataclass
@@ -37,6 +60,65 @@ class CrawlerService:
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         }
 
+    def _validated_request(self, url: str) -> tuple[bytes, dict[str, str]]:
+        """Fetch a URL with SSRF protection and response size limit.
+
+        Validates that resolved IPs are not private/reserved before each
+        request (including redirects) and caps response body size.
+
+        Returns:
+            Tuple of (content_bytes, response_headers).
+        """
+        parsed = urlparse(url)
+        _validate_not_private(parsed.hostname)
+
+        response = requests.get(
+            url,
+            headers=self._headers,
+            timeout=self._timeout,
+            allow_redirects=False,
+            stream=True,
+        )
+
+        # Follow redirects manually so each hop is SSRF-checked
+        redirects = 0
+        while response.is_redirect and redirects < MAX_REDIRECTS:
+            location = response.headers.get("Location")
+            if not location:
+                break
+            redirect_url = urljoin(url, location)  # handles relative URLs
+            redirect_parsed = urlparse(redirect_url)
+            if redirect_parsed.scheme not in ("http", "https"):
+                raise ValueError(f"Redirect to unsupported scheme: {redirect_parsed.scheme}")
+            _validate_not_private(redirect_parsed.hostname)
+            url = redirect_url
+            response.close()
+            response = requests.get(
+                url,
+                headers=self._headers,
+                timeout=self._timeout,
+                allow_redirects=False,
+                stream=True,
+            )
+            redirects += 1
+
+        response.raise_for_status()
+
+        # Read body with size limit
+        chunks: list[bytes] = []
+        bytes_read = 0
+        for chunk in response.iter_content(chunk_size=8192):
+            bytes_read += len(chunk)
+            if bytes_read > MAX_RESPONSE_BYTES:
+                response.close()
+                raise ValueError(
+                    f"Response exceeds maximum allowed size ({MAX_RESPONSE_BYTES // 1024 // 1024} MB)"
+                )
+            chunks.append(chunk)
+        response.close()
+
+        return b"".join(chunks), dict(response.headers)
+
     def fetch_url(self, url: str) -> CrawlResult:
         """Fetch content from a URL.
 
@@ -47,7 +129,7 @@ class CrawlerService:
             CrawlResult with extracted content
 
         Raises:
-            ValueError: If URL is invalid
+            ValueError: If URL is invalid or targets private network
             requests.RequestException: If fetch fails
         """
         # Validate URL
@@ -58,17 +140,11 @@ class CrawlerService:
         if parsed.scheme not in ("http", "https"):
             raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
 
-        # Fetch the page
-        response = requests.get(
-            url,
-            headers=self._headers,
-            timeout=self._timeout,
-            allow_redirects=True,
-        )
-        response.raise_for_status()
+        # Fetch with SSRF protection + size limit
+        content_bytes, headers = self._validated_request(url)
 
         # Parse HTML
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = BeautifulSoup(content_bytes, "html.parser")
 
         # Extract title
         title = self._extract_title(soup, url)
@@ -80,7 +156,7 @@ class CrawlerService:
             url=url,
             title=title,
             content=content,
-            content_type=response.headers.get("content-type", "text/html"),
+            content_type=headers.get("content-type", "text/html"),
         )
 
     def _extract_title(self, soup: BeautifulSoup, fallback_url: str) -> str:
