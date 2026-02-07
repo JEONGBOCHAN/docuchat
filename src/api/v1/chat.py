@@ -105,7 +105,8 @@ def _run_agent_chat(
     # Use Clean Architecture: ProcessQueryUseCase
     use_case = create_process_query_use_case(
         use_legacy_dashboard=True,
-        include_web_search=False,
+        include_web_search=True,
+        include_academic_search=True,
     )
 
     result = use_case.execute(
@@ -155,7 +156,8 @@ def _run_agent_chat_stream(
     """
     use_case = create_process_query_use_case(
         use_legacy_dashboard=True,
-        include_web_search=False,
+        include_web_search=True,
+        include_academic_search=True,
     )
 
     stream_gen = use_case.execute_stream(

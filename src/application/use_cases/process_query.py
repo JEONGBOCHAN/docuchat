@@ -89,6 +89,7 @@ class ProcessQueryUseCase:
         event_sink: AgentEventSinkPort | None = None,
         document_search: DocumentSearchPort | None = None,
         web_search: WebSearchPort | None = None,
+        enabled_tools: list[str] | None = None,
     ):
         """Initialize the use case with dependencies.
 
@@ -97,11 +98,35 @@ class ProcessQueryUseCase:
             event_sink: Optional event sink for observability
             document_search: Optional document search adapter
             web_search: Optional web search adapter
+            enabled_tools: Explicit list of tool names to enable.
+                If provided, overrides port-based detection.
+                If None, falls back to checking document_search/web_search ports.
         """
         self.agent_runner = agent_runner
         self.event_sink = event_sink
         self.document_search = document_search
         self.web_search = web_search
+        self._enabled_tools = enabled_tools
+
+    def _resolve_tools(self) -> list[str]:
+        """Resolve which tools should be available to the agent.
+
+        If enabled_tools was explicitly provided, use it directly.
+        Otherwise, fall back to port-based detection (backward compat).
+
+        Returns:
+            List of tool name strings.
+        """
+        if self._enabled_tools is not None:
+            return list(self._enabled_tools)
+
+        # Legacy port-based detection
+        available_tools = []
+        if self.document_search:
+            available_tools.append("search_documents")
+        if self.web_search:
+            available_tools.append("web_search")
+        return available_tools
 
     def execute(
         self,
@@ -145,11 +170,7 @@ class ProcessQueryUseCase:
 
         try:
             # Determine available tools
-            available_tools = []
-            if self.document_search:
-                available_tools.append("search_documents")
-            if self.web_search:
-                available_tools.append("web_search")
+            available_tools = self._resolve_tools()
 
             # Configure agent
             config = AgentConfig(
@@ -241,11 +262,7 @@ class ProcessQueryUseCase:
 
         try:
             # Determine available tools
-            available_tools = []
-            if self.document_search:
-                available_tools.append("search_documents")
-            if self.web_search:
-                available_tools.append("web_search")
+            available_tools = self._resolve_tools()
 
             # Configure agent
             config = AgentConfig(

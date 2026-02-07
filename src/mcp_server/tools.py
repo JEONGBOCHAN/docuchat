@@ -339,7 +339,8 @@ async def run_rag_query(
 
         use_case = create_process_query_use_case(
             use_legacy_dashboard=True,
-            include_web_search=False,
+            include_web_search=True,
+            include_academic_search=True,
         )
 
         result = use_case.execute(
@@ -465,7 +466,8 @@ async def run_rag_with_web_search(
 
         use_case = create_process_query_use_case(
             use_legacy_dashboard=True,
-            include_web_search=True,  # Enable Tavily
+            include_web_search=True,
+            include_academic_search=True,
         )
 
         result = use_case.execute(

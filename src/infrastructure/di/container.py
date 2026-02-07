@@ -265,6 +265,7 @@ def create_citation_search() -> CitationSearchPort:
 def create_process_query_use_case(
     use_legacy_dashboard: bool = True,
     include_web_search: bool = False,
+    include_academic_search: bool = False,
     enable_realtime_tokens: bool = True,
 ) -> ProcessQueryUseCase:
     """Create a ProcessQueryUseCase with all dependencies wired.
@@ -276,6 +277,8 @@ def create_process_query_use_case(
         use_legacy_dashboard: If True, enables dashboard updates via
                              legacy state store adapter.
         include_web_search: If True, includes web search capability.
+        include_academic_search: If True, includes academic search tools
+                               (arxiv, semantic_scholar, crossref).
         enable_realtime_tokens: If True, enables real-time token counting
                                during streaming.
 
@@ -309,12 +312,24 @@ def create_process_query_use_case(
     document_search = create_document_search()
     web_search = create_web_search() if include_web_search else None
 
+    # Build enabled tools list explicitly
+    enabled_tools = ["search_documents"]
+    if include_web_search:
+        enabled_tools.append("web_search")
+    if include_academic_search:
+        enabled_tools.extend([
+            "arxiv_search",
+            "semantic_scholar_search",
+            "crossref_search",
+        ])
+
     # Wire everything together
     return ProcessQueryUseCase(
         agent_runner=agent_runner,
         event_sink=event_sink,
         document_search=document_search,
         web_search=web_search,
+        enabled_tools=enabled_tools,
     )
 
 
@@ -333,7 +348,8 @@ def get_default_use_case() -> ProcessQueryUseCase:
     """
     return create_process_query_use_case(
         use_legacy_dashboard=True,
-        include_web_search=False,
+        include_web_search=True,
+        include_academic_search=True,
     )
 
 
