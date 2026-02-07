@@ -10,10 +10,13 @@ from src.core.rate_limiter import limiter, RateLimits
 from src.core.database import get_db
 from src.models.preview import (
     DocumentPreviewResponse,
+    TextHighlight,
+    SourceLocation,
     SourceLocationResponse,
 )
 from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
+from src.application.ports.preview import DocumentPreviewDTO, SourceLocationResultDTO
 from src.application.services.preview_service import PreviewService, DEFAULT_PAGE_SIZE
 from src.infrastructure.di.container import (
     create_channel_port,
@@ -22,6 +25,44 @@ from src.infrastructure.di.container import (
 )
 
 router = APIRouter(prefix="/channels", tags=["preview"])
+
+
+def _preview_dto_to_response(dto: DocumentPreviewDTO) -> DocumentPreviewResponse:
+    """Convert DocumentPreviewDTO to Pydantic response model."""
+    return DocumentPreviewResponse(
+        document_id=dto.document_id,
+        filename=dto.filename,
+        total_pages=dto.total_pages,
+        total_characters=dto.total_characters,
+        current_page=dto.current_page,
+        page_size=dto.page_size,
+        content=dto.content,
+        highlights=[
+            TextHighlight(start=h.start, end=h.end, text=h.text)
+            for h in dto.highlights
+        ],
+        has_next=dto.has_next,
+        has_previous=dto.has_previous,
+        cached_at=dto.cached_at,
+    )
+
+
+def _location_dto_to_response(dto: SourceLocationResultDTO) -> SourceLocationResponse:
+    """Convert SourceLocationResultDTO to Pydantic response model."""
+    location = None
+    if dto.location:
+        location = SourceLocation(
+            document_id=dto.location.document_id,
+            filename=dto.location.filename,
+            page_number=dto.location.page_number,
+            position=dto.location.position,
+            context=dto.location.context,
+            highlights=[
+                TextHighlight(start=h.start, end=h.end, text=h.text)
+                for h in dto.location.highlights
+            ],
+        )
+    return SourceLocationResponse(found=dto.found, location=location)
 
 
 def get_channel_port() -> ChannelPort:
@@ -113,7 +154,7 @@ def get_document_preview(
     doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
-        return preview_service.get_preview(
+        dto = preview_service.get_preview(
             channel_id=channel_id,
             document_id=doc_id,
             filename=filename,
@@ -121,6 +162,7 @@ def get_document_preview(
             page_size=page_size,
             search_term=search_term,
         )
+        return _preview_dto_to_response(dto)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -158,7 +200,7 @@ def get_document_page(
     doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
-        return preview_service.get_preview(
+        dto = preview_service.get_preview(
             channel_id=channel_id,
             document_id=doc_id,
             filename=filename,
@@ -166,6 +208,7 @@ def get_document_page(
             page_size=page_size,
             search_term=search_term,
         )
+        return _preview_dto_to_response(dto)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -200,13 +243,14 @@ def find_source_in_document(
     doc_id, filename = _get_document_info(channel_port, document_port, channel_id, document_id)
 
     try:
-        return preview_service.find_source_location(
+        dto = preview_service.find_source_location(
             channel_id=channel_id,
             document_id=doc_id,
             filename=filename,
             source_text=source_text,
             page_size=page_size,
         )
+        return _location_dto_to_response(dto)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

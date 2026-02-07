@@ -163,6 +163,25 @@ from src.application.ports.infrastructure import (
     SchedulerPort,
 )
 
+# Export DTOs
+from src.application.ports.export import (
+    ExportFormat,
+    GroundingSourceDTO,
+    NoteExportDTO,
+    ChatMessageExportDTO,
+    ChatExportDTO,
+    ChannelExportMetadataDTO,
+    ChannelFullExportDTO,
+)
+
+# Preview DTOs
+from src.application.ports.preview import (
+    TextHighlightDTO,
+    DocumentPreviewDTO,
+    SourceLocationDTO,
+    SourceLocationResultDTO,
+)
+
 __all__ = [
     # Observability
     "AgentEventSinkPort",
@@ -276,4 +295,17 @@ __all__ = [
     "JobHistoryDTO",
     "ApiMetricsPort",
     "SchedulerPort",
+    # Export DTOs
+    "ExportFormat",
+    "GroundingSourceDTO",
+    "NoteExportDTO",
+    "ChatMessageExportDTO",
+    "ChatExportDTO",
+    "ChannelExportMetadataDTO",
+    "ChannelFullExportDTO",
+    # Preview DTOs
+    "TextHighlightDTO",
+    "DocumentPreviewDTO",
+    "SourceLocationDTO",
+    "SourceLocationResultDTO",
 ]

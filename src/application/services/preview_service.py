@@ -9,11 +9,11 @@ from src.application.ports.persistence import (
     DocumentPreviewCacheRepositoryPort,
     DocumentPreviewCacheDTO,
 )
-from src.models.preview import (
-    DocumentPreviewResponse,
-    TextHighlight,
-    SourceLocation,
-    SourceLocationResponse,
+from src.application.ports.preview import (
+    DocumentPreviewDTO,
+    TextHighlightDTO,
+    SourceLocationDTO,
+    SourceLocationResultDTO,
 )
 
 
@@ -46,7 +46,7 @@ class PreviewService:
         page: int = 1,
         page_size: int = DEFAULT_PAGE_SIZE,
         search_term: str | None = None,
-    ) -> DocumentPreviewResponse:
+    ) -> DocumentPreviewDTO:
         """Get document preview with pagination and optional highlighting.
 
         Args:
@@ -58,7 +58,7 @@ class PreviewService:
             search_term: Optional search term to highlight
 
         Returns:
-            Document preview response with content and highlights
+            Document preview DTO with content and highlights
         """
         # Get or create cache
         cached = self._preview_cache_repo.get_by_document_id(document_id)
@@ -90,7 +90,7 @@ class PreviewService:
         if search_term:
             highlights = self._find_highlights(page_content, search_term)
 
-        return DocumentPreviewResponse(
+        return DocumentPreviewDTO(
             document_id=document_id,
             filename=cached.filename,
             total_pages=total_pages,
@@ -111,7 +111,7 @@ class PreviewService:
         filename: str,
         source_text: str,
         page_size: int = DEFAULT_PAGE_SIZE,
-    ) -> SourceLocationResponse:
+    ) -> SourceLocationResultDTO:
         """Find the location of a source citation in a document.
 
         Args:
@@ -122,7 +122,7 @@ class PreviewService:
             page_size: Characters per page for page calculation
 
         Returns:
-            Source location response with page and position
+            Source location result DTO with page and position
         """
         # Get or create cache
         cached = self._preview_cache_repo.get_by_document_id(document_id)
@@ -145,7 +145,7 @@ class PreviewService:
             position = cached.content.lower().find(partial.lower())
 
         if position == -1:
-            return SourceLocationResponse(found=False, location=None)
+            return SourceLocationResultDTO(found=False, location=None)
 
         # Calculate page number
         page_number = (position // page_size) + 1
@@ -158,9 +158,9 @@ class PreviewService:
         # Find highlights in context
         highlights = self._find_highlights(context, source_text)
 
-        return SourceLocationResponse(
+        return SourceLocationResultDTO(
             found=True,
-            location=SourceLocation(
+            location=SourceLocationDTO(
                 document_id=document_id,
                 filename=filename,
                 page_number=page_number,
@@ -231,7 +231,7 @@ Return the extracted text content now:"""
         self,
         text: str,
         search_term: str,
-    ) -> list[TextHighlight]:
+    ) -> list[TextHighlightDTO]:
         """Find all occurrences of search term in text.
 
         Args:
@@ -250,7 +250,7 @@ Return the extracted text content now:"""
 
         for match in pattern.finditer(text):
             highlights.append(
-                TextHighlight(
+                TextHighlightDTO(
                     start=match.start(),
                     end=match.end(),
                     text=match.group(),

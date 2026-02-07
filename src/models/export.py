@@ -1,20 +1,15 @@
 # -*- coding: utf-8 -*-
 """Pydantic models for Export functionality."""
 
-from enum import Enum
 from datetime import datetime
 from pydantic import BaseModel, Field
 
 from src.models.chat import ChatMessage, GroundingSource
 from src.models.note import NoteResponse
 
-
-class ExportFormat(str, Enum):
-    """Supported export formats."""
-
-    MARKDOWN = "markdown"
-    PDF = "pdf"
-    JSON = "json"
+# ExportFormat is defined in the application layer and re-exported here
+# for API layer consumers.
+from src.application.ports.export import ExportFormat
 
 
 class NoteExportData(BaseModel):
