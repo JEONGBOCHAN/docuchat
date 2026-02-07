@@ -66,7 +66,7 @@ async def upload_document(
         )
 
     try:
-        original_filename = file.filename or "document"
+        original_filename = os.path.basename(file.filename or "document")
         tmp_dir = tempfile.mkdtemp()
         tmp_path = os.path.join(tmp_dir, original_filename)
         content = await file.read()
