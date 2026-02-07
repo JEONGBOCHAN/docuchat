@@ -244,23 +244,27 @@ class ChatHistoryRepository:
     def get_session_history(self, session: ChatSessionDB, limit: int | None = None) -> list[ChatMessageDB]:
         """Get chat history for a specific session.
 
+        Returns the most recent N messages in chronological order.
+
         Args:
             session: The chat session
             limit: Maximum number of messages (defaults to session's context_window)
 
         Returns:
-            List of chat messages in chronological order
+            List of chat messages in chronological order (oldest first)
         """
-        query = self.db.query(ChatMessageDB).filter(
+        effective_limit = limit if limit is not None else session.context_window
+
+        if effective_limit:
+            # Get most recent N messages (DESC + limit), then reverse to ASC
+            rows = self.db.query(ChatMessageDB).filter(
+                ChatMessageDB.session_id == session.id
+            ).order_by(ChatMessageDB.created_at.desc()).limit(effective_limit).all()
+            return list(reversed(rows))
+
+        return self.db.query(ChatMessageDB).filter(
             ChatMessageDB.session_id == session.id
-        ).order_by(ChatMessageDB.created_at.asc())
-
-        if limit is not None:
-            query = query.limit(limit)
-        elif session.context_window:
-            query = query.limit(session.context_window)
-
-        return query.all()
+        ).order_by(ChatMessageDB.created_at.asc()).all()
 
     def clear_history(self, channel: ChannelMetadata) -> int:
         """Clear chat history for a channel.

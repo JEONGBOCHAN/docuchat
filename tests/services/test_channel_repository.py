@@ -216,6 +216,109 @@ class TestChatHistoryRepository:
         messages = chat_repo.get_history(channel)
         assert len(messages) == 0
 
+    def test_get_session_history_returns_most_recent(self, test_db):
+        """Test that session history returns the most recent N messages, not the oldest."""
+        from src.models.db_models import ChatSessionDB, ChatMessageDB
+        import time
+
+        channel_repo = ChannelRepository(test_db)
+        channel = channel_repo.create(gemini_store_id="store/ctx-window", name="Context Window Test")
+
+        # Create a session with context_window=3
+        session = ChatSessionDB(
+            session_id="sess-ctx-test",
+            channel_id=channel.id,
+            context_window=3,
+        )
+        test_db.add(session)
+        test_db.commit()
+        test_db.refresh(session)
+
+        # Add 6 messages with slightly different timestamps
+        chat_repo = ChatHistoryRepository(test_db)
+        for i in range(6):
+            msg = ChatMessageDB(
+                channel_id=channel.id,
+                session_id=session.id,
+                role="user",
+                content=f"Message {i + 1}",
+            )
+            test_db.add(msg)
+            test_db.commit()
+
+        # Get session history (context_window=3 → should return last 3)
+        messages = chat_repo.get_session_history(session)
+        assert len(messages) == 3
+        # Should be the 3 most recent messages in chronological order
+        assert messages[0].content == "Message 4"
+        assert messages[1].content == "Message 5"
+        assert messages[2].content == "Message 6"
+
+    def test_get_session_history_explicit_limit(self, test_db):
+        """Test session history with explicit limit override."""
+        from src.models.db_models import ChatSessionDB, ChatMessageDB
+
+        channel_repo = ChannelRepository(test_db)
+        channel = channel_repo.create(gemini_store_id="store/ctx-limit", name="Limit Override")
+
+        session = ChatSessionDB(
+            session_id="sess-limit-test",
+            channel_id=channel.id,
+            context_window=10,
+        )
+        test_db.add(session)
+        test_db.commit()
+        test_db.refresh(session)
+
+        chat_repo = ChatHistoryRepository(test_db)
+        for i in range(5):
+            msg = ChatMessageDB(
+                channel_id=channel.id,
+                session_id=session.id,
+                role="user",
+                content=f"Msg {i + 1}",
+            )
+            test_db.add(msg)
+            test_db.commit()
+
+        # Explicit limit=2 should return last 2
+        messages = chat_repo.get_session_history(session, limit=2)
+        assert len(messages) == 2
+        assert messages[0].content == "Msg 4"
+        assert messages[1].content == "Msg 5"
+
+    def test_get_session_history_no_limit_returns_all(self, test_db):
+        """Test session history without limit returns all messages in order."""
+        from src.models.db_models import ChatSessionDB, ChatMessageDB
+
+        channel_repo = ChannelRepository(test_db)
+        channel = channel_repo.create(gemini_store_id="store/ctx-all", name="No Limit")
+
+        session = ChatSessionDB(
+            session_id="sess-all-test",
+            channel_id=channel.id,
+            context_window=None,  # No window
+        )
+        test_db.add(session)
+        test_db.commit()
+        test_db.refresh(session)
+
+        chat_repo = ChatHistoryRepository(test_db)
+        for i in range(4):
+            msg = ChatMessageDB(
+                channel_id=channel.id,
+                session_id=session.id,
+                role="user",
+                content=f"All {i + 1}",
+            )
+            test_db.add(msg)
+            test_db.commit()
+
+        messages = chat_repo.get_session_history(session)
+        assert len(messages) == 4
+        assert messages[0].content == "All 1"
+        assert messages[3].content == "All 4"
+
     def test_cascade_delete(self, test_db):
         """Test that deleting a channel also deletes its chat history."""
         channel_repo = ChannelRepository(test_db)
