@@ -15,6 +15,7 @@ from src.application.ports.web_search import WebSearchPort
 from src.application.ports.arxiv_search import ArxivSearchPort
 from src.application.ports.semantic_scholar import SemanticScholarSearchPort
 from src.application.ports.crossref import CrossrefSearchPort
+from src.application.ports.google_scholar import GoogleScholarSearchPort
 
 
 def create_search_documents_tool(
@@ -321,3 +322,59 @@ def create_crossref_search_tool(
             return "No publications found on Crossref for this query."
 
     return crossref_search
+
+
+def create_google_scholar_search_tool(
+    google_scholar_port: GoogleScholarSearchPort,
+) -> Callable[[str], str]:
+    """Create a google_scholar_search tool for searching academic papers.
+
+    Args:
+        google_scholar_port: GoogleScholarSearchPort for Google Scholar search.
+
+    Returns:
+        A tool function that searches Google Scholar.
+    """
+
+    @tool
+    def google_scholar_search(query: str) -> str:
+        """Search Google Scholar for academic papers and citations.
+
+        Use this when the user asks about:
+        - Academic papers across all disciplines (not just CS/physics like arXiv)
+        - Citation counts or highly cited papers
+        - Papers from specific authors
+        - Published journal articles and conference papers
+        - Broad academic literature search
+
+        Args:
+            query: The search query to find papers on Google Scholar.
+
+        Returns:
+            Search results with paper titles, authors, citations, and links.
+        """
+        results = google_scholar_port.search(query=query, max_results=5)
+
+        if results:
+            formatted_parts = []
+            for i, paper in enumerate(results, 1):
+                authors = ", ".join(paper.authors[:3])
+                if len(paper.authors) > 3:
+                    authors += f" et al. ({len(paper.authors)} authors)"
+
+                snippet = paper.snippet[:250] + "..." if len(paper.snippet) > 250 else paper.snippet
+
+                formatted_parts.append(
+                    f"[GScholar {i}] {paper.title}\n"
+                    f"Authors: {authors}\n"
+                    f"Year: {paper.year or 'N/A'}\n"
+                    f"Citations: {paper.citation_count}\n"
+                    f"Venue: {paper.venue or 'N/A'}\n"
+                    f"URL: {paper.url}\n"
+                    f"Snippet: {snippet}"
+                )
+            return f"Found {len(results)} papers on Google Scholar:\n\n" + "\n\n---\n\n".join(formatted_parts)
+        else:
+            return "No papers found on Google Scholar for this query."
+
+    return google_scholar_search

@@ -22,6 +22,7 @@ from src.application.ports import (
     ArxivSearchPort,
     SemanticScholarSearchPort,
     CrossrefSearchPort,
+    GoogleScholarSearchPort,
     FAQGenerationPort,
     SummarizationPort,
     TimelinePort,
@@ -93,6 +94,7 @@ from src.infrastructure.external.mcp.web_search import McpWebSearchAdapter
 from src.infrastructure.external.arxiv.mcp_adapter import ArxivMcpAdapter
 from src.infrastructure.external.semantic_scholar.adapter import SemanticScholarAdapter
 from src.infrastructure.external.crossref.adapter import CrossrefAdapter
+from src.infrastructure.external.google_scholar.mcp_adapter import GoogleScholarMcpAdapter
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
 from src.agents.middlewares.dashboard import DashboardMiddleware
@@ -249,6 +251,15 @@ def create_crossref_search(email: str | None = None) -> CrossrefSearchPort:
     return CrossrefAdapter(email=email)
 
 
+def create_google_scholar_search() -> GoogleScholarSearchPort:
+    """Create a Google Scholar search adapter.
+
+    Returns:
+        GoogleScholarSearchPort implementation (GoogleScholarMcpAdapter).
+    """
+    return GoogleScholarMcpAdapter()
+
+
 def create_citation_search() -> CitationSearchPort:
     """Create a citation search adapter.
 
@@ -321,6 +332,7 @@ def create_process_query_use_case(
             "arxiv_search",
             "semantic_scholar_search",
             "crossref_search",
+            "google_scholar_search",
         ])
 
     # Wire everything together

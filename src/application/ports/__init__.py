@@ -60,6 +60,10 @@ from src.application.ports.crossref import (
     CrossrefJournal,
     CrossrefFunder,
 )
+from src.application.ports.google_scholar import (
+    GoogleScholarSearchPort,
+    GoogleScholarResult,
+)
 from src.application.ports.llm import LLMPort, LLMMessage, LLMResponse
 from src.application.ports.agent_runner import (
     AgentRunnerPort,
@@ -180,6 +184,9 @@ __all__ = [
     "CrossrefWork",
     "CrossrefJournal",
     "CrossrefFunder",
+    # Google Scholar Search
+    "GoogleScholarSearchPort",
+    "GoogleScholarResult",
     # LLM
     "LLMPort",
     "LLMMessage",

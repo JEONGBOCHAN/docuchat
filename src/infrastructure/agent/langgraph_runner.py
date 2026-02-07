@@ -46,6 +46,7 @@ from src.agents.tools.search_tools import (
     create_arxiv_search_tool,
     create_semantic_scholar_search_tool,
     create_crossref_search_tool,
+    create_google_scholar_search_tool,
 )
 from src.core.config import get_settings, GeminiModels
 from src.application.ports.document_search import DocumentSearchPort
@@ -158,6 +159,13 @@ class LangGraphAgentRunner(AgentRunnerPort):
             crossref_adapter = create_crossref_search()
             tools.append(create_crossref_search_tool(crossref_port=crossref_adapter))
 
+        if enabled_tools is None or "google_scholar_search" in enabled_tools:
+            from src.infrastructure.di import create_google_scholar_search
+            google_scholar_adapter = create_google_scholar_search()
+            tools.append(create_google_scholar_search_tool(
+                google_scholar_port=google_scholar_adapter
+            ))
+
         # Use custom system prompt if provided, otherwise build from available tools
         system_prompt = config.system_prompt or self._build_system_prompt(tools)
 
@@ -244,6 +252,15 @@ If the question is clearly about external/current events not covered in these do
             )
             tool_number += 1
 
+        if "google_scholar_search" in tool_names:
+            tool_sections.append(
+                f"{tool_number}. **google_scholar_search**: Search Google Scholar for academic papers\n"
+                f"   - Use for broad academic literature search across all disciplines\n"
+                f"   - Use for citation counts and highly cited papers\n"
+                f"   - Returns paper titles, authors, citations, and links"
+            )
+            tool_number += 1
+
         # Build routing instructions based on available tools
         instructions = []
         instructions.append("1. Analyze the user's question to determine which tool is most appropriate")
@@ -263,6 +280,9 @@ If the question is clearly about external/current events not covered in these do
         if "crossref_search" in tool_names:
             instructions.append(f"{inst_num}. For DOI lookup/publication metadata -> use crossref_search")
             inst_num += 1
+        if "google_scholar_search" in tool_names:
+            instructions.append(f"{inst_num}. For broad academic literature/citation search -> use google_scholar_search")
+            inst_num += 1
         instructions.append(f"{inst_num}. You can use multiple tools if needed")
         inst_num += 1
         instructions.append(f"{inst_num}. Once you have enough information, respond directly to the user with a complete answer")
@@ -281,6 +301,8 @@ If the question is clearly about external/current events not covered in these do
             cite_parts.append("[Scholar 1] for Semantic Scholar")
         if "crossref_search" in tool_names:
             cite_parts.append("[Crossref 1] for Crossref")
+        if "google_scholar_search" in tool_names:
+            cite_parts.append("[GScholar 1] for Google Scholar")
         cite_example = ", ".join(cite_parts) if cite_parts else ""
 
         return f"""You are an intelligent assistant with access to multiple tools. Choose the appropriate tool based on the user's question.
@@ -1107,6 +1129,16 @@ If the question is clearly about external/current events not covered in these do
                     "query": {
                         "type": "string",
                         "description": "The DOI or search query for publication metadata",
+                    }
+                },
+            ),
+            AgentTool(
+                name="google_scholar_search",
+                description="Search Google Scholar for academic papers across all disciplines",
+                parameters={
+                    "query": {
+                        "type": "string",
+                        "description": "The search query for academic papers",
                     }
                 },
             ),
