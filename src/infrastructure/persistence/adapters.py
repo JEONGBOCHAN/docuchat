@@ -8,7 +8,6 @@ between SQLAlchemy models and application DTOs.
 import json
 from datetime import datetime, UTC
 
-from src.core.database import get_db
 from src.application.ports.persistence import (
     ChannelMetadataDTO,
     ChatMessageDTO,
@@ -100,14 +99,14 @@ def _note_to_dto(note: NoteDB) -> NoteDTO:
 class ChannelRepositoryAdapter(ChannelRepositoryPort):
     """Adapter that implements ChannelRepositoryPort using existing repository."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
         from src.infrastructure.persistence.channel_repository import ChannelRepository
-        self._db = db if db is not None else next(get_db())
+        self._db = db
         self._repo = ChannelRepository(self._db)
 
     def create(
@@ -174,14 +173,14 @@ class ChannelRepositoryAdapter(ChannelRepositoryPort):
 class ChatHistoryRepositoryAdapter(ChatHistoryRepositoryPort):
     """Adapter that implements ChatHistoryRepositoryPort."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
         from src.infrastructure.persistence.channel_repository import ChatHistoryRepository
-        self._db = db if db is not None else next(get_db())
+        self._db = db
         self._repo = ChatHistoryRepository(self._db)
 
     def add_message(
@@ -257,14 +256,14 @@ class ChatHistoryRepositoryAdapter(ChatHistoryRepositoryPort):
 class ChatSessionRepositoryAdapter(ChatSessionRepositoryPort):
     """Adapter that implements ChatSessionRepositoryPort."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
         from src.infrastructure.persistence.channel_repository import ChatSessionRepository
-        self._db = db if db is not None else next(get_db())
+        self._db = db
         self._repo = ChatSessionRepository(self._db)
 
     def create(
@@ -323,14 +322,14 @@ class ChatSessionRepositoryAdapter(ChatSessionRepositoryPort):
 class NoteRepositoryAdapter(NoteRepositoryPort):
     """Adapter that implements NoteRepositoryPort."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
         from src.infrastructure.persistence.note_repository import NoteRepository
-        self._db = db if db is not None else next(get_db())
+        self._db = db
         self._repo = NoteRepository(self._db)
 
     def create(
@@ -404,15 +403,15 @@ class NoteRepositoryAdapter(NoteRepositoryPort):
 class FavoriteRepositoryAdapter(FavoriteRepositoryPort):
     """Adapter that implements FavoriteRepositoryPort."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
         from src.infrastructure.persistence.favorite_repository import FavoriteRepository
         from src.models.favorite import TargetType
-        self._db = db if db is not None else next(get_db())
+        self._db = db
         self._repo = FavoriteRepository(self._db)
         self._TargetType = TargetType
 
@@ -487,14 +486,14 @@ class FavoriteRepositoryAdapter(FavoriteRepositoryPort):
 class SearchHistoryRepositoryAdapter(SearchHistoryRepositoryPort):
     """Adapter that implements SearchHistoryRepositoryPort."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
         from src.infrastructure.persistence.search_repository import SearchHistoryRepository
-        self._db = db if db is not None else next(get_db())
+        self._db = db
         self._repo = SearchHistoryRepository(self._db)
 
     def _to_dto(self, entry) -> SearchHistoryDTO:
@@ -599,14 +598,14 @@ class SearchHistoryRepositoryAdapter(SearchHistoryRepositoryPort):
 class TrashRepositoryAdapter(TrashRepositoryPort):
     """Adapter that implements TrashRepositoryPort."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
         from src.infrastructure.persistence.trash_repository import TrashRepository
-        self._db = db if db is not None else next(get_db())
+        self._db = db
         self._repo = TrashRepository(self._db)
 
     def soft_delete_channel(self, channel_id: int) -> bool:
@@ -681,14 +680,14 @@ class TrashRepositoryAdapter(TrashRepositoryPort):
 class AudioRepositoryAdapter(AudioRepositoryPort):
     """Adapter that implements AudioRepositoryPort."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
         from src.infrastructure.persistence.audio_repository import AudioRepository
-        self._db = db if db is not None else next(get_db())
+        self._db = db
         self._repo = AudioRepository(self._db)
 
     def _to_dto(self, audio) -> AudioOverviewDTO:
@@ -799,13 +798,13 @@ def _preview_cache_to_dto(cache: DocumentPreviewCacheDB) -> DocumentPreviewCache
 class DocumentPreviewCacheRepositoryAdapter(DocumentPreviewCacheRepositoryPort):
     """Adapter that implements DocumentPreviewCacheRepositoryPort."""
 
-    def __init__(self, db=None):
+    def __init__(self, db):
         """Initialize adapter with database session.
 
         Args:
-            db: Optional database session. If None, creates one from get_db().
+            db: Database session (required).
         """
-        self._db = db if db is not None else next(get_db())
+        self._db = db
 
     def get_by_document_id(self, document_id: str) -> DocumentPreviewCacheDTO | None:
         cache = self._db.query(DocumentPreviewCacheDB).filter(

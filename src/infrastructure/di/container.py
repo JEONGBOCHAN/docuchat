@@ -920,36 +920,30 @@ def create_cache_port() -> CachePort:
 # Application Service Factory Functions
 # ============================================================
 
-def create_capacity_service(db=None):
+def create_capacity_service(db):
     """Create capacity service.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session (required).
 
     Returns:
         CapacityService instance with all dependencies wired.
     """
-    if db is None:
-        from src.core.database import get_db
-        db = next(get_db())
     from src.application.services.capacity_service import CapacityService
     return CapacityService(
         channel_repo=create_channel_repository_port(db),
     )
 
 
-def create_export_service(db=None):
+def create_export_service(db):
     """Create export service.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session (required).
 
     Returns:
         ExportService instance with all dependencies wired.
     """
-    if db is None:
-        from src.core.database import get_db
-        db = next(get_db())
     from src.application.services.export_service import ExportService
     return ExportService(
         channel_repo=create_channel_repository_port(db),
@@ -958,18 +952,15 @@ def create_export_service(db=None):
     )
 
 
-def create_admin_stats_service(db=None):
+def create_admin_stats_service(db):
     """Create admin stats service.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session (required).
 
     Returns:
         AdminStatsService instance with all dependencies wired.
     """
-    if db is None:
-        from src.core.database import get_db
-        db = next(get_db())
     from src.application.services.admin_stats import AdminStatsService
     return AdminStatsService(
         channel_repo=create_channel_repository_port(db),
@@ -978,18 +969,15 @@ def create_admin_stats_service(db=None):
     )
 
 
-def create_preview_service(db=None):
+def create_preview_service(db):
     """Create preview service.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session (required).
 
     Returns:
         PreviewService instance with all dependencies wired.
     """
-    if db is None:
-        from src.core.database import get_db
-        db = next(get_db())
     from src.application.services.preview_service import PreviewService
     from src.infrastructure.persistence.adapters import DocumentPreviewCacheRepositoryAdapter
     return PreviewService(
