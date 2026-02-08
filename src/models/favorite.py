@@ -2,18 +2,15 @@
 """Favorite/pin models."""
 
 from datetime import datetime
-from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from src.domain.value_objects import TargetType  # re-export from domain
 
-class TargetType(str, Enum):
-    """Favorite target types."""
-
-    CHANNEL = "channel"
-    DOCUMENT = "document"
-    NOTE = "note"
+__all__ = ["TargetType", "FavoriteCreate", "FavoriteResponse",
+           "FavoriteListResponse", "FavoriteWithDetails",
+           "FavoriteListWithDetailsResponse", "FavoriteReorderRequest"]
 
 
 class FavoriteCreate(BaseModel):

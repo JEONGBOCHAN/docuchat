@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.models.db_models import FavoriteDB
-from src.models.favorite import TargetType
+from src.domain.value_objects import TargetType
 
 
 class FavoriteRepository:

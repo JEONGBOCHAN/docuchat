@@ -410,7 +410,7 @@ class FavoriteRepositoryAdapter(FavoriteRepositoryPort):
             db: Database session (required).
         """
         from src.infrastructure.persistence.favorite_repository import FavoriteRepository
-        from src.models.favorite import TargetType
+        from src.domain.value_objects import TargetType
         self._db = db
         self._repo = FavoriteRepository(self._db)
         self._TargetType = TargetType
