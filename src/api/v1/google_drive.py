@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """Google Drive Integration API endpoints."""
 
+import hashlib
+import hmac
 import os
+import secrets
 import time
 import tempfile
 from typing import Annotated, Optional
@@ -25,9 +28,50 @@ from src.domain.exceptions import CapacityExceededError
 logger = get_logger(__name__)
 settings = get_settings()
 
-# Pending OAuth states for CSRF protection (state -> expiry_timestamp)
-_pending_oauth_states: dict[str, float] = {}
 OAUTH_STATE_TTL = 600  # 10 minutes
+
+
+def _get_hmac_key() -> bytes:
+    """Get HMAC key for OAuth state signing."""
+    return settings.google_oauth_client_secret.encode()
+
+
+def _create_oauth_state() -> str:
+    """Create a signed OAuth state token (stateless CSRF protection).
+
+    Format: {nonce}.{timestamp}.{signature}
+    No server-side storage needed — signature is verified on callback.
+    """
+    nonce = secrets.token_hex(16)
+    timestamp = str(int(time.time()))
+    message = f"{nonce}.{timestamp}".encode()
+    signature = hmac.new(_get_hmac_key(), message, hashlib.sha256).hexdigest()
+    return f"{nonce}.{timestamp}.{signature}"
+
+
+def _verify_oauth_state(state: str) -> bool:
+    """Verify a signed OAuth state token.
+
+    Checks HMAC signature integrity and TTL expiry.
+    """
+    parts = state.split(".")
+    if len(parts) != 3:
+        return False
+
+    nonce, timestamp, signature = parts
+
+    # Check TTL
+    try:
+        ts = int(timestamp)
+    except ValueError:
+        return False
+    if time.time() - ts > OAUTH_STATE_TTL:
+        return False
+
+    # Verify HMAC signature
+    message = f"{nonce}.{timestamp}".encode()
+    expected = hmac.new(_get_hmac_key(), message, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
 
 router = APIRouter(prefix="/integrations/google-drive", tags=["google-drive"])
 
@@ -139,22 +183,17 @@ def get_auth_url():
     """
     try:
         flow = _get_oauth_flow()
-        auth_url, state = flow.authorization_url(
+        # Generate HMAC-signed state (stateless — no server-side storage)
+        signed_state = _create_oauth_state()
+        auth_url, _ = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
             prompt="consent",
+            state=signed_state,
         )
 
-        # Store state for CSRF verification
-        _pending_oauth_states[state] = time.time() + OAUTH_STATE_TTL
-        # Cleanup expired states
-        now = time.time()
-        expired = [s for s, exp in _pending_oauth_states.items() if exp < now]
-        for s in expired:
-            del _pending_oauth_states[s]
-
         logger.info("Generated Google OAuth authorization URL")
-        return AuthUrlResponse(auth_url=auth_url, state=state)
+        return AuthUrlResponse(auth_url=auth_url, state=signed_state)
 
     except HTTPException:
         raise
@@ -172,9 +211,8 @@ def exchange_token(request: TokenRequest):
     This endpoint exchanges that code for access and refresh tokens.
     """
     try:
-        # Verify OAuth state (CSRF protection)
-        expiry = _pending_oauth_states.pop(request.state, None)
-        if expiry is None or time.time() > expiry:
+        # Verify OAuth state via HMAC signature (stateless CSRF protection)
+        if not _verify_oauth_state(request.state):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid or expired OAuth state parameter. Please retry authorization.",
