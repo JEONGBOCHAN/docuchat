@@ -18,7 +18,9 @@ from src.application.ports.persistence import (
     NoteRepositoryPort,
     TrashRepositoryPort,
 )
-from src.application.use_cases.exceptions import ChannelNotFoundError
+from src.domain.entities.note import Note
+from src.domain.exceptions import NoteValidationError as DomainNoteValidationError
+from src.application.use_cases.exceptions import ChannelNotFoundError, NoteValidationError
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +112,20 @@ class NoteCrudUseCase:
 
         Raises:
             ChannelNotFoundError: If channel doesn't exist.
+            NoteValidationError: If title/content violates domain rules.
         """
         db_channel_id = self._resolve_channel(channel_id)
+
+        # Domain validation via Note entity
+        try:
+            Note.create(
+                channel_id=db_channel_id,
+                title=title,
+                content=content,
+                sources=sources,
+            )
+        except DomainNoteValidationError as e:
+            raise NoteValidationError(str(e)) from e
 
         note = self._note_repo.create(
             channel_id=db_channel_id,
@@ -173,12 +187,22 @@ class NoteCrudUseCase:
 
         Raises:
             ChannelNotFoundError: If channel doesn't exist.
+            NoteValidationError: If title/content violates domain rules.
         """
         db_channel_id = self._resolve_channel(channel_id)
 
         note = self._note_repo.get_by_id(note_id)
         if not note or note.channel_id != db_channel_id:
             return None
+
+        # Domain validation for updated fields
+        try:
+            if title is not None:
+                Note._validate_title(title)
+            if content is not None:
+                Note._validate_content(content)
+        except DomainNoteValidationError as e:
+            raise NoteValidationError(str(e)) from e
 
         updated = self._note_repo.update(note_id, title=title, content=content)
         return self._to_dto(updated, channel_id)

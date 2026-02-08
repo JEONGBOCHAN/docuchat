@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from src.models.note import NoteCreate, NoteUpdate, NoteResponse, NoteList
 from src.models.chat import GroundingSource
 from src.application.use_cases.note_crud import NoteCrudUseCase, NoteDetailDTO
-from src.application.use_cases.exceptions import ChannelNotFoundError
+from src.application.use_cases.exceptions import ChannelNotFoundError, NoteValidationError
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 
@@ -66,6 +66,11 @@ def create_note(
     except ChannelNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except NoteValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
 
@@ -151,6 +156,11 @@ def update_note(
     except ChannelNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except NoteValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
 
