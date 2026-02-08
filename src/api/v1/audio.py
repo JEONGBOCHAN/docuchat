@@ -382,6 +382,14 @@ def stream_audio(
             detail=f"Audio overview not found: {audio_id}",
         )
 
+    # Verify channel ownership
+    channel_dto = audio_repo.get_channel_by_store_id(channel_id)
+    if not channel_dto or audio_dto.channel_id != channel_dto.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Audio overview not found in channel: {channel_id}",
+        )
+
     if audio_dto.status != AudioStatus.COMPLETED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
