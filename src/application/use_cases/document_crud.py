@@ -282,10 +282,8 @@ class DocumentCrudUseCase:
         """
         # Extract channel_id from document_id if not provided
         extracted_channel_id = channel_id
-        if not extracted_channel_id and document_id.startswith("fileSearchStores/"):
-            parts = document_id.split("/documents/")
-            if len(parts) >= 1:
-                extracted_channel_id = parts[0]
+        if not extracted_channel_id:
+            extracted_channel_id = self._document_port.extract_channel_id(document_id)
 
         # Try to get file size before deletion (best-effort for capacity update)
         deleted_file_size = 0
@@ -302,11 +300,8 @@ class DocumentCrudUseCase:
                     "capacity size will sync on next scheduled update"
                 )
 
-        # Delete based on document_id format
-        if document_id.startswith("fileSearchStores/"):
-            success = self._document_port.delete_document(document_id)
-        else:
-            success = self._document_port.delete_file(document_id)
+        # Delete using unified method (port decides based on ID format)
+        success = self._document_port.delete_any(document_id)
 
         if not success:
             return False

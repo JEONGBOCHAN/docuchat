@@ -179,3 +179,24 @@ class GeminiDocumentAdapter(DocumentPort):
         response = requests.delete(url)
         # Treat 200 (success) and 404 (not found/already deleted) as success
         return response.status_code in (200, 404)
+
+    # -- Provider-specific ID helpers (Gemini) --
+
+    def extract_channel_id(self, document_id: str) -> str | None:
+        """Extract channel ID from Gemini document ID.
+
+        Gemini format: 'fileSearchStores/xxx/documents/yyy' -> 'fileSearchStores/xxx'
+        """
+        if document_id.startswith("fileSearchStores/"):
+            parts = document_id.split("/documents/")
+            if len(parts) >= 1:
+                return parts[0]
+        return None
+
+    def is_store_document(self, document_id: str) -> bool:
+        """Check if ID is a Gemini store document (vs. a files/ reference)."""
+        return document_id.startswith("fileSearchStores/")
+
+    def is_valid_file_reference(self, file_id: str) -> bool:
+        """Check if ID is a valid Gemini files/ reference."""
+        return bool(file_id) and file_id.startswith("files/")

@@ -106,3 +106,56 @@ class DocumentPort(ABC):
             True if deleted successfully or already deleted.
         """
         pass
+
+    def delete_any(self, document_id: str) -> bool:
+        """Delete a document or file by its ID, regardless of format.
+
+        Determines the correct deletion method based on the ID format.
+        Subclasses may override for provider-specific logic.
+
+        Args:
+            document_id: Document or file ID in any supported format.
+
+        Returns:
+            True if deleted successfully.
+        """
+        # Default: try document delete, fall back to file delete.
+        if self.is_store_document(document_id):
+            return self.delete_document(document_id)
+        return self.delete_file(document_id)
+
+    def extract_channel_id(self, document_id: str) -> str | None:
+        """Extract the channel ID from a document ID.
+
+        Provider-specific parsing of compound IDs. Returns None if
+        the document ID format does not contain a channel reference.
+
+        Args:
+            document_id: The document identifier.
+
+        Returns:
+            Channel ID string, or None if not extractable.
+        """
+        return None
+
+    def is_store_document(self, document_id: str) -> bool:
+        """Check if the given ID refers to a store document (vs. a file).
+
+        Args:
+            document_id: The document/file identifier.
+
+        Returns:
+            True if this is a store document ID.
+        """
+        return False
+
+    def is_valid_file_reference(self, file_id: str) -> bool:
+        """Check if the given ID is a valid file reference.
+
+        Args:
+            file_id: The file identifier to validate.
+
+        Returns:
+            True if the format is valid for this provider.
+        """
+        return bool(file_id)

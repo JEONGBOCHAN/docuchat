@@ -89,9 +89,9 @@ class FavoriteCrudUseCase:
             if not channel:
                 raise ChannelNotFoundError(target_id)
         elif target_type == "document":
-            if not target_id or not target_id.startswith("files/"):
+            if not target_id:
                 raise InvalidTargetError(
-                    "Invalid document ID format. Expected 'files/xxx'"
+                    "Document ID must not be empty."
                 )
         elif target_type == "note":
             try:

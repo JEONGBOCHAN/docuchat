@@ -150,7 +150,7 @@ class TestAddFavorite:
         app.dependency_overrides.pop(get_favorite_crud_use_case, None)
 
     def test_add_invalid_document_id(self, client_with_db: TestClient, test_db):
-        """Test adding document with invalid ID format returns 400."""
+        """Test adding document with empty ID returns 400."""
         mock_channel_port = MagicMock()
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
         app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
@@ -159,12 +159,12 @@ class TestAddFavorite:
             "/api/v1/favorites",
             json={
                 "target_type": "document",
-                "target_id": "invalid-id",
+                "target_id": "",
             },
         )
 
         assert response.status_code == 400
-        assert "Invalid document ID format" in response.json()["detail"]
+        assert "Document ID" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_favorite_crud_use_case, None)
 

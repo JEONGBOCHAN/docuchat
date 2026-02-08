@@ -321,7 +321,7 @@ class TestDeleteDocument:
     def test_delete_document_api_error(self, client: TestClient):
         """Test delete handles API errors."""
         mock_document_port = MagicMock()
-        mock_document_port.delete_file.return_value = False
+        mock_document_port.delete_any.return_value = False
 
         use_case = _make_use_case(document_port=mock_document_port)
         app.dependency_overrides[get_document_crud_use_case] = lambda: use_case
