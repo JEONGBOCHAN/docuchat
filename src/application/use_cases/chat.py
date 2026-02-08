@@ -335,14 +335,14 @@ class ChatUseCase:
         channel_id: str,
         query: str,
         session_id: str | None = None,
-    ) -> tuple[str | None, Generator[dict, None, dict | None]]:
+    ) -> tuple[str | None, bool, Generator[dict, None, dict | None]]:
         """Prepare streaming chat. Validates synchronously, returns generator.
 
         Validation (channel, session) happens synchronously so errors
         can be caught before StreamingResponse is created.
 
         Returns:
-            Tuple of (session_id_response, event_generator).
+            Tuple of (session_id_response, session_renewed, event_generator).
             Events: {"type": "content", "chunk": str},
                     {"type": "sources", "sources": list},
                     {"type": "done"},
