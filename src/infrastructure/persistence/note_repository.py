@@ -4,7 +4,7 @@
 import json
 from sqlalchemy.orm import Session
 
-from src.models.db_models import NoteDB, ChannelMetadata
+from src.infrastructure.persistence.db_models import NoteDB, ChannelMetadata
 
 
 class NoteRepository:

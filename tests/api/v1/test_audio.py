@@ -10,7 +10,7 @@ from src.main import app
 from src.api.v1.audio import get_channel_port
 from src.application.ports.channel import ChannelDTO
 from src.models.audio import AudioStatus, VoiceType
-from src.models.db_models import ChannelMetadata, AudioOverviewDB
+from src.infrastructure.persistence.db_models import ChannelMetadata, AudioOverviewDB
 
 
 class TestGenerateAudioOverview:

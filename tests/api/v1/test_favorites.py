@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.api.v1.favorites import get_favorite_crud_use_case
 from src.application.ports.channel import ChannelDTO
-from src.models.db_models import NoteDB
+from src.infrastructure.persistence.db_models import NoteDB
 
 
 def _make_use_case(test_db, channel_port=None):

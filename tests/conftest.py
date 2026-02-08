@@ -30,7 +30,7 @@ def _get_limiter():
 
 def _get_channel_metadata():
     """Lazy load ChannelMetadata model."""
-    from src.models.db_models import ChannelMetadata
+    from src.infrastructure.persistence.db_models import ChannelMetadata
     return ChannelMetadata
 
 

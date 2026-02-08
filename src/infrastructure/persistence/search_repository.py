@@ -5,7 +5,7 @@ from datetime import datetime, UTC
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from src.models.db_models import SearchHistoryDB, ChannelMetadata
+from src.infrastructure.persistence.db_models import SearchHistoryDB, ChannelMetadata
 
 
 class SearchHistoryRepository:

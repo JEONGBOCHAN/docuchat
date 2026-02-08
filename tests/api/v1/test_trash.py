@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.models.db_models import ChannelMetadata, NoteDB
+from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB
 from src.api.v1.trash import get_channel_port
 from src.api.v1.channels import get_channel_crud_use_case
 from src.api.v1.notes import get_note_crud_use_case

@@ -4,7 +4,7 @@
 from datetime import datetime, UTC
 from sqlalchemy.orm import Session
 
-from src.models.db_models import DocumentSummaryCacheDB
+from src.infrastructure.persistence.db_models import DocumentSummaryCacheDB
 from src.application.ports.document_summary import (
     DocumentSummaryCachePort,
     DocumentSummaryDTO,

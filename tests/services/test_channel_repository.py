@@ -218,7 +218,7 @@ class TestChatHistoryRepository:
 
     def test_get_session_history_returns_most_recent(self, test_db):
         """Test that session history returns the most recent N messages, not the oldest."""
-        from src.models.db_models import ChatSessionDB, ChatMessageDB
+        from src.infrastructure.persistence.db_models import ChatSessionDB, ChatMessageDB
         import time
 
         channel_repo = ChannelRepository(test_db)
@@ -256,7 +256,7 @@ class TestChatHistoryRepository:
 
     def test_get_session_history_explicit_limit(self, test_db):
         """Test session history with explicit limit override."""
-        from src.models.db_models import ChatSessionDB, ChatMessageDB
+        from src.infrastructure.persistence.db_models import ChatSessionDB, ChatMessageDB
 
         channel_repo = ChannelRepository(test_db)
         channel = channel_repo.create(gemini_store_id="store/ctx-limit", name="Limit Override")
@@ -289,7 +289,7 @@ class TestChatHistoryRepository:
 
     def test_get_session_history_no_limit_returns_all(self, test_db):
         """Test session history without limit returns all messages in order."""
-        from src.models.db_models import ChatSessionDB, ChatMessageDB
+        from src.infrastructure.persistence.db_models import ChatSessionDB, ChatMessageDB
 
         channel_repo = ChannelRepository(test_db)
         channel = channel_repo.create(gemini_store_id="store/ctx-all", name="No Limit")
@@ -332,7 +332,7 @@ class TestChatHistoryRepository:
         channel_repo.delete("store/cascade")
 
         # Verify messages are also deleted (need new query)
-        from src.models.db_models import ChatMessageDB
+        from src.infrastructure.persistence.db_models import ChatMessageDB
         messages = test_db.query(ChatMessageDB).filter(
             ChatMessageDB.channel_id == channel.id
         ).all()

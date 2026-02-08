@@ -4,7 +4,7 @@
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from src.models.db_models import FavoriteDB
+from src.infrastructure.persistence.db_models import FavoriteDB
 from src.domain.value_objects import TargetType
 
 

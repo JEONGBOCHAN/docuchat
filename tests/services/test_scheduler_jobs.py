@@ -9,7 +9,7 @@ import pytest
 from datetime import datetime, timedelta, UTC
 from unittest.mock import MagicMock, patch, Mock
 
-from src.models.db_models import ChannelMetadata, NoteDB
+from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB
 from src.infrastructure.persistence.trash_repository import TrashRepository
 
 

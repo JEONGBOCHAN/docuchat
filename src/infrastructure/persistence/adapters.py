@@ -28,7 +28,7 @@ from src.application.ports.persistence import (
     AudioRepositoryPort,
     DocumentPreviewCacheRepositoryPort,
 )
-from src.models.db_models import ChannelMetadata, ChatMessageDB, ChatSessionDB, NoteDB, DocumentPreviewCacheDB
+from src.infrastructure.persistence.db_models import ChannelMetadata, ChatMessageDB, ChatSessionDB, NoteDB, DocumentPreviewCacheDB
 
 
 # =============================================================================

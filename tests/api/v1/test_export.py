@@ -12,7 +12,7 @@ from src.main import app
 from src.api.v1.export import get_channel_port
 from src.api.v1.notes import get_note_crud_use_case
 from src.application.ports.channel import ChannelDTO
-from src.models.db_models import ChannelMetadata, NoteDB, ChatMessageDB
+from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB, ChatMessageDB
 
 
 def _make_note_use_case(test_db, channel_port=None):
@@ -183,7 +183,7 @@ class TestExportChat:
     def test_export_chat_markdown(self, client_with_db: TestClient, test_db, sample_channel):
         """Test exporting chat history as Markdown."""
         # Add some chat messages
-        from src.models.db_models import ChatMessageDB
+        from src.infrastructure.persistence.db_models import ChatMessageDB
         msg1 = ChatMessageDB(
             channel_id=sample_channel.id,
             role="user",
@@ -226,7 +226,7 @@ class TestExportChat:
     def test_export_chat_json(self, client_with_db: TestClient, test_db, sample_channel):
         """Test exporting chat history as JSON."""
         # Add some chat messages
-        from src.models.db_models import ChatMessageDB
+        from src.infrastructure.persistence.db_models import ChatMessageDB
         msg = ChatMessageDB(
             channel_id=sample_channel.id,
             role="user",
@@ -287,7 +287,7 @@ class TestExportChannel:
     def test_export_channel_json(self, client_with_db: TestClient, test_db, sample_channel):
         """Test exporting entire channel as JSON."""
         # Add a note
-        from src.models.db_models import NoteDB
+        from src.infrastructure.persistence.db_models import NoteDB
         note = NoteDB(
             channel_id=sample_channel.id,
             title="Channel Note",
@@ -347,7 +347,7 @@ class TestExportChannel:
     def test_export_channel_zip(self, client_with_db: TestClient, test_db, sample_channel):
         """Test exporting entire channel as ZIP (pdf format triggers zip)."""
         # Add a note
-        from src.models.db_models import NoteDB
+        from src.infrastructure.persistence.db_models import NoteDB
         note = NoteDB(
             channel_id=sample_channel.id,
             title="Zip Test Note",

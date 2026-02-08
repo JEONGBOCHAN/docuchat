@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Pydantic models."""
+"""API request/response schemas (Pydantic models).
+
+This package contains only API-layer schemas for request validation
+and response serialization. Database (SQLAlchemy) models live in
+``src.infrastructure.persistence.db_models``.
+"""
 
 from src.models.channel import ChannelCreate, ChannelResponse, ChannelList
 from src.models.document import (

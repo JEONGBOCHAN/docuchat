@@ -194,7 +194,7 @@ def cleanup_expired_trash(retention_days: int = 30):
         channel_port = create_channel_port()
 
         # Get trashed channels that will be deleted for Gemini cleanup
-        from src.models.db_models import ChannelMetadata
+        from src.infrastructure.persistence.db_models import ChannelMetadata
         from datetime import timedelta
 
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)

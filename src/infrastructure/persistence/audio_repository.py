@@ -7,7 +7,7 @@ from datetime import datetime, UTC
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.models.db_models import AudioOverviewDB, ChannelMetadata
+from src.infrastructure.persistence.db_models import AudioOverviewDB, ChannelMetadata
 from src.models.audio import (
     AudioStatus,
     PodcastScript,

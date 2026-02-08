@@ -12,7 +12,7 @@ from src.application.use_cases.channel_crud import ChannelCrudUseCase
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 from src.core.database import get_db
-from src.models.db_models import ChannelMetadata
+from src.infrastructure.persistence.db_models import ChannelMetadata
 
 
 def _make_use_case(test_db, channel_port=None, document_port=None, cache=None):
