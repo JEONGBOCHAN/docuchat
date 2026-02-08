@@ -46,3 +46,18 @@ class SessionExpiredError(Exception):
     def __init__(self, session_id: str):
         self.session_id = session_id
         super().__init__(f"Session has expired: {session_id}")
+
+
+class YouTubeError(Exception):
+    """Base YouTube operation error. Maps to HTTP 500."""
+    pass
+
+
+class InvalidVideoError(YouTubeError):
+    """Invalid video URL or ID. Maps to HTTP 400."""
+    pass
+
+
+class TranscriptNotAvailableError(YouTubeError):
+    """Transcript not available for the video. Maps to HTTP 422."""
+    pass

@@ -17,8 +17,8 @@ from src.application.ports.document import DocumentPort
 from src.application.ports.external_services import YouTubePort
 from src.application.services.capacity_service import CapacityService
 from src.domain.exceptions import CapacityExceededError
-from src.infrastructure.external.youtube import (
-    YouTubeServiceError,
+from src.application.use_cases.exceptions import (
+    YouTubeError,
     TranscriptNotAvailableError,
     InvalidVideoError,
 )
@@ -140,7 +140,7 @@ def add_youtube_source(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=str(e),
         )
-    except YouTubeServiceError as e:
+    except YouTubeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"YouTube service error: {str(e)}",
@@ -216,7 +216,7 @@ def preview_youtube_transcript(
             "available": False,
             "message": "No transcript available for this video",
         }
-    except YouTubeServiceError as e:
+    except YouTubeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"YouTube service error: {str(e)}",

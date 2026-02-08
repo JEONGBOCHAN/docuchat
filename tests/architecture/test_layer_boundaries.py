@@ -163,10 +163,7 @@ class TestApplicationLayerBoundaries:
 # API must not reach directly into infrastructure, except via DI container.
 API_FORBIDDEN = ["src.infrastructure"]
 API_ALLOWED = ["src.infrastructure.di.container"]
-# youtube.py imports infra exceptions directly; tracked as CHA-141.
-API_EXCEPTIONS: set[str] = {
-    "src/api/v1/youtube.py",  # TODO: remove after CHA-141
-}
+API_EXCEPTIONS: set[str] = set()
 
 
 class TestApiLayerBoundaries:
