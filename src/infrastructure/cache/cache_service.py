@@ -134,6 +134,12 @@ class CacheService:
         # Track key for channel-level invalidation
         if channel_id not in self._chat_channel_keys:
             self._chat_channel_keys[channel_id] = set()
+        else:
+            # Prune stale keys that TTL-expired from the cache
+            self._chat_channel_keys[channel_id] = {
+                k for k in self._chat_channel_keys[channel_id]
+                if k in self._chat_cache
+            }
         self._chat_channel_keys[channel_id].add(key)
 
     def invalidate_chat_cache(self, channel_id: str) -> int:
@@ -308,6 +314,7 @@ class CacheService:
     def clear_all(self) -> None:
         """Clear all caches."""
         self._chat_cache.clear()
+        self._chat_channel_keys.clear()
         self._document_cache.clear()
         self._channel_cache.clear()
         self._store_cache.clear()
