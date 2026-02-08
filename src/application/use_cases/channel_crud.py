@@ -8,6 +8,7 @@ The router becomes a thin controller handling only HTTP concerns.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 
@@ -18,6 +19,8 @@ from src.application.ports.persistence import (
     FavoriteRepositoryPort,
 )
 from src.application.ports.cache import CachePort
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -145,8 +148,15 @@ class ChannelCrudUseCase:
                     name=store.get("display_name", ""),
                 )
 
-            files = self._document_port.list_documents(store_id)
-            actual_file_count = len(files)
+            try:
+                files = self._document_port.list_documents(store_id)
+                actual_file_count = len(files)
+            except Exception:
+                logger.warning(
+                    "Failed to list documents for channel %s, using cached count",
+                    store_id,
+                )
+                actual_file_count = local_meta.file_count if local_meta else 0
 
             if local_meta and local_meta.file_count != actual_file_count:
                 self._channel_repo.update_stats(store_id, file_count=actual_file_count)
