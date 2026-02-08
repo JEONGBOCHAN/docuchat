@@ -183,7 +183,7 @@ class ChannelRepository:
             Set of deleted Gemini store IDs
         """
         deleted_channels = self.db.query(ChannelMetadata.gemini_store_id).filter(
-            ChannelMetadata.is_deleted == True  # noqa: E712
+            ChannelMetadata.deleted_at.isnot(None)
         ).all()
         return {c[0] for c in deleted_channels}
 
