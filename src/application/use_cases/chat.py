@@ -355,6 +355,7 @@ class ChatUseCase:
 
             accumulated_content = ""
             result = None
+            had_error = False
 
             try:
                 while True:
@@ -367,9 +368,14 @@ class ChatUseCase:
                             accumulated_content += content
                             yield {"type": "content", "chunk": content}
                     elif event_type == "error":
+                        had_error = True
                         yield {"type": "error", "error": event.get("error", "Unknown error")}
             except StopIteration as e:
                 result = e.value
+
+            # Don't save to DB or send done if an error occurred
+            if had_error:
+                return None
 
             if result:
                 sources = result.sources or []
