@@ -49,9 +49,31 @@ class TestProcessQueryUseCase:
         # Verify runner was called
         mock_runner.run.assert_called_once()
 
-    def test_execute_with_event_sink(self):
-        """Test query execution with event sink."""
-        # Mock dependencies
+    def test_execute_passes_session_id_to_runner(self):
+        """Test that execute passes session_id in context to avoid ID mismatch."""
+        mock_runner = Mock(spec=AgentRunnerPort)
+        mock_runner.run.return_value = AgentResult(
+            response="Answer",
+            sources=[],
+            tool_calls=[],
+            iterations=1,
+        )
+
+        use_case = ProcessQueryUseCase(agent_runner=mock_runner)
+
+        result = use_case.execute(
+            query="Test query",
+            channel_id="test-channel",
+            session_id="my-session-123",
+        )
+
+        # Verify runner received session_id in context
+        call_kwargs = mock_runner.run.call_args
+        context = call_kwargs.kwargs.get("context") or call_kwargs[1].get("context")
+        assert context["session_id"] == "my-session-123"
+
+    def test_execute_does_not_duplicate_events(self):
+        """Test that execute does not emit events (runner handles them)."""
         mock_runner = Mock(spec=AgentRunnerPort)
         mock_runner.run.return_value = AgentResult(
             response="Answer",
@@ -62,20 +84,18 @@ class TestProcessQueryUseCase:
 
         mock_event_sink = Mock(spec=AgentEventSinkPort)
 
-        # Create use case
         use_case = ProcessQueryUseCase(
             agent_runner=mock_runner,
             event_sink=mock_event_sink,
         )
 
-        # Execute
         result = use_case.execute(
             query="Test query",
             channel_id="test-channel",
         )
 
-        # Verify events were emitted
-        assert mock_event_sink.emit.call_count >= 2  # start and complete
+        # Use case should NOT emit start/complete events (runner does that)
+        assert mock_event_sink.emit.call_count == 0
 
     def test_execute_with_conversation_history(self):
         """Test query execution with conversation history."""

@@ -28,8 +28,6 @@ from src.application.ports import (
     WebSearchPort,
 )
 from src.application.dto.agent_event import (
-    AgentStartedEvent,
-    AgentCompletedEvent,
     AgentErrorEvent,
     generate_session_id,
 )
@@ -160,14 +158,6 @@ class ProcessQueryUseCase:
         if not session_id:
             session_id = generate_session_id()
 
-        # Emit start event
-        if self.event_sink:
-            self.event_sink.emit(AgentStartedEvent(
-                session_id=session_id,
-                query=query,
-                channel_id=channel_id,
-            ))
-
         try:
             # Determine available tools
             available_tools = self._resolve_tools()
@@ -179,13 +169,14 @@ class ProcessQueryUseCase:
                 document_context=document_context,
             )
 
-            # Build context
+            # Build context (include session_id so the runner uses the same one)
             context = {
                 "channel_id": channel_id,
                 "conversation_history": conversation_history or [],
+                "session_id": session_id,
             }
 
-            # Run agent
+            # Run agent (runner emits start/complete/error events)
             agent_result = self.agent_runner.run(
                 query=query,
                 config=config,
@@ -202,26 +193,9 @@ class ProcessQueryUseCase:
                 metadata=agent_result.metadata,
             )
 
-            # Emit completion event
-            if self.event_sink:
-                self.event_sink.emit(AgentCompletedEvent(
-                    session_id=session_id,
-                    response=result.response,
-                    sources=result.sources,
-                    iterations=result.iterations,
-                ))
-
             return result
 
         except Exception as e:
-            # Emit error event
-            if self.event_sink:
-                self.event_sink.emit(AgentErrorEvent(
-                    session_id=session_id,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                ))
-
             return QueryResult(
                 response=f"Error processing query: {str(e)}",
                 session_id=session_id,
