@@ -215,6 +215,14 @@ export const googleDriveApi = {
               return;
             }
 
+            // Verify state matches stored value (CSRF protection)
+            const storedState = sessionStorage.getItem(OAUTH_STATE_KEY);
+            sessionStorage.removeItem(OAUTH_STATE_KEY);
+            if (!storedState || storedState !== state) {
+              resolve(false);
+              return;
+            }
+
             try {
               await googleDriveApi.exchangeToken(code, state);
               resolve(true);
