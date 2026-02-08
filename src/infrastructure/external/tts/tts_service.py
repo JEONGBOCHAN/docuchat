@@ -126,6 +126,7 @@ class TTSService:
         """
         audio_id = str(uuid.uuid4())
         temp_files: list[str] = []
+        final_path: str | None = None
 
         try:
             # Generate intro audio
