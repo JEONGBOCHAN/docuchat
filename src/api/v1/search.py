@@ -6,9 +6,10 @@ Thin controller: delegates all business logic to SearchHistoryUseCase.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from src.core.rate_limiter import limiter, RateLimits
 from src.models.search import (
     SearchHistoryItem,
     SearchHistoryList,
@@ -48,7 +49,9 @@ def _history_dto_to_response(dto: SearchHistoryItemDTO) -> SearchHistoryItem:
     response_model=SearchHistoryList,
     summary="Get search history",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_search_history(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
     use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
     limit: Annotated[int, Query(description="Maximum number of entries", ge=1, le=100)] = 50,
@@ -76,7 +79,9 @@ def get_search_history(
     response_model=SearchSuggestionList,
     summary="Get search suggestions",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_search_suggestions(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
     use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
     q: Annotated[str, Query(description="Query prefix for suggestions")] = "",
@@ -107,7 +112,9 @@ def get_search_suggestions(
     response_model=SearchSuggestionList,
     summary="Get popular searches",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def get_popular_searches(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
     use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
     limit: Annotated[int, Query(description="Maximum number of entries", ge=1, le=20)] = 10,
@@ -137,7 +144,9 @@ def get_popular_searches(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a search history entry",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def delete_search_history(
+    request: Request,
     history_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
     use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
@@ -162,7 +171,9 @@ def delete_search_history(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Clear all search history",
 )
+@limiter.limit(RateLimits.DEFAULT)
 def clear_search_history(
+    request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
     use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
 ):
