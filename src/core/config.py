@@ -79,7 +79,7 @@ class Settings(BaseSettings):
 
     # File Search
     max_file_size_mb: int = 50
-    allowed_extensions: list[str] = [".pdf", ".txt", ".docx"]
+    allowed_extensions: list[str] = [".pdf", ".txt", ".md", ".docx"]
 
     # Database
     database_url: str = "sqlite:///./data/docuchat.db"
