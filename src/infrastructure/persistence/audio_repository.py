@@ -4,7 +4,7 @@
 import json
 import uuid
 from datetime import datetime, UTC
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.infrastructure.persistence.db_models import AudioOverviewDB, ChannelMetadata
@@ -102,8 +102,8 @@ class AudioRepository:
         Returns:
             Count of audio overviews
         """
-        stmt = select(AudioOverviewDB).where(AudioOverviewDB.channel_id == channel_id)
-        return len(list(self.db.execute(stmt).scalars().all()))
+        stmt = select(func.count()).select_from(AudioOverviewDB).where(AudioOverviewDB.channel_id == channel_id)
+        return self.db.execute(stmt).scalar_one()
 
     def update_status(
         self,
