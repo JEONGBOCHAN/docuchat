@@ -52,6 +52,7 @@ class ChatResultDTO:
     response: str
     sources: list[SourceDTO]
     session_id: str | None = None
+    session_renewed: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -154,15 +155,29 @@ class ChatUseCase:
             self._channel_repo.touch(channel_id)
         return meta
 
-    def _resolve_session(self, channel_db_id: int, session_id: str | None):
-        """Resolve session, returning the session_id for response."""
+    def _resolve_session(
+        self, channel_db_id: int, session_id: str | None
+    ) -> tuple[str | None, bool]:
+        """Resolve session, returning (session_id, session_renewed).
+
+        When the requested session_id is expired or not found,
+        get_or_create silently creates a new session. The boolean
+        flag indicates this happened so callers can inform the client.
+        """
         if not session_id:
-            return None
-        session_dto, _ = self._session_repo.get_or_create(
+            return None, False
+        session_dto, created = self._session_repo.get_or_create(
             channel_id=channel_db_id,
             session_id=session_id,
         )
-        return session_dto.session_id if session_dto else session_id
+        resolved_id = session_dto.session_id if session_dto else session_id
+        renewed = created and resolved_id != session_id
+        if renewed:
+            logger.warning(
+                "Session renewed: requested %s → created %s",
+                session_id, resolved_id,
+            )
+        return resolved_id, renewed
 
     def _get_conversation_history(self, session_id: str | None) -> list[dict[str, str]]:
         """Get conversation history for context."""
@@ -253,7 +268,9 @@ class ChatUseCase:
             channel_id, channel.display_name
         )
 
-        session_id_response = self._resolve_session(channel_meta.id, session_id)
+        session_id_response, session_renewed = self._resolve_session(
+            channel_meta.id, session_id
+        )
         conversation_history = self._get_conversation_history(session_id_response)
         document_context = self._summaries.build_context_string(channel_id)
 
@@ -310,6 +327,7 @@ class ChatUseCase:
             response=response_text,
             sources=sources,
             session_id=session_id_response,
+            session_renewed=session_renewed,
         )
 
     def prepare_stream(
@@ -338,7 +356,9 @@ class ChatUseCase:
             channel_id, channel.display_name
         )
 
-        session_id_response = self._resolve_session(channel_meta.id, session_id)
+        session_id_response, session_renewed = self._resolve_session(
+            channel_meta.id, session_id
+        )
         conversation_history = self._get_conversation_history(session_id_response)
         document_context = self._summaries.build_context_string(channel_id)
 
@@ -402,7 +422,7 @@ class ChatUseCase:
                 yield {"type": "error", "error": "No result from agent"}
                 return None
 
-        return session_id_response, generate()
+        return session_id_response, session_renewed, generate()
 
     # ---- Chat history ----
 

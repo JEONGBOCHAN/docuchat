@@ -35,6 +35,7 @@ class ChatResponse(BaseModel):
     response: str = Field(..., description="Generated response")
     sources: list[GroundingSource] = Field(default_factory=list, description="Grounding sources")
     session_id: str | None = Field(default=None, description="Session ID for multi-turn conversation")
+    session_renewed: bool = Field(default=False, description="True when the requested session was expired and a new one was created")
     created_at: datetime = Field(default_factory=_utc_now)
 
 

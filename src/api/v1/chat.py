@@ -100,6 +100,7 @@ def send_message(
             response=result.response,
             sources=_sources_to_grounding(result.sources),
             session_id=result.session_id,
+            session_renewed=result.session_renewed,
             created_at=result.created_at,
         )
     except ChannelNotFoundError:
@@ -135,7 +136,7 @@ def send_message_stream(
     - error: Error information if something went wrong
     """
     try:
-        session_id_response, stream_gen = use_case.prepare_stream(
+        session_id_response, session_renewed, stream_gen = use_case.prepare_stream(
             channel_id, body.query, body.session_id
         )
     except ChannelNotFoundError:
@@ -147,7 +148,10 @@ def send_message_stream(
     def generate_sse() -> Generator[str, None, None]:
         """Generate SSE events from use case stream."""
         if session_id_response:
-            yield _format_sse_event({"session_id": session_id_response})
+            session_event = {"session_id": session_id_response}
+            if session_renewed:
+                session_event["session_renewed"] = True
+            yield _format_sse_event(session_event)
 
         try:
             while True:
