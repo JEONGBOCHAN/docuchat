@@ -119,14 +119,20 @@ async def generate_audio_task(
 
     This runs the full pipeline: script generation -> TTS -> audio merge.
     """
+    import logging
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
+    from src.infrastructure.persistence.audio_repository import AudioRepository
+    from src.infrastructure.external.tts.tts_service import get_tts_service
+
+    bg_logger = logging.getLogger(__name__)
 
     # Create new database session for background task
     engine = create_engine(db_url)
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()
 
+    repo = None
     try:
         repo = AudioRepository(db)
         tts = get_tts_service()
@@ -193,11 +199,13 @@ async def generate_audio_task(
         repo.update_audio_complete(audio_id, audio_path, duration)
 
     except Exception as e:
-        repo.update_status(
-            audio_id,
-            AudioStatus.FAILED,
-            error_message=str(e),
-        )
+        bg_logger.error("Audio generation failed for %s: %s", audio_id, e)
+        if repo is not None:
+            repo.update_status(
+                audio_id,
+                AudioStatus.FAILED,
+                error_message=str(e),
+            )
     finally:
         db.close()
 
