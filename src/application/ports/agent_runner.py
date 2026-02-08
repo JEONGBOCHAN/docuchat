@@ -80,6 +80,18 @@ class AgentRunnerPort(ABC):
     stays in the infrastructure layer, while the application only
     deals with this clean interface.
 
+    Event Emission Contract:
+        Implementations are responsible for emitting lifecycle events
+        (e.g. AgentStartedEvent, AgentCompletedEvent) via the EventSink
+        if one is provided in the context dict. The application layer
+        (ProcessQueryUseCase) does NOT emit these events — it delegates
+        entirely to the runner to avoid duplication.
+
+        Expected context keys:
+            - "event_sink": Optional EventSinkPort for emitting events
+            - "session_id": Optional session identifier for tracking
+            - "channel_id": Channel being queried
+
     Example:
         # Using LangGraph
         runner = LangGraphAgentRunner(llm, tools)
@@ -99,10 +111,14 @@ class AgentRunnerPort(ABC):
     ) -> AgentResult:
         """Run the agent to answer a query.
 
+        Implementations should emit AgentStartedEvent/AgentCompletedEvent
+        via context["event_sink"] if provided.
+
         Args:
             query: The user's question
             config: Agent configuration
-            context: Additional context (channel_id, history, etc.)
+            context: Additional context (channel_id, session_id,
+                     event_sink, history, etc.)
 
         Returns:
             AgentResult with response and metadata
@@ -118,10 +134,14 @@ class AgentRunnerPort(ABC):
     ) -> Generator[dict, None, AgentResult]:
         """Run the agent with streaming events.
 
+        Implementations should emit AgentStartedEvent/AgentCompletedEvent
+        via context["event_sink"] if provided.
+
         Args:
             query: The user's question
             config: Agent configuration
-            context: Additional context
+            context: Additional context (channel_id, session_id,
+                     event_sink, history, etc.)
 
         Yields:
             Event dictionaries (tool_start, tool_end, content, etc.)
