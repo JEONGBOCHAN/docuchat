@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query, status
 from sqlalchemy.orm import Session
 
+from src.core.config import get_settings
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.models.document import (
@@ -70,10 +71,16 @@ async def upload_document(
         tmp_dir = tempfile.mkdtemp()
         tmp_path = os.path.join(tmp_dir, original_filename)
         actual_size = 0
+        max_size = get_settings().max_file_size_mb * 1024 * 1024
         with open(tmp_path, "wb") as tmp:
             while chunk := await file.read(1024 * 1024):  # 1MB chunks
-                tmp.write(chunk)
                 actual_size += len(chunk)
+                if actual_size > max_size:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File too large. Maximum size: {get_settings().max_file_size_mb}MB",
+                    )
+                tmp.write(chunk)
 
         result = use_case.upload(channel_id, tmp_path, original_filename, actual_size)
 
