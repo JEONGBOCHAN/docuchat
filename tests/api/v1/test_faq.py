@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch, Mock
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.faq import get_channel_port, get_document_port
+from src.api.v1.deps import get_channel_port, get_document_port
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 from src.application.use_cases.generate_faq import GenerateFAQUseCase, FAQResult
@@ -143,6 +143,20 @@ class TestGenerateFAQ:
 
     def test_generate_faq_invalid_count(self, client_with_db: TestClient, test_db):
         """Test FAQ generation with invalid count."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_document_port = MagicMock()
+        mock_document_port.list_documents.return_value = [
+            DocumentDTO(name="files/test-file", display_name="test.pdf", size_bytes=1024, state="ACTIVE"),
+        ]
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/generate-faq",
             json={"count": 0},  # Must be >= 1
@@ -154,6 +168,9 @@ class TestGenerateFAQ:
             json={"count": 25},  # Must be <= 20
         )
         assert response.status_code == 422
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port, None)
 
     def test_generate_faq_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors during FAQ generation."""

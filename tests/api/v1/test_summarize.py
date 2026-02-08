@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.summarize import get_channel_port, get_document_port
+from src.api.v1.deps import get_channel_port, get_document_port
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 from src.application.use_cases.summarize import SummarizeResult
@@ -384,9 +384,19 @@ class TestSummarizeDocument:
 
     def test_summarize_document_invalid_type(self, client_with_db: TestClient, test_db):
         """Test document summary with invalid summary type."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/documents/files/doc-123/summarize",
             json={"summary_type": "invalid"},
         )
 
         assert response.status_code == 422
+
+        app.dependency_overrides.pop(get_channel_port, None)

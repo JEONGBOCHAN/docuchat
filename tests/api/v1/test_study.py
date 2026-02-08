@@ -12,7 +12,7 @@ from src.models.study import (
     StudyGuideGenerateRequest,
     QuizGenerateRequest,
 )
-from src.api.v1.study import get_channel_port, get_document_port
+from src.api.v1.deps import get_channel_port, get_document_port
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 from src.application.use_cases.learning import StudyGuideResult, QuizResult

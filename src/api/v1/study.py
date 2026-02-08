@@ -7,10 +7,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
 
 from src.core.config import get_settings
-from src.core.database import get_db
 from src.core.rate_limiter import RateLimits
 from src.models.study import (
     DifficultyLevel,
@@ -24,35 +22,15 @@ from src.models.study import (
     StudyGuideResponse,
     StudySection,
 )
-from src.application.ports.channel import ChannelPort
-from src.application.ports.document import DocumentPort
-from src.application.ports.persistence import ChannelRepositoryPort
+from src.api.v1.deps import ValidatedChannel, require_channel_with_documents
 from src.infrastructure.di.container import (
-    create_channel_port,
-    create_document_port,
     create_generate_study_guide_use_case,
     create_generate_quiz_use_case,
-    create_channel_repository_port,
 )
 
 router = APIRouter(prefix="/channels", tags=["study"])
 settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)
-
-
-def get_channel_port() -> ChannelPort:
-    """Get channel port instance."""
-    return create_channel_port()
-
-
-def get_document_port() -> DocumentPort:
-    """Get document port instance."""
-    return create_document_port()
-
-
-def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
-    """Get channel repository port instance."""
-    return create_channel_repository_port(db)
 
 
 @router.post(
@@ -64,10 +42,7 @@ def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPor
 @limiter.limit(RateLimits.CHAT)
 async def generate_study_guide(
     request: Request,
-    channel_id: str,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    validated: Annotated[ValidatedChannel, Depends(require_channel_with_documents)],
     body: StudyGuideGenerateRequest | None = None,
 ):
     """Generate a study guide from channel documents.
@@ -79,7 +54,7 @@ async def generate_study_guide(
     - Study tips
 
     Args:
-        channel_id: The channel (File Search Store) ID
+        validated: Validated channel with documents
         body: Optional configuration for the study guide
 
     Returns:
@@ -88,26 +63,10 @@ async def generate_study_guide(
     if body is None:
         body = StudyGuideGenerateRequest()
 
-    # Verify channel exists
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
-
-    # Check if channel has documents
-    files = document_port.list_documents(channel_id)
-    if not files:
-        raise HTTPException(
-            status_code=400,
-            detail="Channel has no documents. Upload documents first.",
-        )
-
-    # Update last accessed time
-    channel_repo.touch(channel_id)
-
     # Generate study guide using Clean Architecture use case
     use_case = create_generate_study_guide_use_case()
     result = use_case.execute(
-        channel_id=channel_id,
+        channel_id=validated.channel_id,
         include_concepts=body.include_concepts,
         include_summary=body.include_summary,
         max_sections=body.max_sections,
@@ -140,7 +99,7 @@ async def generate_study_guide(
     ]
 
     return StudyGuideResponse(
-        channel_id=channel_id,
+        channel_id=validated.channel_id,
         title=result.title,
         overview=result.overview,
         sections=sections,
@@ -159,10 +118,7 @@ async def generate_study_guide(
 @limiter.limit(RateLimits.CHAT)
 async def generate_quiz(
     request: Request,
-    channel_id: str,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
-    document_port: Annotated[DocumentPort, Depends(get_document_port)],
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    validated: Annotated[ValidatedChannel, Depends(require_channel_with_documents)],
     body: QuizGenerateRequest | None = None,
 ):
     """Generate a quiz from channel documents.
@@ -174,7 +130,7 @@ async def generate_quiz(
     - Answer explanations
 
     Args:
-        channel_id: The channel (File Search Store) ID
+        validated: Validated channel with documents
         body: Optional configuration for the quiz
 
     Returns:
@@ -183,26 +139,10 @@ async def generate_quiz(
     if body is None:
         body = QuizGenerateRequest()
 
-    # Verify channel exists
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
-
-    # Check if channel has documents
-    files = document_port.list_documents(channel_id)
-    if not files:
-        raise HTTPException(
-            status_code=400,
-            detail="Channel has no documents. Upload documents first.",
-        )
-
-    # Update last accessed time
-    channel_repo.touch(channel_id)
-
     # Generate quiz using Clean Architecture use case
     use_case = create_generate_quiz_use_case()
     result = use_case.execute(
-        channel_id=channel_id,
+        channel_id=validated.channel_id,
         count=body.count,
         quiz_type=body.quiz_type.value,
         difficulty=body.difficulty.value,
@@ -254,7 +194,7 @@ async def generate_quiz(
         )
 
     return QuizResponse(
-        channel_id=channel_id,
+        channel_id=validated.channel_id,
         title=result.title,
         description=result.description,
         questions=questions,
