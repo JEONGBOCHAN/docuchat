@@ -136,6 +136,7 @@ class ApiMetricsResponse(BaseModel):
 def get_system_stats(
     request: Request,
     stats_service: Annotated[AdminStatsService, Depends(get_admin_stats_service)],
+    _admin: Annotated[str, Depends(require_admin_key)],
 ) -> SystemStatsResponse:
     """Get comprehensive system statistics for monitoring.
 
@@ -162,6 +163,7 @@ def get_system_stats(
 def get_channel_breakdown(
     request: Request,
     stats_service: Annotated[AdminStatsService, Depends(get_admin_stats_service)],
+    _admin: Annotated[str, Depends(require_admin_key)],
 ) -> ChannelBreakdownResponse:
     """Get detailed breakdown of all channels.
 
@@ -184,6 +186,7 @@ def get_channel_breakdown(
 def get_api_metrics_endpoint(
     request: Request,
     metrics_port: Annotated[ApiMetricsPort, Depends(get_api_metrics_port)],
+    _admin: Annotated[str, Depends(require_admin_key)],
 ) -> ApiMetricsResponse:
     """Get detailed API call metrics.
 

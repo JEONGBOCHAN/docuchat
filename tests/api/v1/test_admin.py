@@ -8,6 +8,14 @@ from src.main import app
 from src.api.deps import require_admin_key
 
 
+@pytest.fixture(autouse=True)
+def bypass_admin_key():
+    """Bypass admin key check in all admin tests."""
+    app.dependency_overrides[require_admin_key] = lambda: "test-key"
+    yield
+    app.dependency_overrides.pop(require_admin_key, None)
+
+
 class TestGetSystemStats:
     """Tests for GET /api/v1/admin/stats endpoint."""
 
@@ -165,13 +173,6 @@ class TestGetApiMetrics:
 
 class TestResetApiMetrics:
     """Tests for POST /api/v1/admin/api-metrics/reset endpoint."""
-
-    @pytest.fixture(autouse=True)
-    def bypass_admin_key(self):
-        """Bypass admin key check in tests."""
-        app.dependency_overrides[require_admin_key] = lambda: "test-key"
-        yield
-        app.dependency_overrides.pop(require_admin_key, None)
 
     def test_reset_api_metrics(self, client_with_db):
         """Test resetting API metrics."""

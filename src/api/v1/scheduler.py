@@ -61,6 +61,7 @@ class SchedulerHistoryResponse(BaseModel):
 def get_scheduler_status(
     request: Request,
     scheduler_port: Annotated[SchedulerPort, Depends(get_scheduler_port)],
+    _admin: Annotated[str, Depends(require_admin_key)],
 ) -> SchedulerStatus:
     """Get the current status of the background scheduler.
 
@@ -92,6 +93,7 @@ def get_scheduler_status(
 def get_job_history(
     request: Request,
     scheduler_port: Annotated[SchedulerPort, Depends(get_scheduler_port)],
+    _admin: Annotated[str, Depends(require_admin_key)],
     limit: int = 20,
 ) -> SchedulerHistoryResponse:
     """Get recent job execution history.
