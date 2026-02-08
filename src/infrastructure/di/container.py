@@ -600,6 +600,23 @@ def create_generate_podcast_script_use_case() -> GeneratePodcastScriptUseCase:
     return GeneratePodcastScriptUseCase(podcast_port=create_podcast_script())
 
 
+def create_generate_audio_use_case(db=None):
+    """Create GenerateAudioUseCase with all dependencies wired.
+
+    Args:
+        db: Database session (required for audio repository).
+
+    Returns:
+        Fully configured GenerateAudioUseCase.
+    """
+    from src.application.use_cases.audio_generation import GenerateAudioUseCase
+    return GenerateAudioUseCase(
+        audio_repo=create_audio_repository_port(db),
+        tts_port=create_tts_port(),
+        script_use_case=create_generate_podcast_script_use_case(),
+    )
+
+
 # ============================================================
 # Channel Factory Functions
 # ============================================================

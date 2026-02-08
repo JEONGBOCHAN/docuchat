@@ -2,10 +2,11 @@
 """Audio Overview (Podcast) API endpoints."""
 
 import asyncio
+import threading
 from datetime import datetime, UTC
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -25,12 +26,17 @@ from src.application.ports.persistence import (
     ChannelRepositoryPort,
 )
 from src.application.ports.external_services import TTSPort
+from src.application.use_cases.audio_generation import (
+    GenerateAudioUseCase,
+    AudioGenerationRequest,
+)
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.application.use_cases.podcast import GeneratePodcastScriptRequest
 from src.infrastructure.di.container import (
     create_channel_port,
     create_generate_podcast_script_use_case,
+    create_generate_audio_use_case,
     create_audio_repository_port,
     create_channel_repository_port,
     create_tts_port,
@@ -105,123 +111,31 @@ def _audio_dto_to_response(audio_dto, channel_id: str) -> AudioOverviewResponse:
     )
 
 
-async def generate_audio_task(
-    audio_id: str,
-    store_name: str,
-    duration_minutes: int,
-    style: str,
-    language: str,
-    host_a_voice: VoiceType,
-    host_b_voice: VoiceType,
-    db_url: str,
-):
-    """Background task for generating podcast audio.
+def _run_audio_generation_in_background(request: AudioGenerationRequest) -> None:
+    """Run audio generation use case in a background thread.
 
-    This runs the full pipeline: script generation -> TTS -> audio merge.
+    Creates its own DB session for thread safety, wires up the use case
+    via the DI container, and runs it in a new event loop.
     """
-    import logging
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from src.infrastructure.persistence.audio_repository import AudioRepository
-    from src.infrastructure.external.tts.tts_service import get_tts_service
+    from src.core.config import get_settings
 
-    bg_logger = logging.getLogger(__name__)
-
-    # Create new database session for background task
+    db_url = get_settings().database_url
     engine = create_engine(db_url)
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()
 
-    repo = None
     try:
-        repo = AudioRepository(db)
-        tts = get_tts_service()
-
-        # Update status to generating script
-        repo.update_status(audio_id, AudioStatus.GENERATING_SCRIPT.value)
-
-        # Generate podcast script using UseCase
-        use_case = create_generate_podcast_script_use_case()
-        request = GeneratePodcastScriptRequest(
-            store_name=store_name,
-            duration_minutes=duration_minutes,
-            style=style,
-            language=language,
-        )
-
+        use_case = create_generate_audio_use_case(db)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
-            script_dto = use_case.execute(request)
-        except Exception as e:
-            repo.update_status(
-                audio_id,
-                AudioStatus.FAILED.value,
-                error_message=str(e),
-            )
-            return
-
-        # Convert DTO to model
-        dialogue = []
-        for line in script_dto.dialogue:
-            speaker = line.speaker
-            if "Host A" in speaker or "진행자" in speaker:
-                voice = host_a_voice
-            else:
-                voice = host_b_voice
-
-            dialogue.append(
-                DialogueLine(
-                    speaker=speaker,
-                    text=line.text,
-                    voice=voice,
-                )
-            )
-
-        script = PodcastScript(
-            title=script_dto.title,
-            introduction=script_dto.introduction,
-            dialogue=dialogue,
-            conclusion=script_dto.conclusion,
-            estimated_duration_seconds=script_dto.estimated_duration_seconds,
-        )
-
-        # Update with script
-        repo.update_script(audio_id, script.model_dump_json(), script.title)
-
-        # Generate audio
-        audio_path, duration = await tts.generate_podcast_audio(
-            script=script,
-            language=language,
-            host_a_voice=host_a_voice,
-            host_b_voice=host_b_voice,
-        )
-
-        # Mark complete
-        repo.update_audio_complete(audio_id, audio_path, duration)
-
-    except Exception as e:
-        bg_logger.error("Audio generation failed for %s: %s", audio_id, e)
-        if repo is not None:
-            repo.update_status(
-                audio_id,
-                AudioStatus.FAILED.value,
-                error_message=str(e),
-            )
+            loop.run_until_complete(use_case.execute(request))
+        finally:
+            loop.close()
     finally:
         db.close()
-
-
-def run_async_task(coro_fn, **kwargs):
-    """Run async task in background thread.
-
-    Creates the coroutine inside the thread to avoid 'coroutine never awaited'
-    warnings when Thread.start() is mocked in tests.
-    """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(coro_fn(**kwargs))
-    finally:
-        loop.close()
 
 
 @router.post(
@@ -235,7 +149,6 @@ def generate_audio_overview(
     request: Request,
     channel_id: str,
     body: GenerateAudioRequest,
-    background_tasks: BackgroundTasks,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     audio_repo: Annotated[AudioRepositoryPort, Depends(get_audio_repo_port)],
     channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
@@ -274,25 +187,19 @@ def generate_audio_overview(
         style=body.style,
     )
 
-    # Get database URL for background task
-    from src.core.config import get_settings
-    db_url = get_settings().database_url
-
     # Start background generation
-    import threading
+    gen_request = AudioGenerationRequest(
+        audio_id=audio_dto.audio_id,
+        store_name=channel_id,
+        duration_minutes=body.duration_minutes,
+        style=body.style,
+        language=body.language,
+        host_a_voice=body.host_a_voice.value,
+        host_b_voice=body.host_b_voice.value,
+    )
     thread = threading.Thread(
-        target=run_async_task,
-        kwargs={
-            "coro_fn": generate_audio_task,
-            "audio_id": audio_dto.audio_id,
-            "store_name": channel_id,
-            "duration_minutes": body.duration_minutes,
-            "style": body.style,
-            "language": body.language,
-            "host_a_voice": body.host_a_voice,
-            "host_b_voice": body.host_b_voice,
-            "db_url": db_url,
-        },
+        target=_run_audio_generation_in_background,
+        args=(gen_request,),
     )
     thread.start()
 
