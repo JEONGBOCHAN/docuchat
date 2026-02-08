@@ -138,7 +138,7 @@ async def generate_audio_task(
         tts = get_tts_service()
 
         # Update status to generating script
-        repo.update_status(audio_id, AudioStatus.GENERATING_SCRIPT)
+        repo.update_status(audio_id, AudioStatus.GENERATING_SCRIPT.value)
 
         # Generate podcast script using UseCase
         use_case = create_generate_podcast_script_use_case()
@@ -154,7 +154,7 @@ async def generate_audio_task(
         except Exception as e:
             repo.update_status(
                 audio_id,
-                AudioStatus.FAILED,
+                AudioStatus.FAILED.value,
                 error_message=str(e),
             )
             return
@@ -185,7 +185,7 @@ async def generate_audio_task(
         )
 
         # Update with script
-        repo.update_script(audio_id, script)
+        repo.update_script(audio_id, script.model_dump_json(), script.title)
 
         # Generate audio
         audio_path, duration = await tts.generate_podcast_audio(
@@ -203,7 +203,7 @@ async def generate_audio_task(
         if repo is not None:
             repo.update_status(
                 audio_id,
-                AudioStatus.FAILED,
+                AudioStatus.FAILED.value,
                 error_message=str(e),
             )
     finally:

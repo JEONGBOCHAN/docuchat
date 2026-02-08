@@ -108,14 +108,14 @@ class AudioRepository:
     def update_status(
         self,
         audio_id: str,
-        status: AudioStatus,
+        status: str,
         error_message: str | None = None,
     ) -> AudioOverviewDB | None:
         """Update audio overview status.
 
         Args:
             audio_id: Audio overview ID
-            status: New status
+            status: New status value string (e.g. "pending", "completed")
             error_message: Error message if failed
 
         Returns:
@@ -125,10 +125,10 @@ class AudioRepository:
         if not audio:
             return None
 
-        audio.status = status.value
+        audio.status = status
         if error_message:
             audio.error_message = error_message
-        if status == AudioStatus.COMPLETED:
+        if status == AudioStatus.COMPLETED.value:
             audio.completed_at = utc_now()
 
         self.db.commit()
@@ -138,13 +138,15 @@ class AudioRepository:
     def update_script(
         self,
         audio_id: str,
-        script: PodcastScript,
+        script_json: str,
+        title: str | None = None,
     ) -> AudioOverviewDB | None:
         """Update audio overview with generated script.
 
         Args:
             audio_id: Audio overview ID
-            script: Generated podcast script
+            script_json: Script as JSON string
+            title: Optional title to set (extracted from script by caller)
 
         Returns:
             Updated audio overview or None
@@ -153,8 +155,9 @@ class AudioRepository:
         if not audio:
             return None
 
-        audio.title = script.title
-        audio.script_json = script.model_dump_json()
+        if title is not None:
+            audio.title = title
+        audio.script_json = script_json
         audio.status = AudioStatus.GENERATING_AUDIO.value
 
         self.db.commit()

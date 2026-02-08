@@ -739,26 +739,12 @@ class AudioRepositoryAdapter(AudioRepositoryPort):
         status: str,
         error_message: str | None = None,
     ) -> AudioOverviewDTO | None:
-        # Need to convert string status to enum
-        from src.models.audio import AudioStatus
-        audio = self._repo.update_status(audio_id, AudioStatus(status), error_message)
+        audio = self._repo.update_status(audio_id, status, error_message)
         return self._to_dto(audio) if audio else None
 
     def update_script(self, audio_id: str, script_json: str) -> AudioOverviewDTO | None:
-        # The repository expects a PodcastScript object, need to handle this
-        # For now, we'll access the underlying DB directly
-        from src.models.db_models import AudioOverviewDB
-        audio = self._db.query(AudioOverviewDB).filter(
-            AudioOverviewDB.audio_id == audio_id
-        ).first()
-        if audio:
-            audio.script_json = script_json
-            from src.models.audio import AudioStatus
-            audio.status = AudioStatus.GENERATING_AUDIO.value
-            self._db.commit()
-            self._db.refresh(audio)
-            return self._to_dto(audio)
-        return None
+        audio = self._repo.update_script(audio_id, script_json)
+        return self._to_dto(audio) if audio else None
 
     def update_audio_complete(
         self,
