@@ -2,6 +2,7 @@
 """Google Drive Integration API endpoints."""
 
 import os
+import time
 import tempfile
 from typing import Annotated, Optional
 
@@ -24,6 +25,10 @@ from src.domain.exceptions import CapacityExceededError
 logger = get_logger(__name__)
 settings = get_settings()
 
+# Pending OAuth states for CSRF protection (state -> expiry_timestamp)
+_pending_oauth_states: dict[str, float] = {}
+OAUTH_STATE_TTL = 600  # 10 minutes
+
 router = APIRouter(prefix="/integrations/google-drive", tags=["google-drive"])
 
 
@@ -45,11 +50,13 @@ SCOPES = [
 class AuthUrlResponse(BaseModel):
     """Response containing OAuth authorization URL."""
     auth_url: str = Field(..., description="Google OAuth authorization URL")
+    state: str = Field(..., description="OAuth state parameter for CSRF protection")
 
 
 class TokenRequest(BaseModel):
     """Request containing OAuth authorization code."""
     code: str = Field(..., description="OAuth authorization code from callback")
+    state: str = Field(..., description="OAuth state parameter for CSRF verification")
 
 
 class TokenResponse(BaseModel):
@@ -132,14 +139,22 @@ def get_auth_url():
     """
     try:
         flow = _get_oauth_flow()
-        auth_url, _ = flow.authorization_url(
+        auth_url, state = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
             prompt="consent",
         )
 
+        # Store state for CSRF verification
+        _pending_oauth_states[state] = time.time() + OAUTH_STATE_TTL
+        # Cleanup expired states
+        now = time.time()
+        expired = [s for s, exp in _pending_oauth_states.items() if exp < now]
+        for s in expired:
+            del _pending_oauth_states[s]
+
         logger.info("Generated Google OAuth authorization URL")
-        return AuthUrlResponse(auth_url=auth_url)
+        return AuthUrlResponse(auth_url=auth_url, state=state)
 
     except HTTPException:
         raise
@@ -157,6 +172,14 @@ def exchange_token(request: TokenRequest):
     This endpoint exchanges that code for access and refresh tokens.
     """
     try:
+        # Verify OAuth state (CSRF protection)
+        expiry = _pending_oauth_states.pop(request.state, None)
+        if expiry is None or time.time() > expiry:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid or expired OAuth state parameter. Please retry authorization.",
+            )
+
         flow = _get_oauth_flow()
         flow.fetch_token(code=request.code)
 

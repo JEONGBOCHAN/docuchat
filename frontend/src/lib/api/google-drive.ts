@@ -33,6 +33,7 @@ export interface ImportFileResponse {
 // Token storage keys
 const TOKEN_KEY = 'google_drive_token';
 const REFRESH_TOKEN_KEY = 'google_drive_refresh_token';
+const OAUTH_STATE_KEY = 'google_drive_oauth_state';
 
 export const googleDriveApi = {
   /**
@@ -71,23 +72,26 @@ export const googleDriveApi = {
   },
 
   /**
-   * Get OAuth authorization URL
+   * Get OAuth authorization URL and state
    */
-  getAuthUrl: async (): Promise<string> => {
-    const response = await apiClient.get<{ auth_url: string }>(
+  getAuthUrl: async (): Promise<{ auth_url: string; state: string }> => {
+    const response = await apiClient.get<{ auth_url: string; state: string }>(
       '/api/v1/integrations/google-drive/auth-url'
     );
-    return response.auth_url;
+    // Store state for CSRF verification
+    sessionStorage.setItem(OAUTH_STATE_KEY, response.state);
+    return response;
   },
 
   /**
-   * Exchange authorization code for tokens
+   * Exchange authorization code for tokens (with state verification)
    */
-  exchangeToken: async (code: string): Promise<TokenResponse> => {
+  exchangeToken: async (code: string, state: string): Promise<TokenResponse> => {
     const response = await apiClient.post<TokenResponse>(
       '/api/v1/integrations/google-drive/token',
-      { code }
+      { code, state }
     );
+    sessionStorage.removeItem(OAUTH_STATE_KEY);
     googleDriveApi.storeTokens(response);
     return response;
   },
@@ -178,7 +182,7 @@ export const googleDriveApi = {
    */
   connect: async (): Promise<boolean> => {
     try {
-      const authUrl = await googleDriveApi.getAuthUrl();
+      const { auth_url: authUrl } = await googleDriveApi.getAuthUrl();
 
       return new Promise((resolve) => {
         const width = 600;
@@ -204,15 +208,15 @@ export const googleDriveApi = {
           if (event.data?.type === 'google-drive-callback') {
             window.removeEventListener('message', handleMessage);
 
-            const { code, error } = event.data;
+            const { code, state, error } = event.data;
 
-            if (error || !code) {
+            if (error || !code || !state) {
               resolve(false);
               return;
             }
 
             try {
-              await googleDriveApi.exchangeToken(code);
+              await googleDriveApi.exchangeToken(code, state);
               resolve(true);
             } catch {
               resolve(false);

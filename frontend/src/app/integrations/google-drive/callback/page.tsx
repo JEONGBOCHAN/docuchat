@@ -10,6 +10,7 @@ function CallbackContent() {
 
   useEffect(() => {
     const code = searchParams.get('code');
+    const state = searchParams.get('state');
     const error = searchParams.get('error');
 
     if (error) {
@@ -27,21 +28,21 @@ function CallbackContent() {
       return;
     }
 
-    if (code) {
+    if (code && state) {
       setStatus('success');
       setMessage('Authentication successful! This window will close...');
 
-      // Send code to parent window
+      // Send code and state to parent window for CSRF verification
       if (window.opener) {
         window.opener.postMessage(
-          { type: 'google-drive-callback', code },
+          { type: 'google-drive-callback', code, state },
           window.location.origin
         );
         setTimeout(() => window.close(), 1500);
       }
     } else {
       setStatus('error');
-      setMessage('No authorization code received.');
+      setMessage('No authorization code or state received.');
     }
   }, [searchParams]);
 
