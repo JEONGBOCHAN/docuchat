@@ -278,6 +278,7 @@ class DocumentCrudUseCase:
         """Delete a document.
 
         Returns True if deleted, False otherwise.
+        Updates capacity statistics after successful deletion.
         """
         # Extract channel_id from document_id if not provided
         extracted_channel_id = channel_id
@@ -285,6 +286,21 @@ class DocumentCrudUseCase:
             parts = document_id.split("/documents/")
             if len(parts) >= 1:
                 extracted_channel_id = parts[0]
+
+        # Try to get file size before deletion (best-effort for capacity update)
+        deleted_file_size = 0
+        if extracted_channel_id:
+            try:
+                docs = self._document_port.list_documents(extracted_channel_id)
+                for doc in docs:
+                    if doc.name == document_id:
+                        deleted_file_size = doc.size_bytes
+                        break
+            except Exception:
+                logger.warning(
+                    "Could not determine file size before deletion, "
+                    "capacity size will sync on next scheduled update"
+                )
 
         # Delete based on document_id format
         if document_id.startswith("fileSearchStores/"):
@@ -295,8 +311,14 @@ class DocumentCrudUseCase:
         if not success:
             return False
 
-        # Invalidate caches
+        # Update capacity and invalidate caches
         if extracted_channel_id:
+            try:
+                self._capacity.update_after_delete(
+                    extracted_channel_id, deleted_file_size
+                )
+            except Exception:
+                logger.warning("Failed to update capacity after deletion")
             self._cache.invalidate_document_cache(extracted_channel_id)
             self._cache.invalidate_chat_cache(extracted_channel_id)
 
