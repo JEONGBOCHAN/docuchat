@@ -1,4 +1,4 @@
-import apiClient, { API_BASE_URL } from './client';
+import apiClient, { API_BASE_URL, ApiClientError } from './client';
 
 export interface DriveFile {
   id: string;
@@ -143,7 +143,7 @@ export const googleDriveApi = {
       );
     } catch (error: unknown) {
       // Try to refresh token on 401
-      if (error instanceof Error && error.message.includes('401')) {
+      if (error instanceof ApiClientError && error.status === 401) {
         const refreshed = await googleDriveApi.refreshToken();
         if (refreshed) {
           return await apiClient.get<DriveFilesResponse>(
