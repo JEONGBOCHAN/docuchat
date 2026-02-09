@@ -10,6 +10,7 @@ from unittest.mock import Mock, MagicMock, patch
 
 from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 from src.application.ports.channel import ChannelDTO
+from src.application.use_cases.exceptions import UpstreamError
 
 
 class TestGeminiChannelAdapter:
@@ -67,14 +68,36 @@ class TestGeminiChannelAdapter:
         )
 
     def test_get_channel_not_found(self):
-        """Test channel retrieval when not found."""
+        """Test channel retrieval when not found (404)."""
+        from google.genai.errors import ClientError
         mock_client = self._create_mock_client()
-        mock_client.file_search_stores.get.side_effect = Exception("Not found")
+        error = ClientError.__new__(ClientError)
+        error.code = 404
+        error.message = "Not found"
+        error.status = "NOT_FOUND"
+        mock_client.file_search_stores.get.side_effect = error
 
         adapter = GeminiChannelAdapter(client=mock_client)
         result = adapter.get_channel("fileSearchStores/nonexistent")
 
         assert result is None
+
+    def test_get_channel_upstream_error(self):
+        """Test channel retrieval raises UpstreamError on non-404 failures."""
+        from google.genai.errors import ServerError
+        mock_client = self._create_mock_client()
+        error = ServerError.__new__(ServerError)
+        error.code = 500
+        error.message = "Internal server error"
+        error.status = "INTERNAL"
+        mock_client.file_search_stores.get.side_effect = error
+
+        adapter = GeminiChannelAdapter(client=mock_client)
+        with pytest.raises(UpstreamError) as exc_info:
+            adapter.get_channel("fileSearchStores/some-channel")
+
+        assert exc_info.value.service == "Gemini"
+        assert exc_info.value.status_code == 500
 
     def test_get_channel_missing_display_name(self):
         """Test channel retrieval when display_name is missing."""
