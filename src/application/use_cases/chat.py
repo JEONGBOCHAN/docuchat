@@ -9,6 +9,7 @@ caching, and persistence.
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from typing import Callable, Generator
@@ -138,6 +139,17 @@ class ChatUseCase:
         self._memory_recent_turns = memory_recent_turns
 
     # ---- Private helpers ----
+
+    def _run_compaction_background(self, session_id: str) -> None:
+        """Run compaction in a background thread (fire-and-forget)."""
+        def _compact():
+            try:
+                self._conversation_memory.maybe_compact(session_id)
+            except Exception:
+                logger.warning("Background compaction failed for session %s", session_id, exc_info=True)
+
+        thread = threading.Thread(target=_compact, daemon=True)
+        thread.start()
 
     def _validate_channel(self, channel_id: str):
         """Validate channel exists via external API."""
@@ -360,12 +372,9 @@ class ChatUseCase:
             self._sources_to_dicts(sources), session_id_response,
         )
 
-        # Trigger compaction check (non-blocking, best-effort)
+        # Trigger compaction check (background, best-effort)
         if self._conversation_memory and session_id_response:
-            try:
-                self._conversation_memory.maybe_compact(session_id_response)
-            except Exception:
-                logger.warning("Compaction failed for session %s", session_id_response, exc_info=True)
+            self._run_compaction_background(session_id_response)
 
         return ChatResultDTO(
             query=query,
@@ -477,12 +486,9 @@ class ChatUseCase:
                     sources, session_id_response,
                 )
 
-                # Trigger compaction check (best-effort)
+                # Trigger compaction check (background, best-effort)
                 if _conversation_memory and session_id_response:
-                    try:
-                        _conversation_memory.maybe_compact(session_id_response)
-                    except Exception:
-                        logger.warning("Compaction failed for session %s", session_id_response, exc_info=True)
+                    self._run_compaction_background(session_id_response)
 
                 yield {"type": "done"}
                 return {
