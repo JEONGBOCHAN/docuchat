@@ -120,6 +120,8 @@ class ChatUseCase:
         conversation_memory: ConversationMemoryService | None = None,
         session_memory_repo: ChatSessionMemoryRepositoryPort | None = None,
         memory_mode: str | None = None,
+        memory_token_budget: int = 12000,
+        memory_recent_turns: int = 80,
     ):
         self._channel_port = channel_port
         self._channel_repo = channel_repo
@@ -132,6 +134,8 @@ class ChatUseCase:
         self._conversation_memory = conversation_memory
         self._session_memory_repo = session_memory_repo
         self._memory_mode = memory_mode
+        self._memory_token_budget = memory_token_budget
+        self._memory_recent_turns = memory_recent_turns
 
     # ---- Private helpers ----
 
@@ -312,6 +316,8 @@ class ChatUseCase:
             conversation_history = (
                 lambda sid=session_id_response: self._conversation_memory.build_context_messages(
                     session_id=sid, query=query,
+                    budget=self._memory_token_budget,
+                    recent_turns=self._memory_recent_turns,
                 )
             )
         else:
@@ -404,6 +410,8 @@ class ChatUseCase:
             conversation_history = (
                 lambda sid=session_id_response: self._conversation_memory.build_context_messages(
                     session_id=sid, query=query,
+                    budget=self._memory_token_budget,
+                    recent_turns=self._memory_recent_turns,
                 )
             )
         else:

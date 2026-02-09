@@ -170,6 +170,34 @@ class TestBuildContextMessages:
         assert len(messages) == 1
         assert messages[0] == ("user", "Hello")
 
+    def test_recent_turns_passed_to_history_repo(self, service, session_memory_repo, chat_history_repo):
+        """recent_turns parameter should be forwarded to get_session_history as limit."""
+        session_memory_repo.get_by_session_id.return_value = None
+        chat_history_repo.get_session_history.return_value = []
+
+        service.build_context_messages("sess_1", "query", recent_turns=42)
+
+        chat_history_repo.get_session_history.assert_called_once_with("sess_1", limit=42)
+
+    def test_custom_budget_trims_correctly(self, service, session_memory_repo, chat_history_repo, token_counter):
+        """A small budget should trim more aggressively."""
+        session_memory_repo.get_by_session_id.return_value = None
+        history = [
+            FakeMessageDTO(id=i, role="user", content="x" * 100)
+            for i in range(10)
+        ]
+        chat_history_repo.get_session_history.return_value = history
+
+        messages_small = service.build_context_messages("sess_1", "q", budget=50)
+        chat_history_repo.get_session_history.return_value = history
+        session_memory_repo.get_by_session_id.return_value = None
+        messages_large = service.build_context_messages("sess_1", "q", budget=50000)
+
+        assert len(messages_small) < len(messages_large)
+        # Query is always preserved
+        assert messages_small[-1] == ("user", "q")
+        assert messages_large[-1] == ("user", "q")
+
 
 class TestMaybeCompact:
     """Tests for maybe_compact."""

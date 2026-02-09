@@ -823,6 +823,8 @@ def create_chat_use_case(db):
         conversation_memory=create_conversation_memory_service(db),
         session_memory_repo=create_session_memory_repository_port(db),
         memory_mode=settings.memory_mode,
+        memory_token_budget=settings.memory_token_budget,
+        memory_recent_turns=settings.memory_recent_turns,
     )
 
 
