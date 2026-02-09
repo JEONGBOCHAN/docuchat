@@ -1174,3 +1174,122 @@ class TestCheckpointMissFallback:
         messages = call_args[0][0]["messages"]
         assert len(messages) == 1
         assert messages[0] == ("user", "new question")
+
+
+class TestCheckpointMissFallbackStream:
+    """Tests for checkpoint miss DB history fallback via run_stream() (CHA-170)."""
+
+    def test_stream_checkpoint_miss_invokes_history_loader(self):
+        """run_stream(): when checkpointer has no state, the lazy history loader is called."""
+        from langgraph.checkpoint.memory import MemorySaver
+        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.application.ports.agent_runner import AgentConfig
+
+        checkpointer = MemorySaver()
+        runner = LangGraphAgentRunner(checkpointer=checkpointer)
+
+        loader_called = []
+
+        def lazy_loader():
+            loader_called.append(True)
+            return [
+                {"role": "user", "content": "previous question"},
+                {"role": "assistant", "content": "previous answer"},
+            ]
+
+        # Mock _create_agent to return an agent whose .stream yields (msg, metadata) pairs
+        ai_msg = MagicMock(content="response", type="ai", tool_calls=[])
+        mock_agent = MagicMock()
+        mock_agent.stream.return_value = [(ai_msg, {"langgraph_node": "agent"})]
+        runner._create_agent = MagicMock(return_value=mock_agent)
+
+        config = AgentConfig(max_iterations=5)
+        context = {
+            "channel_id": "test-channel",
+            "conversation_history": lazy_loader,
+            "thread_id": "sess_no_checkpoint_stream",
+        }
+
+        # Consume the generator to drive execution
+        gen = runner.run_stream(query="new question", config=config, context=context)
+        events = []
+        try:
+            while True:
+                events.append(next(gen))
+        except StopIteration:
+            pass
+
+        # Loader should have been called because no checkpoint exists
+        assert len(loader_called) == 1
+
+        # Verify the messages include history + new query
+        call_args = mock_agent.stream.call_args
+        messages = call_args[0][0]["messages"]
+        assert len(messages) == 3  # 2 history + 1 new
+        assert messages[0] == ("user", "previous question")
+        assert messages[1] == ("assistant", "previous answer")
+        assert messages[2] == ("user", "new question")
+
+    def test_stream_checkpoint_hit_skips_history_loader(self):
+        """run_stream(): when checkpoint exists, the lazy history loader is NOT called."""
+        from langgraph.checkpoint.memory import MemorySaver
+        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.application.ports.agent_runner import AgentConfig
+
+        checkpointer = MemorySaver()
+        runner = LangGraphAgentRunner(checkpointer=checkpointer)
+
+        # Pre-populate checkpoint state so get_tuple returns non-None
+        thread_id = "sess_has_checkpoint_stream"
+        checkpoint_config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": "", "checkpoint_id": ""}}
+        checkpointer.put(
+            config=checkpoint_config,
+            checkpoint={
+                "v": 1,
+                "id": "ckpt-stream-1",
+                "ts": "2026-01-01T00:00:00+00:00",
+                "channel_values": {},
+                "channel_versions": {},
+                "versions_seen": {},
+                "pending_sends": [],
+            },
+            metadata={"source": "input", "step": 0, "writes": {}, "parents": {}},
+            new_versions={},
+        )
+
+        loader_called = []
+
+        def lazy_loader():
+            loader_called.append(True)
+            return [{"role": "user", "content": "old"}]
+
+        # Mock _create_agent to return an agent whose .stream yields (msg, metadata) pairs
+        ai_msg = MagicMock(content="response", type="ai", tool_calls=[])
+        mock_agent = MagicMock()
+        mock_agent.stream.return_value = [(ai_msg, {"langgraph_node": "agent"})]
+        runner._create_agent = MagicMock(return_value=mock_agent)
+
+        config = AgentConfig(max_iterations=5)
+        context = {
+            "channel_id": "test-channel",
+            "conversation_history": lazy_loader,
+            "thread_id": thread_id,
+        }
+
+        # Consume the generator to drive execution
+        gen = runner.run_stream(query="new question", config=config, context=context)
+        events = []
+        try:
+            while True:
+                events.append(next(gen))
+        except StopIteration:
+            pass
+
+        # Loader should NOT have been called - checkpoint exists
+        assert len(loader_called) == 0
+
+        # Only the new query should be in messages
+        call_args = mock_agent.stream.call_args
+        messages = call_args[0][0]["messages"]
+        assert len(messages) == 1
+        assert messages[0] == ("user", "new question")
