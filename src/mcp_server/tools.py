@@ -23,11 +23,21 @@ _chat_histories: dict[str, list[dict[str, Any]]] = {}
 
 SESSION_TTL_SECONDS = 3600  # 1 hour
 MAX_SESSIONS = 500
+_CLEANUP_INTERVAL_SECONDS = 60  # Throttle cleanup to at most once per minute
+_last_cleanup_time: float = 0.0
 
 
-def _cleanup_stale_sessions() -> None:
-    """Remove sessions that have exceeded the TTL."""
+def _cleanup_stale_sessions(force: bool = False) -> None:
+    """Remove sessions that have exceeded the TTL.
+
+    Args:
+        force: If True, skip the throttle check and run immediately.
+    """
+    global _last_cleanup_time
     now = time.monotonic()
+    if not force and (now - _last_cleanup_time) < _CLEANUP_INTERVAL_SECONDS:
+        return
+    _last_cleanup_time = now
     expired = [
         sid for sid, data in _sessions.items()
         if now - data.get("_last_seen", 0) > SESSION_TTL_SECONDS
@@ -183,7 +193,7 @@ async def create_session(channel_id: str) -> dict[str, Any]:
         }
 
     # Cleanup expired sessions and enforce capacity limit
-    _cleanup_stale_sessions()
+    _cleanup_stale_sessions(force=True)
     if len(_sessions) >= MAX_SESSIONS:
         return {
             "success": False,
@@ -215,6 +225,7 @@ async def get_session(session_id: str) -> dict[str, Any]:
     Returns:
         Dictionary with session information.
     """
+    _cleanup_stale_sessions()
     if session_id not in _sessions:
         return {
             "success": False,
@@ -261,6 +272,7 @@ async def list_sessions() -> dict[str, Any]:
     Returns:
         Dictionary with list of sessions.
     """
+    _cleanup_stale_sessions()
     sessions = []
     for session_id, session in _sessions.items():
         sessions.append({
