@@ -29,11 +29,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run linting (optional)
+      - name: Run linting
         run: |
           pip install ruff
           ruff check src/ --ignore E501
-        continue-on-error: true
 
       - name: Run tests
         env:
@@ -51,7 +50,6 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           pytest tests/integration -v --tb=short -m integration
-        continue-on-error: true
 
   docker-build:
     runs-on: ubuntu-latest
