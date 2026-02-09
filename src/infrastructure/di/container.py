@@ -107,7 +107,7 @@ from src.mcp_server.state import get_global_state_store
 
 _event_store: InMemoryEventStore | None = None
 _state_store_adapter: StateStoreAdapter | None = None
-_checkpointer = None  # MemorySaver singleton
+_checkpointer = None  # SqliteSaver singleton for persistent checkpoints
 
 
 def get_event_store() -> InMemoryEventStore:
@@ -125,13 +125,36 @@ def get_event_store() -> InMemoryEventStore:
 def get_checkpointer():
     """Get the global checkpointer (singleton).
 
+    Uses SqliteSaver for persistent conversation checkpoints that survive
+    server restarts. Falls back to MemorySaver if SQLite setup fails.
+
     Returns:
-        MemorySaver instance for LangGraph conversation persistence.
+        Checkpointer instance for LangGraph conversation persistence.
     """
     global _checkpointer
     if _checkpointer is None:
-        from langgraph.checkpoint.memory import MemorySaver
-        _checkpointer = MemorySaver()
+        try:
+            import sqlite3
+            import os
+            from langgraph.checkpoint.sqlite import SqliteSaver
+            from src.core.config import get_settings
+
+            settings = get_settings()
+            db_path = settings.checkpoint_db_path
+
+            # Ensure parent directory exists
+            os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            _checkpointer = SqliteSaver(conn)
+            _checkpointer.setup()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to create SqliteSaver, falling back to MemorySaver"
+            )
+            from langgraph.checkpoint.memory import MemorySaver
+            _checkpointer = MemorySaver()
     return _checkpointer
 
 

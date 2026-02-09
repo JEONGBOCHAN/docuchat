@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite:///./data/docuchat.db"
 
+    # LangGraph Checkpoint persistence
+    checkpoint_db_path: str = "./data/checkpoints.db"
+
     # Channel Lifecycle
     channel_inactive_days: int = 90  # Days before channel is considered inactive
     max_files_per_channel: int = 100

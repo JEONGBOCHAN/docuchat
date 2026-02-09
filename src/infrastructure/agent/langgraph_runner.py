@@ -21,7 +21,7 @@ warnings.filterwarnings(
     message="create_react_agent has been moved",
 )
 from langgraph.prebuilt import create_react_agent
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         model: str = GeminiModels.DEFAULT,
         dashboard_middleware: DashboardMiddleware | None = None,
         token_counter: TokenCounterPort | None = None,
-        checkpointer: MemorySaver | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
     ):
         """Initialize the LangGraph runner.
 
@@ -92,7 +92,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
             model: The Gemini model to use.
             dashboard_middleware: Optional DashboardMiddleware for LLM node display.
             token_counter: Optional TokenCounterPort for real-time token counting.
-            checkpointer: Optional MemorySaver for conversation persistence.
+            checkpointer: Optional checkpoint saver for conversation persistence.
         """
         self._event_sink = event_sink
         if document_search is None:
@@ -105,6 +105,8 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self._dashboard_middleware = dashboard_middleware
         self._token_counter = token_counter
         self._checkpointer = checkpointer
+        self._checkpoint_miss_count = 0
+        self._checkpoint_hit_count = 0
 
     def _create_agent(self, channel_id: str, config: AgentConfig, streaming: bool = False):
         """Create a LangGraph agent for the specified channel.
@@ -371,10 +373,16 @@ If the question is clearly about external/current events not covered in these do
                 has_checkpoint = self._checkpointer.get_tuple(checkpoint_config) is not None
                 if has_checkpoint:
                     # Checkpoint exists → only send new message (no DB query needed)
+                    self._checkpoint_hit_count += 1
                     messages = [("user", query)]
                 else:
                     # Checkpoint miss (e.g. server restart) → load DB history as fallback
-                    logger.info("Checkpoint miss for thread_id=%s, using DB history fallback", thread_id)
+                    self._checkpoint_miss_count += 1
+                    logger.info(
+                        "Checkpoint miss for thread_id=%s, using DB history fallback "
+                        "(total misses=%d, hits=%d)",
+                        thread_id, self._checkpoint_miss_count, self._checkpoint_hit_count,
+                    )
                     conversation_history = _load_history()
                     messages = []
                     if conversation_history:
@@ -612,9 +620,15 @@ If the question is clearly about external/current events not covered in these do
                 has_checkpoint = self._checkpointer.get_tuple(checkpoint_config) is not None
                 if has_checkpoint:
                     # Checkpoint exists → no DB query needed
+                    self._checkpoint_hit_count += 1
                     messages = [("user", query)]
                 else:
-                    logger.info("Checkpoint miss for thread_id=%s, using DB history fallback (stream)", thread_id)
+                    self._checkpoint_miss_count += 1
+                    logger.info(
+                        "Checkpoint miss for thread_id=%s, using DB history fallback (stream) "
+                        "(total misses=%d, hits=%d)",
+                        thread_id, self._checkpoint_miss_count, self._checkpoint_hit_count,
+                    )
                     conversation_history = _load_history()
                     messages = []
                     if conversation_history:
