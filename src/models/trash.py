@@ -55,4 +55,5 @@ class EmptyTrashResponse(BaseModel):
 
     deleted_channels: int = Field(..., description="Number of permanently deleted channels")
     deleted_notes: int = Field(..., description="Number of permanently deleted notes")
+    failed_channels: int = Field(0, description="Number of channels that failed external deletion")
     message: str = Field(..., description="Success message")

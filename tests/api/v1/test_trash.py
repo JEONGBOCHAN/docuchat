@@ -226,6 +226,37 @@ class TestDeleteItemPermanently:
 
         app.dependency_overrides.pop(get_channel_port, None)
 
+    def test_permanent_delete_channel_gemini_failure(self, client_with_db: TestClient, test_db):
+        """Test that Gemini delete failure returns 502 and keeps channel in trash."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.delete_channel.return_value = False
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        channel = ChannelMetadata(
+            gemini_store_id="fileSearchStores/fail-channel",
+            name="Fail Channel",
+            deleted_at=datetime.now(UTC),
+        )
+        test_db.add(channel)
+        test_db.commit()
+        test_db.refresh(channel)
+        channel_id = channel.id
+
+        response = client_with_db.delete(f"/api/v1/trash/channel/{channel_id}")
+
+        assert response.status_code == 502
+        assert "external storage" in response.json()["detail"].lower()
+
+        # Verify channel is still in trash (not deleted from DB)
+        still_exists = test_db.query(ChannelMetadata).filter(
+            ChannelMetadata.id == channel_id
+        ).first()
+        assert still_exists is not None
+        assert still_exists.deleted_at is not None
+
+        app.dependency_overrides.pop(get_channel_port, None)
+
     def test_permanent_delete_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test permanently deleting non-existent trashed channel."""
         mock_channel_port = MagicMock()
@@ -280,7 +311,60 @@ class TestEmptyTrash:
         assert response.status_code == 200
         data = response.json()
         assert data["deleted_channels"] >= 1
+        assert data["failed_channels"] == 0
         assert "message" in data
+
+        app.dependency_overrides.pop(get_channel_port, None)
+
+    def test_empty_trash_partial_gemini_failure(self, client_with_db: TestClient, test_db):
+        """Test that Gemini failures leave channels in trash while notes are still deleted."""
+        mock_channel_port = MagicMock()
+        # First channel succeeds, second fails
+        mock_channel_port.delete_channel.side_effect = [True, False]
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+
+        # Create two soft-deleted channels
+        ch1 = ChannelMetadata(
+            gemini_store_id="fileSearchStores/ch-ok",
+            name="OK Channel",
+            deleted_at=datetime.now(UTC),
+        )
+        ch2 = ChannelMetadata(
+            gemini_store_id="fileSearchStores/ch-fail",
+            name="Fail Channel",
+            deleted_at=datetime.now(UTC),
+        )
+        test_db.add_all([ch1, ch2])
+        test_db.commit()
+        test_db.refresh(ch1)
+        test_db.refresh(ch2)
+        ch1_id, ch2_id = ch1.id, ch2.id
+
+        # Create a soft-deleted note (on ch2 so it survives ch1 deletion)
+        note = NoteDB(
+            channel_id=ch2.id,
+            title="Deleted Note",
+            content="Content",
+            deleted_at=datetime.now(UTC),
+        )
+        test_db.add(note)
+        test_db.commit()
+
+        response = client_with_db.delete("/api/v1/trash", params={"confirm": True})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["deleted_channels"] == 1
+        assert data["failed_channels"] == 1
+        assert data["deleted_notes"] == 1
+        assert "failed" in data["message"].lower() or "remain" in data["message"].lower()
+
+        # ch1 should be gone, ch2 should remain in trash
+        assert test_db.query(ChannelMetadata).filter(ChannelMetadata.id == ch1_id).first() is None
+        ch2_still = test_db.query(ChannelMetadata).filter(ChannelMetadata.id == ch2_id).first()
+        assert ch2_still is not None
+        assert ch2_still.deleted_at is not None
 
         app.dependency_overrides.pop(get_channel_port, None)
 

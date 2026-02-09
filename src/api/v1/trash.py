@@ -140,8 +140,13 @@ def delete_item_permanently(
                 detail=f"Trashed channel not found: {item_id}",
             )
 
-        # Delete from Gemini
-        channel_port.delete_channel(channel_dto.gemini_store_id, force=True)
+        # Delete from Gemini — only proceed with DB delete if successful
+        gemini_success = channel_port.delete_channel(channel_dto.gemini_store_id, force=True)
+        if not gemini_success:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to delete channel from external storage. Channel remains in trash for retry.",
+            )
 
         # Delete from DB
         if not trash_repo.permanent_delete_channel(item_id):
@@ -188,19 +193,36 @@ def empty_trash(
             detail="Please confirm by setting confirm=true",
         )
 
-    # First, delete all trashed channels from Gemini
+    # Delete trashed channels — only DB-delete those that succeed in Gemini
     trashed_channel_dtos = trash_repo.get_all_trashed_channels()
+    deleted_channels = 0
+    failed_channels = 0
 
     for channel_dto in trashed_channel_dtos:
-        channel_port.delete_channel(channel_dto.gemini_store_id, force=True)
+        success = channel_port.delete_channel(channel_dto.gemini_store_id, force=True)
+        if success:
+            trash_repo.permanent_delete_channel(channel_dto.id)
+            deleted_channels += 1
+        else:
+            failed_channels += 1
 
-    # Then delete from DB
-    deleted_channels, deleted_notes = trash_repo.empty_trash()
+    # Delete trashed notes (no external resources, safe to delete directly)
+    all_items = trash_repo.get_all_trashed_items()
+    deleted_notes = 0
+    for item in all_items:
+        if item.type == "note":
+            if trash_repo.permanent_delete_note(item.id):
+                deleted_notes += 1
+
+    message = f"Permanently deleted {deleted_channels} channels and {deleted_notes} notes"
+    if failed_channels > 0:
+        message += f" ({failed_channels} channels failed external deletion and remain in trash)"
 
     return EmptyTrashResponse(
         deleted_channels=deleted_channels,
         deleted_notes=deleted_notes,
-        message=f"Permanently deleted {deleted_channels} channels and {deleted_notes} notes",
+        failed_channels=failed_channels,
+        message=message,
     )
 
 
