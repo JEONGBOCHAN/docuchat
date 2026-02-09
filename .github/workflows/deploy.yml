@@ -68,8 +68,7 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           TESTING: "true"
         run: |
-          pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing || true
-        continue-on-error: true
+          pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
 
       - name: Debug - Check Python and installed packages
         run: |
@@ -108,8 +107,7 @@ jobs:
 
       - name: Run frontend tests
         working-directory: frontend
-        run: npm test -- --passWithNoTests || true
-        continue-on-error: true
+        run: npm test -- --passWithNoTests
 
   # ============================================
   # Build Job - Build Docker images
