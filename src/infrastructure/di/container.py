@@ -773,6 +773,28 @@ def create_search_history_use_case(db):
     )
 
 
+def create_conversation_memory_service(db):
+    """Create ConversationMemoryService with all dependencies wired.
+
+    Args:
+        db: Database session.
+
+    Returns:
+        Fully configured ConversationMemoryService.
+    """
+    from src.application.use_cases.conversation_memory import ConversationMemoryService
+    from src.core.config import get_settings
+    settings = get_settings()
+    return ConversationMemoryService(
+        chat_history_repo=create_chat_history_repository_port(db),
+        session_memory_repo=create_session_memory_repository_port(db),
+        summary_port=create_conversation_summary_port(),
+        token_counter=create_token_counter(),
+        compaction_trigger_turns=getattr(settings, "memory_compaction_trigger_turns", 30),
+        compaction_target_tokens=getattr(settings, "memory_compaction_target_tokens", 1200),
+    )
+
+
 def create_chat_use_case(db):
     """Create ChatUseCase with all dependencies wired.
 
@@ -796,6 +818,8 @@ def create_chat_use_case(db):
             include_web_search=True,
             include_academic_search=True,
         ),
+        conversation_memory=create_conversation_memory_service(db),
+        session_memory_repo=create_session_memory_repository_port(db),
     )
 
 

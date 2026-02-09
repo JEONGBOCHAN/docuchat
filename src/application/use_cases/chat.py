@@ -18,11 +18,13 @@ from src.application.ports.persistence import (
     ChannelRepositoryPort,
     ChatHistoryRepositoryPort,
     ChatSessionRepositoryPort,
+    ChatSessionMemoryRepositoryPort,
     SearchHistoryRepositoryPort,
 )
 from src.application.ports.cache import CachePort
 from src.application.use_cases.document_summary import GetChannelDocumentSummariesUseCase
 from src.application.use_cases.process_query import ProcessQueryUseCase
+from src.application.use_cases.conversation_memory import ConversationMemoryService
 from src.application.use_cases.exceptions import (
     ChannelNotFoundError,
     SessionNotFoundError,
@@ -115,6 +117,8 @@ class ChatUseCase:
         cache: CachePort,
         summaries_use_case: GetChannelDocumentSummariesUseCase,
         process_query_factory: Callable[[], ProcessQueryUseCase],
+        conversation_memory: ConversationMemoryService | None = None,
+        session_memory_repo: ChatSessionMemoryRepositoryPort | None = None,
     ):
         self._channel_port = channel_port
         self._channel_repo = channel_repo
@@ -124,6 +128,8 @@ class ChatUseCase:
         self._cache = cache
         self._summaries = summaries_use_case
         self._process_query_factory = process_query_factory
+        self._conversation_memory = conversation_memory
+        self._session_memory_repo = session_memory_repo
 
     # ---- Private helpers ----
 
@@ -299,12 +305,20 @@ class ChatUseCase:
                     session_id=session_id_response,
                 )
 
-        # Pass lazy loader so DB history is only queried on checkpoint miss
-        conversation_history = (
-            (lambda sid=session_id_response: self._get_conversation_history(sid))
-            if session_id_response
-            else []
-        )
+        # Build conversation history — use memory service if available
+        if self._conversation_memory and session_id_response:
+            conversation_history = (
+                lambda sid=session_id_response: self._conversation_memory.build_context_messages(
+                    session_id=sid, query=query,
+                )
+            )
+        else:
+            # Fallback: lazy loader for raw DB history
+            conversation_history = (
+                (lambda sid=session_id_response: self._get_conversation_history(sid))
+                if session_id_response
+                else []
+            )
 
         # Run agent with thread_id for checkpointer-based context
         use_case = self._process_query_factory()
@@ -336,6 +350,13 @@ class ChatUseCase:
             channel_meta.id, query, response_text,
             self._sources_to_dicts(sources), session_id_response,
         )
+
+        # Trigger compaction check (non-blocking, best-effort)
+        if self._conversation_memory and session_id_response:
+            try:
+                self._conversation_memory.maybe_compact(session_id_response)
+            except Exception:
+                logger.warning("Compaction failed for session %s", session_id_response, exc_info=True)
 
         return ChatResultDTO(
             query=query,
@@ -375,13 +396,24 @@ class ChatUseCase:
         session_id_response, session_renewed, old_session_id = self._resolve_session(
             channel_meta.id, session_id
         )
-        # Pass lazy loader so DB history is only queried on checkpoint miss
-        conversation_history = (
-            (lambda sid=session_id_response: self._get_conversation_history(sid))
-            if session_id_response
-            else []
-        )
+        # Build conversation history — use memory service if available
+        if self._conversation_memory and session_id_response:
+            conversation_history = (
+                lambda sid=session_id_response: self._conversation_memory.build_context_messages(
+                    session_id=sid, query=query,
+                )
+            )
+        else:
+            conversation_history = (
+                (lambda sid=session_id_response: self._get_conversation_history(sid))
+                if session_id_response
+                else []
+            )
         document_context = self._summaries.build_context_string(channel_id)
+
+        # Capture references for use inside generator closure
+        _conversation_memory = self._conversation_memory
+        _search_history = self._search_history
 
         def generate() -> Generator[dict, None, dict | None]:
             """Generate stream events."""
@@ -425,12 +457,19 @@ class ChatUseCase:
                     yield {"type": "sources", "sources": sources}
 
                 # Save to DB
-                self._search_history.add_or_update(channel_meta.id, query)
+                _search_history.add_or_update(channel_meta.id, query)
                 self._save_chat_messages(
                     channel_meta.id, query,
                     accumulated_content or result.response or "",
                     sources, session_id_response,
                 )
+
+                # Trigger compaction check (best-effort)
+                if _conversation_memory and session_id_response:
+                    try:
+                        _conversation_memory.maybe_compact(session_id_response)
+                    except Exception:
+                        logger.warning("Compaction failed for session %s", session_id_response, exc_info=True)
 
                 yield {"type": "done"}
                 return {
@@ -583,6 +622,13 @@ class ChatUseCase:
             raise SessionNotFoundError(session_id)
 
         self._verify_session_ownership(session_dto, channel_id)
+
+        # Clear session memory (summary) before deleting the session
+        if self._session_memory_repo:
+            try:
+                self._session_memory_repo.clear(session_id)
+            except Exception:
+                logger.warning("Failed to clear memory for session %s", session_id, exc_info=True)
 
         if not self._session_repo.delete(session_id):
             raise SessionNotFoundError(session_id)
