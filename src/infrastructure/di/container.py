@@ -671,7 +671,7 @@ def create_generate_podcast_script_use_case() -> GeneratePodcastScriptUseCase:
     return GeneratePodcastScriptUseCase(podcast_port=create_podcast_script())
 
 
-def create_generate_audio_use_case(db=None):
+def create_generate_audio_use_case(db):
     """Create GenerateAudioUseCase with all dependencies wired.
 
     Args:
@@ -701,7 +701,7 @@ def create_channel_port() -> ChannelPort:
     return GeminiChannelAdapter()
 
 
-def create_channel_crud_use_case(db=None):
+def create_channel_crud_use_case(db):
     """Create ChannelCrudUseCase with all dependencies wired.
 
     Args:
@@ -720,7 +720,7 @@ def create_channel_crud_use_case(db=None):
     )
 
 
-def create_note_crud_use_case(db=None):
+def create_note_crud_use_case(db):
     """Create NoteCrudUseCase with all dependencies wired.
 
     Args:
@@ -738,7 +738,7 @@ def create_note_crud_use_case(db=None):
     )
 
 
-def create_favorite_crud_use_case(db=None):
+def create_favorite_crud_use_case(db):
     """Create FavoriteCrudUseCase with all dependencies wired.
 
     Args:
@@ -755,7 +755,7 @@ def create_favorite_crud_use_case(db=None):
     )
 
 
-def create_search_history_use_case(db=None):
+def create_search_history_use_case(db):
     """Create SearchHistoryUseCase with all dependencies wired.
 
     Args:
@@ -772,7 +772,7 @@ def create_search_history_use_case(db=None):
     )
 
 
-def create_chat_use_case(db=None):
+def create_chat_use_case(db):
     """Create ChatUseCase with all dependencies wired.
 
     Args:
@@ -798,7 +798,7 @@ def create_chat_use_case(db=None):
     )
 
 
-def create_document_crud_use_case(db=None):
+def create_document_crud_use_case(db):
     """Create DocumentCrudUseCase with all dependencies wired.
 
     Args:
@@ -839,7 +839,7 @@ def create_document_port() -> DocumentPort:
 # Repository Port Factory Functions
 # ============================================================
 
-def create_channel_repository_port(db=None) -> ChannelRepositoryPort:
+def create_channel_repository_port(db) -> ChannelRepositoryPort:
     """Create channel repository port.
 
     Args:
@@ -852,7 +852,7 @@ def create_channel_repository_port(db=None) -> ChannelRepositoryPort:
     return ChannelRepositoryAdapter(db)
 
 
-def create_chat_history_repository_port(db=None) -> ChatHistoryRepositoryPort:
+def create_chat_history_repository_port(db) -> ChatHistoryRepositoryPort:
     """Create chat history repository port.
 
     Args:
@@ -865,7 +865,7 @@ def create_chat_history_repository_port(db=None) -> ChatHistoryRepositoryPort:
     return ChatHistoryRepositoryAdapter(db)
 
 
-def create_chat_session_repository_port(db=None) -> ChatSessionRepositoryPort:
+def create_chat_session_repository_port(db) -> ChatSessionRepositoryPort:
     """Create chat session repository port.
 
     Args:
@@ -878,7 +878,7 @@ def create_chat_session_repository_port(db=None) -> ChatSessionRepositoryPort:
     return ChatSessionRepositoryAdapter(db)
 
 
-def create_note_repository_port(db=None) -> NoteRepositoryPort:
+def create_note_repository_port(db) -> NoteRepositoryPort:
     """Create note repository port.
 
     Args:
@@ -891,7 +891,7 @@ def create_note_repository_port(db=None) -> NoteRepositoryPort:
     return NoteRepositoryAdapter(db)
 
 
-def create_favorite_repository_port(db=None) -> FavoriteRepositoryPort:
+def create_favorite_repository_port(db) -> FavoriteRepositoryPort:
     """Create favorite repository port.
 
     Args:
@@ -904,7 +904,7 @@ def create_favorite_repository_port(db=None) -> FavoriteRepositoryPort:
     return FavoriteRepositoryAdapter(db)
 
 
-def create_search_history_repository_port(db=None) -> SearchHistoryRepositoryPort:
+def create_search_history_repository_port(db) -> SearchHistoryRepositoryPort:
     """Create search history repository port.
 
     Args:
@@ -917,7 +917,7 @@ def create_search_history_repository_port(db=None) -> SearchHistoryRepositoryPor
     return SearchHistoryRepositoryAdapter(db)
 
 
-def create_trash_repository_port(db=None) -> TrashRepositoryPort:
+def create_trash_repository_port(db) -> TrashRepositoryPort:
     """Create trash repository port.
 
     Args:
@@ -930,7 +930,7 @@ def create_trash_repository_port(db=None) -> TrashRepositoryPort:
     return TrashRepositoryAdapter(db)
 
 
-def create_audio_repository_port(db=None) -> AudioRepositoryPort:
+def create_audio_repository_port(db) -> AudioRepositoryPort:
     """Create audio repository port.
 
     Args:
@@ -943,7 +943,7 @@ def create_audio_repository_port(db=None) -> AudioRepositoryPort:
     return AudioRepositoryAdapter(db)
 
 
-def create_document_preview_cache_repository_port(db=None) -> DocumentPreviewCacheRepositoryPort:
+def create_document_preview_cache_repository_port(db) -> DocumentPreviewCacheRepositoryPort:
     """Create document preview cache repository port.
 
     Args:
@@ -1124,7 +1124,7 @@ def create_document_summary_generation_port() -> DocumentSummaryGenerationPort:
     return GeminiDocumentSummaryAdapter()
 
 
-def create_document_summary_cache_port(db=None) -> DocumentSummaryCachePort:
+def create_document_summary_cache_port(db) -> DocumentSummaryCachePort:
     """Create document summary cache repository port.
 
     Args:
@@ -1139,7 +1139,7 @@ def create_document_summary_cache_port(db=None) -> DocumentSummaryCachePort:
     return DocumentSummaryCacheRepository(db)
 
 
-def create_generate_document_summary_use_case(db=None):
+def create_generate_document_summary_use_case(db):
     """Create GenerateDocumentSummaryUseCase with dependencies.
 
     Args:
@@ -1149,7 +1149,7 @@ def create_generate_document_summary_use_case(db=None):
         Fully configured GenerateDocumentSummaryUseCase.
 
     Example:
-        use_case = create_generate_document_summary_use_case()
+        use_case = create_generate_document_summary_use_case(db)
         result = use_case.execute(
             channel_id="channel-123",
             document_id="file-abc",
@@ -1163,7 +1163,7 @@ def create_generate_document_summary_use_case(db=None):
     )
 
 
-def create_get_channel_summaries_use_case(db=None):
+def create_get_channel_summaries_use_case(db):
     """Create GetChannelDocumentSummariesUseCase with dependencies.
 
     Args:
@@ -1173,7 +1173,7 @@ def create_get_channel_summaries_use_case(db=None):
         Fully configured GetChannelDocumentSummariesUseCase.
 
     Example:
-        use_case = create_get_channel_summaries_use_case()
+        use_case = create_get_channel_summaries_use_case(db)
         result = use_case.execute(channel_id="channel-123")
         context = use_case.build_context_string(channel_id="channel-123")
     """
