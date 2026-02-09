@@ -123,8 +123,8 @@ class ConversationMemoryService:
         )
         previous_summary = memory_dto.rolling_summary if memory_dto else ""
 
-        # Get all session messages
-        all_messages = self._chat_history.get_session_history(session_id)
+        # Get all session messages (limit=0 bypasses context_window default)
+        all_messages = self._chat_history.get_session_history(session_id, limit=0)
         if not all_messages:
             return
 

@@ -278,3 +278,17 @@ class TestMaybeCompact:
         service.maybe_compact("sess_1")
 
         summary_port.summarize_incremental.assert_not_called()
+
+    def test_compaction_reads_full_history_with_limit_zero(self, service, session_memory_repo, chat_history_repo, summary_port):
+        """Compaction should read full session history with limit=0, bypassing context_window default."""
+        session_memory_repo.get_by_session_id.return_value = None
+        chat_history_repo.get_session_history.return_value = [
+            FakeMessageDTO(id=i, role="user", content=f"msg {i}")
+            for i in range(1, 6)
+        ]
+        summary_port.summarize_incremental.return_value = "summary"
+
+        service.maybe_compact("sess_1")
+
+        # Verify limit=0 is passed (bypasses context_window default)
+        chat_history_repo.get_session_history.assert_called_once_with("sess_1", limit=0)
