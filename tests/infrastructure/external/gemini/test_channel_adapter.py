@@ -82,6 +82,37 @@ class TestGeminiChannelAdapter:
 
         assert result is None
 
+    def test_get_channel_not_found_403_not_exist(self):
+        """Test channel retrieval returns None for 403 'may not exist' responses."""
+        from google.genai.errors import ClientError
+        mock_client = self._create_mock_client()
+        error = ClientError.__new__(ClientError)
+        error.code = 403
+        error.message = "Permission denied. The caller does not have permission or it may not exist."
+        error.status = "PERMISSION_DENIED"
+        mock_client.file_search_stores.get.side_effect = error
+
+        adapter = GeminiChannelAdapter(client=mock_client)
+        result = adapter.get_channel("fileSearchStores/nonexistent")
+
+        assert result is None
+
+    def test_get_channel_403_real_permission_denied(self):
+        """Test channel retrieval raises UpstreamError for real 403 (no 'not exist')."""
+        from google.genai.errors import ClientError
+        mock_client = self._create_mock_client()
+        error = ClientError.__new__(ClientError)
+        error.code = 403
+        error.message = "Permission denied. Insufficient quota."
+        error.status = "PERMISSION_DENIED"
+        mock_client.file_search_stores.get.side_effect = error
+
+        adapter = GeminiChannelAdapter(client=mock_client)
+        with pytest.raises(UpstreamError) as exc_info:
+            adapter.get_channel("fileSearchStores/some-channel")
+
+        assert exc_info.value.status_code == 403
+
     def test_get_channel_upstream_error(self):
         """Test channel retrieval raises UpstreamError on non-404 failures."""
         from google.genai.errors import ServerError

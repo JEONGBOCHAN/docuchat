@@ -85,6 +85,10 @@ class GeminiChannelAdapter(ChannelPort):
         except ClientError as e:
             if e.code == 404:
                 return None
+            # Gemini returns 403 PERMISSION_DENIED for non-existent stores
+            # with messages like "or it may not exist"
+            if e.code == 403 and "not exist" in str(e.message).lower():
+                return None
             logger.error("Gemini client error for channel %s: %s (code=%s)", channel_id, e.message, e.code)
             raise UpstreamError("Gemini", str(e.message), status_code=e.code) from e
         except ServerError as e:
