@@ -87,6 +87,8 @@ jobs:
           pytest tests/mcp_server/ tests/integration/test_mcp_integration.py -v --tb=long 2>&1 || (echo "=== FAILED ===" && exit 1)
         continue-on-error: false
 
+      # Policy: coverage upload failure must NOT block deployment.
+      # Codecov is an external service; its outage should not prevent releases.
       - name: Upload coverage report
         uses: codecov/codecov-action@v3
         with:
