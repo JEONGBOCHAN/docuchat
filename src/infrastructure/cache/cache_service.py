@@ -342,32 +342,33 @@ class CacheService:
         Returns:
             Dict with cache statistics
         """
-        return {
-            "chat": {
-                **self._stats["chat"],
-                "size": len(self._chat_cache),
-                "maxsize": self._chat_cache.maxsize,
-                "ttl": CacheTTL.CHAT_RESPONSE,
-            },
-            "document": {
-                **self._stats["document"],
-                "size": len(self._document_cache),
-                "maxsize": self._document_cache.maxsize,
-                "ttl": CacheTTL.DOCUMENT_LIST,
-            },
-            "channel": {
-                **self._stats["channel"],
-                "size": len(self._channel_cache),
-                "maxsize": self._channel_cache.maxsize,
-                "ttl": CacheTTL.CHANNEL_INFO,
-            },
-            "store": {
-                **self._stats["store"],
-                "size": len(self._store_cache),
-                "maxsize": self._store_cache.maxsize,
-                "ttl": CacheTTL.STORE_LIST,
-            },
-        }
+        with self._lock:
+            return {
+                "chat": {
+                    **self._stats["chat"],
+                    "size": len(self._chat_cache),
+                    "maxsize": self._chat_cache.maxsize,
+                    "ttl": CacheTTL.CHAT_RESPONSE,
+                },
+                "document": {
+                    **self._stats["document"],
+                    "size": len(self._document_cache),
+                    "maxsize": self._document_cache.maxsize,
+                    "ttl": CacheTTL.DOCUMENT_LIST,
+                },
+                "channel": {
+                    **self._stats["channel"],
+                    "size": len(self._channel_cache),
+                    "maxsize": self._channel_cache.maxsize,
+                    "ttl": CacheTTL.CHANNEL_INFO,
+                },
+                "store": {
+                    **self._stats["store"],
+                    "size": len(self._store_cache),
+                    "maxsize": self._store_cache.maxsize,
+                    "ttl": CacheTTL.STORE_LIST,
+                },
+            }
 
     def get_hit_rate(self, cache_type: str) -> float:
         """Calculate hit rate for a cache type.
@@ -378,11 +379,12 @@ class CacheService:
         Returns:
             Hit rate as percentage (0-100)
         """
-        stats = self._stats.get(cache_type, {"hits": 0, "misses": 0})
-        total = stats["hits"] + stats["misses"]
-        if total == 0:
-            return 0.0
-        return (stats["hits"] / total) * 100
+        with self._lock:
+            stats = self._stats.get(cache_type, {"hits": 0, "misses": 0})
+            total = stats["hits"] + stats["misses"]
+            if total == 0:
+                return 0.0
+            return (stats["hits"] / total) * 100
 
 
 # Global cache instance
