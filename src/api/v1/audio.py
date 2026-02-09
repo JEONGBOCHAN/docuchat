@@ -114,16 +114,11 @@ def _audio_dto_to_response(audio_dto, channel_id: str) -> AudioOverviewResponse:
 def _run_audio_generation_in_background(request: AudioGenerationRequest) -> None:
     """Run audio generation use case in a background thread.
 
-    Creates its own DB session for thread safety, wires up the use case
-    via the DI container, and runs it in a new event loop.
+    Uses the shared DB session factory for thread safety, wires up the use case
+    via the DI container, and runs it in a new event loop (required per-thread).
     """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from src.core.config import get_settings
+    from src.core.database import SessionLocal
 
-    db_url = get_settings().database_url
-    engine = create_engine(db_url)
-    SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()
 
     try:
