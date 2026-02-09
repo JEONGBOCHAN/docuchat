@@ -944,6 +944,16 @@ def create_audio_repository_port(db) -> AudioRepositoryPort:
     return AudioRepositoryAdapter(db)
 
 
+def create_conversation_summary_port():
+    """Create conversation summary port.
+
+    Returns:
+        ConversationSummaryPort implementation (GeminiConversationSummaryAdapter).
+    """
+    from src.infrastructure.external.gemini.conversation_summary import GeminiConversationSummaryAdapter
+    return GeminiConversationSummaryAdapter()
+
+
 def create_session_memory_repository_port(db):
     """Create session memory repository port.
 

@@ -105,6 +105,7 @@ from src.application.ports.podcast import (
     PodcastScriptDTO,
     DialogueLineDTO,
 )
+from src.application.ports.conversation_summary import ConversationSummaryPort
 from src.application.ports.channel import ChannelPort, ChannelDTO
 from src.application.ports.document import DocumentPort, DocumentDTO, UploadResultDTO
 
@@ -252,6 +253,8 @@ __all__ = [
     "PodcastScriptPort",
     "PodcastScriptDTO",
     "DialogueLineDTO",
+    # Conversation Summary
+    "ConversationSummaryPort",
     # Channel
     "ChannelPort",
     "ChannelDTO",
