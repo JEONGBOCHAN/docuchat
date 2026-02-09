@@ -212,19 +212,29 @@ Once running, access the interactive API docs:
 
 ```
 docuchat/
-├── src/                    # Backend source code
-│   ├── api/v1/            # API routes
-│   ├── core/              # Configuration
-│   ├── models/            # Pydantic models
-│   ├── services/          # Business logic
-│   └── workflows/         # LangGraph workflows
-├── frontend/              # Next.js frontend
-│   ├── src/app/          # App router pages
-│   ├── src/components/   # React components
-│   └── src/lib/          # Utilities & API client
-├── tests/                 # Test suites
-├── docs/                  # Documentation
-└── docker-compose.yml     # Docker configuration
+├── src/                        # Backend source code
+│   ├── api/v1/                # API routes (thin controllers)
+│   ├── application/           # Use cases & port interfaces
+│   │   ├── ports/             # Abstract port definitions
+│   │   └── use_cases/         # Business logic orchestration
+│   ├── domain/                # Domain entities & value objects
+│   ├── infrastructure/        # Port implementations
+│   │   ├── di/                # Dependency injection container
+│   │   ├── external/gemini/   # Gemini API adapters
+│   │   ├── persistence/       # Database repositories & adapters
+│   │   └── scheduler/         # Background job scheduler
+│   ├── agents/                # AI agent definitions & middlewares
+│   ├── mcp_server/            # MCP server integration
+│   ├── core/                  # Configuration, DB, logging
+│   ├── middleware/             # HTTP middlewares
+│   └── models/                # Pydantic request/response models
+├── frontend/                  # Next.js frontend
+│   ├── src/app/              # App router pages
+│   ├── src/components/       # React components
+│   └── src/lib/              # Utilities & API client
+├── tests/                     # Test suites
+├── docs/                      # Documentation
+└── docker-compose.yml         # Docker configuration
 ```
 
 ## Documentation
