@@ -20,6 +20,7 @@ from src.infrastructure.scheduler.scheduler_jobs import (
     update_channel_statistics,
     cleanup_expired_trash,
 )
+from src.application.use_cases.exceptions import UpstreamError
 
 # Initialize structured logging first
 setup_logging()
@@ -97,6 +98,19 @@ app = FastAPI(
 
 # Rate limiting setup
 app.state.limiter = limiter
+
+
+@app.exception_handler(UpstreamError)
+async def upstream_error_handler(request: Request, exc: UpstreamError):
+    """Handle external service failures with 502 Bad Gateway."""
+    logger.error("Upstream error from %s: %s", exc.service, exc)
+    return JSONResponse(
+        status_code=502,
+        content={
+            "detail": f"External service error ({exc.service})",
+            "message": str(exc),
+        },
+    )
 
 
 @app.exception_handler(RateLimitExceeded)

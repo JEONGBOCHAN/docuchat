@@ -5,11 +5,16 @@ Gemini Channel Adapter.
 Implements ChannelPort using Google Gemini File Search Store API.
 """
 
+import logging
 import requests
 from google import genai
+from google.genai.errors import ClientError, ServerError, APIError
 
 from src.application.ports.channel import ChannelPort, ChannelDTO
+from src.application.use_cases.exceptions import UpstreamError
 from src.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiChannelAdapter(ChannelPort):
@@ -67,6 +72,9 @@ class GeminiChannelAdapter(ChannelPort):
 
         Returns:
             ChannelDTO with channel information, or None if not found.
+
+        Raises:
+            UpstreamError: If the external API fails for reasons other than 404.
         """
         try:
             store = self._client.file_search_stores.get(name=channel_id)
@@ -74,8 +82,20 @@ class GeminiChannelAdapter(ChannelPort):
                 name=store.name,
                 display_name=getattr(store, "display_name", ""),
             )
-        except Exception:
-            return None
+        except ClientError as e:
+            if e.code == 404:
+                return None
+            logger.error("Gemini client error for channel %s: %s (code=%s)", channel_id, e.message, e.code)
+            raise UpstreamError("Gemini", str(e.message), status_code=e.code) from e
+        except ServerError as e:
+            logger.error("Gemini server error for channel %s: %s (code=%s)", channel_id, e.message, e.code)
+            raise UpstreamError("Gemini", str(e.message), status_code=e.code) from e
+        except APIError as e:
+            logger.error("Gemini API error for channel %s: %s", channel_id, e)
+            raise UpstreamError("Gemini", str(e), status_code=getattr(e, 'code', None)) from e
+        except Exception as e:
+            logger.error("Unexpected error accessing channel %s: %s", channel_id, e)
+            raise UpstreamError("Gemini", str(e)) from e
 
     def list_channels(self) -> list[ChannelDTO]:
         """List all channels.

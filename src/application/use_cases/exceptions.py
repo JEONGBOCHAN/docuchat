@@ -48,6 +48,27 @@ class SessionExpiredError(Exception):
         super().__init__(f"Session has expired: {session_id}")
 
 
+class NoteValidationError(Exception):
+    """Note validation failed (title/content constraints). Maps to HTTP 400."""
+
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
+
+
+class UpstreamError(Exception):
+    """External service (upstream) error. Maps to HTTP 502.
+
+    Raised when an external API call fails for reasons other than
+    'resource not found' (e.g., auth failure, server error, timeout).
+    """
+
+    def __init__(self, service: str, message: str, status_code: int | None = None):
+        self.service = service
+        self.status_code = status_code
+        super().__init__(f"{service} error: {message}")
+
+
 class YouTubeError(Exception):
     """Base YouTube operation error. Maps to HTTP 500."""
     pass
