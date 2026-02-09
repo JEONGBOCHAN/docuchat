@@ -109,7 +109,7 @@ class TestGeminiDocumentAdapter:
         assert result.done is False
 
     def test_get_operation_status(self):
-        """Test get operation status always returns done=True."""
+        """Test get operation status returns done=False for unknown operations."""
         mock_client = self._create_mock_client()
 
         adapter = GeminiDocumentAdapter(client=mock_client)
@@ -117,7 +117,7 @@ class TestGeminiDocumentAdapter:
 
         assert isinstance(result, UploadResultDTO)
         assert result.operation_name == "operations/op-123"
-        assert result.done is True
+        assert result.done is False
         assert result.document_name is None
 
     def test_list_documents_success(self):
@@ -357,9 +357,9 @@ class TestGeminiDocumentAdapterIntegration:
             assert upload_result.done is True
             assert upload_result.document_name is not None
 
-            # Check operation status
+            # Check operation status — operations/* names fall to unknown fallback (done=False)
             status = adapter.get_operation_status(upload_result.operation_name)
-            assert status.done is True
+            assert status.done is False
 
             # List documents
             documents = adapter.list_documents("fileSearchStores/ch-1")

@@ -119,10 +119,10 @@ class GeminiDocumentAdapter(DocumentPort):
                         document_id=operation_name,
                     )
 
-        # Fallback: unknown status
+        # Fallback: unknown status — assume NOT done to avoid false positives
         return UploadResultDTO(
             operation_name=operation_name,
-            done=True,
+            done=False,
             document_name=None,
         )
 
