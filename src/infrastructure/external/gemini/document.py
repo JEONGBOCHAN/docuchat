@@ -86,19 +86,40 @@ class GeminiDocumentAdapter(DocumentPort):
         )
 
     def get_operation_status(self, operation_name: str) -> UploadResultDTO:
-        """Get the status of an upload operation.
+        """Get the status of a document by checking its state in the channel.
 
-        Note: The Gemini File Search API's operations.get() doesn't work reliably
-        with the operation names returned by upload_to_file_search_store.
-        Since the upload itself succeeds (202 response), we assume the operation
-        completed. The actual document status can be checked via list_documents.
+        The Gemini File Search API's operations.get() doesn't work reliably,
+        so we check the document state via list_documents instead.
+        If the document_id is a store document, we extract its channel and
+        look up the document state directly.
 
         Args:
-            operation_name: The operation name/ID.
+            operation_name: The document or operation name/ID.
 
         Returns:
-            UploadResultDTO with operation status (always done=True).
+            UploadResultDTO with document status based on actual state.
         """
+        # Try to resolve document state from channel listing
+        if operation_name.startswith("fileSearchStores/"):
+            channel_id = self.extract_channel_id(operation_name)
+            if channel_id:
+                try:
+                    documents = self.list_documents(channel_id)
+                    for doc in documents:
+                        if doc.name == operation_name:
+                            is_done = doc.state == "ACTIVE"
+                            return UploadResultDTO(
+                                operation_name=operation_name,
+                                done=is_done,
+                                document_name=operation_name,
+                            )
+                except Exception:
+                    logger.warning(
+                        "Failed to check document status via listing",
+                        document_id=operation_name,
+                    )
+
+        # Fallback: unknown status
         return UploadResultDTO(
             operation_name=operation_name,
             done=True,
