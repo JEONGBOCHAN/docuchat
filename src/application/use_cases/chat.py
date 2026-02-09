@@ -296,8 +296,12 @@ class ChatUseCase:
                     session_id=None,
                 )
 
-        # Load DB history as fallback for checkpoint miss (e.g. server restart)
-        conversation_history = self._get_conversation_history(session_id_response)
+        # Pass lazy loader so DB history is only queried on checkpoint miss
+        conversation_history = (
+            (lambda sid=session_id_response: self._get_conversation_history(sid))
+            if session_id_response
+            else []
+        )
 
         # Run agent with thread_id for checkpointer-based context
         use_case = self._process_query_factory()
@@ -368,8 +372,12 @@ class ChatUseCase:
         session_id_response, session_renewed, old_session_id = self._resolve_session(
             channel_meta.id, session_id
         )
-        # Load DB history as fallback for checkpoint miss (e.g. server restart)
-        conversation_history = self._get_conversation_history(session_id_response)
+        # Pass lazy loader so DB history is only queried on checkpoint miss
+        conversation_history = (
+            (lambda sid=session_id_response: self._get_conversation_history(sid))
+            if session_id_response
+            else []
+        )
         document_context = self._summaries.build_context_string(channel_id)
 
         def generate() -> Generator[dict, None, dict | None]:

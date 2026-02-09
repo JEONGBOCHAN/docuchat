@@ -344,9 +344,15 @@ If the question is clearly about external/current events not covered in these do
         """
         context = context or {}
         channel_id = context.get("channel_id", "")
-        conversation_history = context.get("conversation_history", [])
+        conversation_history_raw = context.get("conversation_history", [])
         thread_id = context.get("thread_id")
         session_id = context.get("session_id") or generate_session_id()
+
+        # Support lazy loading: callable defers DB query until actually needed
+        if callable(conversation_history_raw):
+            _load_history = conversation_history_raw
+        else:
+            _load_history = lambda: conversation_history_raw  # noqa: E731
 
         # Emit: Agent Started
         if self._event_sink:
@@ -364,11 +370,12 @@ If the question is clearly about external/current events not covered in these do
                 checkpoint_config = {"configurable": {"thread_id": thread_id}}
                 has_checkpoint = self._checkpointer.get_tuple(checkpoint_config) is not None
                 if has_checkpoint:
-                    # Checkpoint exists → only send new message
+                    # Checkpoint exists → only send new message (no DB query needed)
                     messages = [("user", query)]
                 else:
-                    # Checkpoint miss (e.g. server restart) → use DB history as fallback
+                    # Checkpoint miss (e.g. server restart) → load DB history as fallback
                     logger.info("Checkpoint miss for thread_id=%s, using DB history fallback", thread_id)
+                    conversation_history = _load_history()
                     messages = []
                     if conversation_history:
                         for msg in conversation_history:
@@ -380,6 +387,7 @@ If the question is clearly about external/current events not covered in these do
                                 messages.append(("assistant", content))
                     messages.append(("user", query))
             else:
+                conversation_history = _load_history()
                 messages = []
                 if conversation_history:
                     for msg in conversation_history:
@@ -575,9 +583,15 @@ If the question is clearly about external/current events not covered in these do
         """
         context = context or {}
         channel_id = context.get("channel_id", "")
-        conversation_history = context.get("conversation_history", [])
+        conversation_history_raw = context.get("conversation_history", [])
         thread_id = context.get("thread_id")
         session_id = context.get("session_id") or generate_session_id()
+
+        # Support lazy loading: callable defers DB query until actually needed
+        if callable(conversation_history_raw):
+            _load_history = conversation_history_raw
+        else:
+            _load_history = lambda: conversation_history_raw  # noqa: E731
 
         # Emit: Agent Started
         if self._event_sink:
@@ -597,9 +611,11 @@ If the question is clearly about external/current events not covered in these do
                 checkpoint_config = {"configurable": {"thread_id": thread_id}}
                 has_checkpoint = self._checkpointer.get_tuple(checkpoint_config) is not None
                 if has_checkpoint:
+                    # Checkpoint exists → no DB query needed
                     messages = [("user", query)]
                 else:
                     logger.info("Checkpoint miss for thread_id=%s, using DB history fallback (stream)", thread_id)
+                    conversation_history = _load_history()
                     messages = []
                     if conversation_history:
                         for msg in conversation_history:
@@ -611,6 +627,7 @@ If the question is clearly about external/current events not covered in these do
                                 messages.append(("assistant", content))
                     messages.append(("user", query))
             else:
+                conversation_history = _load_history()
                 messages = []
                 if conversation_history:
                     for msg in conversation_history:
