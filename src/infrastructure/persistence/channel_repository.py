@@ -230,16 +230,20 @@ class ChatHistoryRepository:
     def get_history(self, channel: ChannelMetadata, limit: int = 100) -> list[ChatMessageDB]:
         """Get chat history for a channel.
 
+        Returns the most recent N messages in chronological order.
+
         Args:
             channel: The channel metadata
             limit: Maximum number of messages
 
         Returns:
-            List of chat messages
+            List of chat messages in chronological order (oldest first)
         """
-        return self.db.query(ChatMessageDB).filter(
+        # Get most recent N messages (DESC + limit), then reverse to ASC
+        rows = self.db.query(ChatMessageDB).filter(
             ChatMessageDB.channel_id == channel.id
-        ).order_by(ChatMessageDB.created_at.asc(), ChatMessageDB.id.asc()).limit(limit).all()
+        ).order_by(ChatMessageDB.created_at.desc(), ChatMessageDB.id.desc()).limit(limit).all()
+        return list(reversed(rows))
 
     def get_session_history(self, session: ChatSessionDB, limit: int | None = None) -> list[ChatMessageDB]:
         """Get chat history for a specific session.
