@@ -5,7 +5,8 @@ from datetime import datetime, UTC, timedelta
 from sqlalchemy.orm import Session
 
 from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB
-from src.models.trash import TrashItem, TrashItemType
+from src.application.dto.enums import TrashItemType
+from src.models.trash import TrashItem
 
 
 class TrashRepository:

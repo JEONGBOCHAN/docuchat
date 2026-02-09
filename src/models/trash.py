@@ -2,21 +2,16 @@
 """Trash (soft delete) related models."""
 
 from datetime import datetime, UTC
-from enum import Enum
 
 from pydantic import BaseModel, Field
+
+# Re-export enum from application DTO layer for backward compatibility
+from src.application.dto.enums import TrashItemType  # noqa: F401
 
 
 def _utc_now() -> datetime:
     """Return current UTC datetime."""
     return datetime.now(UTC)
-
-
-class TrashItemType(str, Enum):
-    """Type of trashed item."""
-
-    CHANNEL = "channel"
-    NOTE = "note"
 
 
 class TrashItem(BaseModel):

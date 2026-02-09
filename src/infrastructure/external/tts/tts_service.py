@@ -10,7 +10,8 @@ from pathlib import Path
 
 import edge_tts
 
-from src.models.audio import VoiceType, DialogueLine, PodcastScript
+from src.application.dto.enums import VoiceType
+from src.models.audio import DialogueLine, PodcastScript
 
 
 # Voice mapping for Edge TTS

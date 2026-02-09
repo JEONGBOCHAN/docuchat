@@ -2,27 +2,10 @@
 """Audio Overview (Podcast) models."""
 
 from datetime import datetime
-from enum import Enum
 from pydantic import BaseModel, Field
 
-
-class AudioStatus(str, Enum):
-    """Status of audio generation."""
-
-    PENDING = "pending"
-    GENERATING_SCRIPT = "generating_script"
-    GENERATING_AUDIO = "generating_audio"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class VoiceType(str, Enum):
-    """Voice types for hosts."""
-
-    MALE_1 = "male_1"
-    MALE_2 = "male_2"
-    FEMALE_1 = "female_1"
-    FEMALE_2 = "female_2"
+# Re-export enums from application DTO layer for backward compatibility
+from src.application.dto.enums import AudioStatus, VoiceType  # noqa: F401
 
 
 class DialogueLine(BaseModel):

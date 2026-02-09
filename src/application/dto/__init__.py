@@ -11,6 +11,12 @@ from src.application.dto.agent_event import (
     ToolCompletedEvent,
 )
 
+from src.application.dto.enums import (
+    AudioStatus,
+    VoiceType,
+    TrashItemType,
+)
+
 __all__ = [
     "AgentEvent",
     "EventType",
@@ -19,4 +25,7 @@ __all__ = [
     "AgentErrorEvent",
     "ToolStartedEvent",
     "ToolCompletedEvent",
+    "AudioStatus",
+    "VoiceType",
+    "TrashItemType",
 ]

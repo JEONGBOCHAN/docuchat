@@ -179,7 +179,7 @@ class TTSAdapter(TTSPort):
         output_path: str | None = None,
     ) -> str:
         """Synthesize text to speech."""
-        from src.models.audio import VoiceType
+        from src.application.dto.enums import VoiceType
 
         vt = VoiceType(voice_type)
         return await self._service.synthesize_text(text, vt, language, output_path)
@@ -193,7 +193,8 @@ class TTSAdapter(TTSPort):
     ) -> TTSResultDTO:
         """Generate complete podcast audio from script."""
         import json
-        from src.models.audio import VoiceType, PodcastScript, DialogueLine
+        from src.application.dto.enums import VoiceType
+        from src.models.audio import PodcastScript, DialogueLine
 
         # Parse script JSON
         script_data = json.loads(script_json)
