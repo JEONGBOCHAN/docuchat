@@ -670,3 +670,8 @@ class ChatSessionMemoryRepositoryPort(ABC):
     def clear(self, session_id: str) -> bool:
         """Delete session memory. Returns True if deleted."""
         ...
+
+    @abstractmethod
+    def clear_by_channel(self, channel_id: int) -> int:
+        """Delete all session memories for a channel. Returns count deleted."""
+        ...

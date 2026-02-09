@@ -77,3 +77,18 @@ class ChatSessionMemoryRepository:
         ).delete()
         self.db.commit()
         return count > 0
+
+    def clear_by_channel(self, channel_id: int) -> int:
+        """Delete all session memories for sessions belonging to a channel."""
+        session_pks = [
+            s.id for s in self.db.query(ChatSessionDB).filter(
+                ChatSessionDB.channel_id == channel_id
+            ).all()
+        ]
+        if not session_pks:
+            return 0
+        count = self.db.query(ChatSessionMemoryDB).filter(
+            ChatSessionMemoryDB.session_id.in_(session_pks)
+        ).delete(synchronize_session="fetch")
+        self.db.commit()
+        return count

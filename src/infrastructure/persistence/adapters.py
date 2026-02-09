@@ -884,3 +884,6 @@ class ChatSessionMemoryRepositoryAdapter:
 
     def clear(self, session_id: str) -> bool:
         return self._repo.clear(session_id)
+
+    def clear_by_channel(self, channel_id: int) -> int:
+        return self._repo.clear_by_channel(channel_id)

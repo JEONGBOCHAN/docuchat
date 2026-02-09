@@ -16,6 +16,7 @@ def _make_chat_use_case(
     channel_port=None,
     process_query_factory=None,
     db=None,
+    session_memory_repo=None,
 ):
     """Create ChatUseCase with mock/real dependencies.
 
@@ -56,6 +57,7 @@ def _make_chat_use_case(
         cache=mock_cache,
         summaries_use_case=mock_summaries,
         process_query_factory=process_query_factory or (lambda: MagicMock()),
+        session_memory_repo=session_memory_repo,
     )
 
 
@@ -307,6 +309,39 @@ class TestClearChatHistory:
         )
 
         assert response.status_code == 404
+
+        app.dependency_overrides.pop(get_chat_use_case, None)
+
+    def test_clear_history_also_clears_session_memory(self, client_with_db: TestClient, test_db):
+        """Test that clearing history also clears session memory (rolling summaries)."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_session_memory_repo = MagicMock()
+        mock_session_memory_repo.clear_by_channel.return_value = 2
+
+        use_case = _make_chat_use_case(
+            channel_port=mock_channel_port,
+            db=test_db,
+            session_memory_repo=mock_session_memory_repo,
+        )
+        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+
+        # Ensure channel metadata exists
+        client_with_db.post(
+            "/api/v1/channels/fileSearchStores/test-store/chat",
+            json={"query": "Hello?"},
+        )
+
+        response = client_with_db.delete(
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
+        )
+
+        assert response.status_code == 204
+        mock_session_memory_repo.clear_by_channel.assert_called_once()
 
         app.dependency_overrides.pop(get_chat_use_case, None)
 

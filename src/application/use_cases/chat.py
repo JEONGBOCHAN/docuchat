@@ -532,6 +532,9 @@ class ChatUseCase:
     def clear_history(self, channel_id: str) -> None:
         """Clear chat history for a channel.
 
+        Also clears session memory (rolling summaries) for all sessions
+        in the channel to prevent stale context from persisting.
+
         Raises:
             ChannelNotFoundError: Channel not found.
         """
@@ -539,6 +542,20 @@ class ChatUseCase:
 
         channel_meta = self._channel_repo.get_by_gemini_id(channel_id)
         if channel_meta:
+            # Clear session memories (rolling summaries) first
+            if self._session_memory_repo:
+                try:
+                    cleared = self._session_memory_repo.clear_by_channel(channel_meta.id)
+                    if cleared:
+                        logger.info(
+                            "Cleared %d session memory records for channel %s",
+                            cleared, channel_id,
+                        )
+                except Exception:
+                    logger.warning(
+                        "Failed to clear session memories for channel %s",
+                        channel_id, exc_info=True,
+                    )
             self._chat_history.clear_history(channel_meta.id)
 
     # ---- Session management ----
