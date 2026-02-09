@@ -222,6 +222,7 @@ async def get_session(session_id: str) -> dict[str, Any]:
         }
 
     session = _sessions[session_id]
+    session["_last_seen"] = time.monotonic()
     return {
         "success": True,
         **session,
@@ -293,6 +294,7 @@ async def get_chat_history(session_id: str, limit: int = 100) -> dict[str, Any]:
             "error": f"Session not found: {session_id}",
         }
 
+    _sessions[session_id]["_last_seen"] = time.monotonic()
     history = _chat_histories.get(session_id, [])[-limit:]
     return {
         "success": True,
@@ -317,6 +319,7 @@ async def clear_chat_history(session_id: str) -> dict[str, Any]:
             "error": f"Session not found: {session_id}",
         }
 
+    _sessions[session_id]["_last_seen"] = time.monotonic()
     _chat_histories[session_id] = []
     return {
         "success": True,
@@ -352,6 +355,8 @@ async def run_rag_query(
 
     # Get conversation history if session exists
     conversation_history = []
+    if session_id and session_id in _sessions:
+        _sessions[session_id]["_last_seen"] = time.monotonic()
     if session_id and session_id in _chat_histories:
         conversation_history = [
             {"role": msg["role"], "content": msg["content"]}
@@ -480,6 +485,8 @@ async def run_rag_with_web_search(
     store.reset(channel_id)
 
     conversation_history = []
+    if session_id and session_id in _sessions:
+        _sessions[session_id]["_last_seen"] = time.monotonic()
     if session_id and session_id in _chat_histories:
         conversation_history = [
             {"role": msg["role"], "content": msg["content"]}
