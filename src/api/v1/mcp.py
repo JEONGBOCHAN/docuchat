@@ -11,14 +11,15 @@ Specification: https://modelcontextprotocol.io/specification/2025-03-26/basic/tr
 import json
 import time
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Request, Response, HTTPException
+from fastapi import APIRouter, Depends, Request, Response, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 
 from src.core.rate_limiter import limiter, RateLimits
 from src.mcp_server.server import mcp_server
 from src.mcp_server.state import get_global_state_store
+from src.api.deps import require_admin_key
 
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
@@ -366,8 +367,11 @@ async def process_jsonrpc_message(message: dict[str, Any], session: dict[str, An
 
 @router.post("/message")
 @limiter.limit(RateLimits.DEFAULT)
-async def mcp_message(request: Request):
-    """Handle MCP Streamable HTTP POST requests.
+async def mcp_message(
+    request: Request,
+    _admin: Annotated[str, Depends(require_admin_key)],
+):
+    """Handle MCP Streamable HTTP POST requests. Requires admin key.
 
     Implements the Streamable HTTP transport specification:
     - Accepts JSON-RPC messages (single or batch)
@@ -459,8 +463,12 @@ async def mcp_message_delete(request: Request):
 
 @router.get("/state")
 @limiter.limit(RateLimits.DEFAULT)
-async def get_mcp_state(request: Request, channel_id: str | None = None):
-    """Get current agent state as JSON (convenience endpoint).
+async def get_mcp_state(
+    request: Request,
+    _admin: Annotated[str, Depends(require_admin_key)],
+    channel_id: str | None = None,
+):
+    """Get current agent state as JSON (convenience endpoint). Requires admin key.
 
     This is not part of MCP protocol but useful for debugging.
 

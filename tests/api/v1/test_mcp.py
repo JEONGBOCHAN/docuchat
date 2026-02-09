@@ -10,10 +10,31 @@ from unittest.mock import patch, AsyncMock
 from src.main import app
 
 
+ADMIN_KEY = "test-admin-key"
+
+
+@pytest.fixture(autouse=True)
+def _set_admin_key(monkeypatch):
+    """Set admin API key for all tests."""
+    monkeypatch.setenv("ADMIN_API_KEY", ADMIN_KEY)
+    from src.core.config import get_settings
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def client():
     """Create test client."""
     return TestClient(app)
+
+
+def _ah(extra: dict | None = None) -> dict:
+    """Build headers dict with admin key merged in."""
+    base = {"X-Admin-Key": ADMIN_KEY}
+    if extra:
+        base.update(extra)
+    return base
 
 
 class TestMCPStreamableHTTP:
@@ -23,6 +44,7 @@ class TestMCPStreamableHTTP:
         """Test that initialize request creates a new session."""
         response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -54,6 +76,7 @@ class TestMCPStreamableHTTP:
         """Test that requests without session ID fail (except initialize)."""
         response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -69,7 +92,7 @@ class TestMCPStreamableHTTP:
         """Test that requests with invalid session ID fail."""
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": "invalid-session-id"},
+            headers=_ah({"Mcp-Session-Id": "invalid-session-id"}),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -86,6 +109,7 @@ class TestMCPStreamableHTTP:
         # First, initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -98,7 +122,7 @@ class TestMCPStreamableHTTP:
         # Then, list resources
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -129,6 +153,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -141,7 +166,7 @@ class TestMCPStreamableHTTP:
         # Read resource
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -166,6 +191,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -178,7 +204,7 @@ class TestMCPStreamableHTTP:
         # Try to read unknown resource
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -197,6 +223,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -209,7 +236,7 @@ class TestMCPStreamableHTTP:
         # List tools
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -235,6 +262,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -247,7 +275,7 @@ class TestMCPStreamableHTTP:
         # Call tool
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -270,6 +298,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -282,7 +311,7 @@ class TestMCPStreamableHTTP:
         # Call tool
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -304,6 +333,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -316,7 +346,7 @@ class TestMCPStreamableHTTP:
         # Try to call unknown tool
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -338,6 +368,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -350,7 +381,7 @@ class TestMCPStreamableHTTP:
         # Batch request
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json=[
                 {
                     "jsonrpc": "2.0",
@@ -382,6 +413,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -394,7 +426,7 @@ class TestMCPStreamableHTTP:
         # Send notification (no id)
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "method": "notifications/initialized",
@@ -408,6 +440,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -420,7 +453,7 @@ class TestMCPStreamableHTTP:
         # Ping
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -439,6 +472,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -451,7 +485,7 @@ class TestMCPStreamableHTTP:
         # Unknown method
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -471,6 +505,7 @@ class TestMCPStreamableHTTP:
         # Initialize
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -491,7 +526,7 @@ class TestMCPStreamableHTTP:
         # Try to use session after deletion
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -509,7 +544,7 @@ class TestMCPStreamableHTTP:
 
     def test_state_endpoint(self, client):
         """Test convenience state endpoint."""
-        response = client.get("/api/v1/mcp/state")
+        response = client.get("/api/v1/mcp/state", headers=_ah())
         assert response.status_code == 200
 
         data = response.json()
@@ -520,9 +555,27 @@ class TestMCPStreamableHTTP:
         response = client.post(
             "/api/v1/mcp/message",
             content="invalid json{",
-            headers={"Content-Type": "application/json"},
+            headers=_ah({"Content-Type": "application/json"}),
         )
         assert response.status_code == 400
+
+    def test_mcp_message_without_admin_key_rejected(self, client):
+        """Test that MCP message endpoint rejects requests without admin key."""
+        response = client.post(
+            "/api/v1/mcp/message",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": "2025-03-26", "capabilities": {}},
+            },
+        )
+        assert response.status_code in (401, 422)
+
+    def test_mcp_state_without_admin_key_rejected(self, client):
+        """Test that MCP state endpoint rejects requests without admin key."""
+        response = client.get("/api/v1/mcp/state")
+        assert response.status_code in (401, 422)
 
 
 class TestMCPSessionManagement:
@@ -533,6 +586,7 @@ class TestMCPSessionManagement:
         # Create first session
         init1 = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -545,6 +599,7 @@ class TestMCPSessionManagement:
         # Create second session
         init2 = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -561,7 +616,7 @@ class TestMCPSessionManagement:
         for session_id in [session1, session2]:
             response = client.post(
                 "/api/v1/mcp/message",
-                headers={"Mcp-Session-Id": session_id},
+                headers=_ah({"Mcp-Session-Id": session_id}),
                 json={
                     "jsonrpc": "2.0",
                     "id": 2,
@@ -581,6 +636,7 @@ class TestMCPSessionManagement:
 
         init_response = client.post(
             "/api/v1/mcp/message",
+            headers=_ah(),
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -599,7 +655,7 @@ class TestMCPSessionManagement:
         # Session should be valid for subsequent requests
         response = client.post(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
             json={
                 "jsonrpc": "2.0",
                 "id": 2,

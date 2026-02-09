@@ -22,8 +22,10 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("", response_class=HTMLResponse)
-async def get_dashboard():
-    """Serve the agent dashboard UI."""
+async def get_dashboard(
+    _admin: Annotated[str, Depends(require_admin_key)],
+):
+    """Serve the agent dashboard UI. Requires admin key."""
     template_path = Path(__file__).parent.parent.parent / "mcp_server" / "templates" / "dashboard.html"
 
     if not template_path.exists():
@@ -45,8 +47,11 @@ async def get_dashboard():
 
 
 @router.get("/state")
-async def get_dashboard_state(channel_id: str | None = None):
-    """Get current agent state as JSON.
+async def get_dashboard_state(
+    _admin: Annotated[str, Depends(require_admin_key)],
+    channel_id: str | None = None,
+):
+    """Get current agent state as JSON. Requires admin key.
 
     Args:
         channel_id: Optional channel ID to get state for.
