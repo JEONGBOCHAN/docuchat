@@ -835,3 +835,52 @@ class DocumentPreviewCacheRepositoryAdapter(DocumentPreviewCacheRepositoryPort):
         ).delete()
         self._db.commit()
         return count
+
+
+# =============================================================================
+# Chat Session Memory Repository Adapter
+# =============================================================================
+
+def _session_memory_to_dto(memory) -> "ChatSessionMemoryDTO":
+    """Convert ChatSessionMemoryDB model to DTO."""
+    from src.application.ports.persistence import ChatSessionMemoryDTO
+    return ChatSessionMemoryDTO(
+        id=memory.id,
+        session_id=memory.session_id,
+        rolling_summary=memory.rolling_summary,
+        last_compacted_message_id=memory.last_compacted_message_id,
+        total_compactions=memory.total_compactions,
+        updated_at=memory.updated_at,
+        version=memory.version,
+    )
+
+
+class ChatSessionMemoryRepositoryAdapter:
+    """Adapter that implements ChatSessionMemoryRepositoryPort."""
+
+    def __init__(self, db):
+        from src.infrastructure.persistence.session_memory_repository import ChatSessionMemoryRepository
+        self._db = db
+        self._repo = ChatSessionMemoryRepository(self._db)
+
+    def get_by_session_id(self, session_id: str):
+        memory = self._repo.get_by_session_id(session_id)
+        return _session_memory_to_dto(memory) if memory else None
+
+    def upsert(
+        self,
+        session_id: str,
+        rolling_summary: str,
+        last_compacted_message_id: int | None = None,
+        increment_compaction: bool = True,
+    ):
+        memory = self._repo.upsert(
+            session_id=session_id,
+            rolling_summary=rolling_summary,
+            last_compacted_message_id=last_compacted_message_id,
+            increment_compaction=increment_compaction,
+        )
+        return _session_memory_to_dto(memory)
+
+    def clear(self, session_id: str) -> bool:
+        return self._repo.clear(session_id)

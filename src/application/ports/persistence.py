@@ -127,6 +127,19 @@ class AudioOverviewDTO:
 
 
 @dataclass
+class ChatSessionMemoryDTO:
+    """DTO for chat session memory (rolling summary)."""
+
+    id: int
+    session_id: int
+    rolling_summary: str
+    last_compacted_message_id: int | None
+    total_compactions: int
+    updated_at: datetime
+    version: int
+
+
+@dataclass
 class DocumentPreviewCacheDTO:
     """DTO for document preview cache."""
 
@@ -631,4 +644,29 @@ class DocumentPreviewCacheRepositoryPort(ABC):
     @abstractmethod
     def delete_by_channel_id(self, channel_id: str) -> int:
         """Delete all cached previews for a channel. Returns count of deleted entries."""
+        ...
+
+
+class ChatSessionMemoryRepositoryPort(ABC):
+    """Port for chat session memory (rolling summary) repository operations."""
+
+    @abstractmethod
+    def get_by_session_id(self, session_id: str) -> ChatSessionMemoryDTO | None:
+        """Get memory by session ID (string, e.g. 'sess_abc123')."""
+        ...
+
+    @abstractmethod
+    def upsert(
+        self,
+        session_id: str,
+        rolling_summary: str,
+        last_compacted_message_id: int | None = None,
+        increment_compaction: bool = True,
+    ) -> ChatSessionMemoryDTO:
+        """Create or update session memory."""
+        ...
+
+    @abstractmethod
+    def clear(self, session_id: str) -> bool:
+        """Delete session memory. Returns True if deleted."""
         ...

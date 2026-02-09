@@ -179,6 +179,27 @@ class AudioOverviewDB(Base):
     channel = relationship("ChannelMetadata", back_populates="audio_overviews")
 
 
+class ChatSessionMemoryDB(Base):
+    """Rolling summary memory for chat sessions.
+
+    Stores compressed conversation summaries alongside raw message history
+    to enable hybrid memory: recent turns + rolling summary.
+    """
+
+    __tablename__ = "chat_session_memory"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    rolling_summary = Column(Text, nullable=False, default="")
+    last_compacted_message_id = Column(Integer, nullable=True)
+    total_compactions = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+
+    # Relationship to session
+    session = relationship("ChatSessionDB", backref="memory", uselist=False)
+
+
 class DocumentSummaryCacheDB(Base):
     """Cache for document summaries to inject into agent system prompt.
 

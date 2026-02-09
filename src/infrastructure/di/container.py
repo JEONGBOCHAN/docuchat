@@ -36,6 +36,7 @@ from src.application.ports import (
     ChannelRepositoryPort,
     ChatHistoryRepositoryPort,
     ChatSessionRepositoryPort,
+    ChatSessionMemoryRepositoryPort,
     NoteRepositoryPort,
     FavoriteRepositoryPort,
     SearchHistoryRepositoryPort,
@@ -941,6 +942,19 @@ def create_audio_repository_port(db) -> AudioRepositoryPort:
     """
     from src.infrastructure.persistence.adapters import AudioRepositoryAdapter
     return AudioRepositoryAdapter(db)
+
+
+def create_session_memory_repository_port(db):
+    """Create session memory repository port.
+
+    Args:
+        db: Database session. Passed through to the adapter as-is.
+
+    Returns:
+        ChatSessionMemoryRepositoryPort implementation.
+    """
+    from src.infrastructure.persistence.adapters import ChatSessionMemoryRepositoryAdapter
+    return ChatSessionMemoryRepositoryAdapter(db)
 
 
 def create_document_preview_cache_repository_port(db) -> DocumentPreviewCacheRepositoryPort:
