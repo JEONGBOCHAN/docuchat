@@ -146,10 +146,19 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
 
 
 # CORS middleware
+# Browser CORS spec disallows credentials with wildcard origin.
+# When origins is ["*"], disable credentials to avoid spec violation.
+_cors_allow_credentials = "*" not in settings.cors_origins_list
+if not _cors_allow_credentials and settings.cors_origins == "*":
+    logger.warning(
+        "CORS: allow_credentials disabled because cors_origins is wildcard ('*'). "
+        "Set explicit origins to enable credentials."
+    )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Mcp-Session-Id"],  # Allow browser to read MCP session header
