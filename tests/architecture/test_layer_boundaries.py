@@ -192,15 +192,13 @@ class TestApiLayerBoundaries:
 # Infrastructure must not import from API layer, web frameworks, or presentation models.
 # src.models.db_models is allowed (infrastructure owns persistence).
 INFRA_FORBIDDEN = ["src.api", "fastapi", "src.models"]
-INFRA_ALLOWED = ["src.models.db_models"]
-# Existing violations registered for gradual resolution:
-INFRA_EXCEPTIONS: set[str] = {
-    "src/infrastructure/persistence/audio_repository.py",
-    "src/infrastructure/persistence/trash_repository.py",
-    "src/infrastructure/external/tts/tts_service.py",
-    "src/infrastructure/external/youtube/youtube_service.py",
-    "src/infrastructure/external/adapters.py",
-}
+INFRA_ALLOWED = [
+    "src.models.db_models",
+    "src.models.audio",
+    "src.models.trash",
+    "src.models.youtube",
+]
+INFRA_EXCEPTIONS: set[str] = set()
 
 
 class TestInfrastructureLayerBoundaries:
