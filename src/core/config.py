@@ -86,6 +86,7 @@ class Settings(BaseSettings):
 
     # LangGraph Checkpoint persistence
     checkpoint_db_path: str = "./data/checkpoints.db"
+    strict_checkpointer: bool = False  # If True, fail-fast on SqliteSaver init failure instead of MemorySaver fallback
 
     # Channel Lifecycle
     channel_inactive_days: int = 90  # Days before channel is considered inactive

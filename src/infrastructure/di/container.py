@@ -126,13 +126,20 @@ def get_checkpointer():
     """Get the global checkpointer (singleton).
 
     Uses SqliteSaver for persistent conversation checkpoints that survive
-    server restarts. Falls back to MemorySaver if SQLite setup fails.
+    server restarts. Falls back to MemorySaver if SQLite setup fails
+    (unless strict_checkpointer is enabled).
 
     Returns:
         Checkpointer instance for LangGraph conversation persistence.
+
+    Raises:
+        RuntimeError: If SqliteSaver init fails and strict_checkpointer=True.
     """
     global _checkpointer
     if _checkpointer is None:
+        import logging
+        logger = logging.getLogger(__name__)
+
         try:
             import sqlite3
             import os
@@ -148,14 +155,40 @@ def get_checkpointer():
             conn = sqlite3.connect(db_path, check_same_thread=False)
             _checkpointer = SqliteSaver(conn)
             _checkpointer.setup()
+            logger.info("Checkpointer initialized: SqliteSaver (path=%s)", db_path)
         except Exception:
-            import logging
-            logging.getLogger(__name__).warning(
-                "Failed to create SqliteSaver, falling back to MemorySaver"
+            from src.core.config import get_settings
+            settings = get_settings()
+
+            if settings.strict_checkpointer:
+                logger.error(
+                    "SqliteSaver initialization failed and strict_checkpointer=True. "
+                    "Refusing to fall back to MemorySaver.",
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    "SqliteSaver initialization failed (strict_checkpointer=True). "
+                    "Check checkpoint_db_path and langgraph-checkpoint-sqlite installation."
+                )
+
+            logger.error(
+                "Failed to create SqliteSaver, falling back to MemorySaver. "
+                "Conversation checkpoints will NOT persist across restarts.",
+                exc_info=True,
             )
             from langgraph.checkpoint.memory import MemorySaver
             _checkpointer = MemorySaver()
     return _checkpointer
+
+
+def get_checkpointer_type() -> str:
+    """Get the type name of the active checkpointer.
+
+    Returns:
+        'SqliteSaver', 'MemorySaver', or 'unknown'.
+    """
+    cp = get_checkpointer()
+    return type(cp).__name__
 
 
 def get_state_store_adapter() -> StateStoreAdapter:

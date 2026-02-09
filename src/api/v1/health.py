@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 
 from src.core.config import get_settings
+from src.infrastructure.di.container import get_checkpointer_type
 
 router = APIRouter()
 
@@ -14,4 +15,5 @@ async def health_check():
         "status": "healthy",
         "app_name": settings.app_name,
         "version": settings.app_version,
+        "checkpointer": get_checkpointer_type(),
     }
