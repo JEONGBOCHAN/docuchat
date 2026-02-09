@@ -175,7 +175,7 @@ class GeminiDocumentAdapter(DocumentPort):
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/{file_name}"
             url += f"?key={self._api_key}"
-            response = requests.delete(url)
+            response = requests.delete(url, timeout=10)
             return response.status_code == 200
         except Exception:
             return False
@@ -197,7 +197,7 @@ class GeminiDocumentAdapter(DocumentPort):
             url += "?force=true"
         url += f"&key={self._api_key}" if force else f"?key={self._api_key}"
 
-        response = requests.delete(url)
+        response = requests.delete(url, timeout=10)
         # Treat 200 (success) and 404 (not found/already deleted) as success
         return response.status_code in (200, 404)
 

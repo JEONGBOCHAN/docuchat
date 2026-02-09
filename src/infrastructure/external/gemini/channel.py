@@ -134,6 +134,6 @@ class GeminiChannelAdapter(ChannelPort):
             url += "?force=true"
         url += f"&key={self._api_key}" if force else f"?key={self._api_key}"
 
-        response = requests.delete(url)
+        response = requests.delete(url, timeout=10)
         # Treat 200 (success) and 404 (not found/already deleted) as success
         return response.status_code in (200, 404)
