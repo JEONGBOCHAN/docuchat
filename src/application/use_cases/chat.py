@@ -161,20 +161,22 @@ class ChatUseCase:
     ) -> tuple[str | None, bool, str | None]:
         """Resolve session, returning (session_id, session_renewed, old_session_id).
 
+        Always ensures a session exists: if no session_id is provided,
+        a new session is created automatically so that every conversation
+        is stateful from the first turn.
+
         When the requested session_id is expired or not found,
         get_or_create silently creates a new session. The boolean
         flag indicates this happened so callers can inform the client.
         old_session_id is set when renewal occurs so the client can
         detect session changes.
         """
-        if not session_id:
-            return None, False, None
         session_dto, created = self._session_repo.get_or_create(
             channel_id=channel_db_id,
             session_id=session_id,
         )
         resolved_id = session_dto.session_id if session_dto else session_id
-        renewed = created and resolved_id != session_id
+        renewed = created and bool(session_id) and resolved_id != session_id
         old_sid = None
         if renewed:
             old_sid = session_id
@@ -278,8 +280,9 @@ class ChatUseCase:
         )
         document_context = self._summaries.build_context_string(channel_id)
 
-        # Check cache (only for non-session queries)
-        use_cache = not session_id
+        # Check cache (only when no session is active — stateful conversations
+        # must always run the agent so context is maintained)
+        use_cache = session_id_response is None
         if use_cache:
             cached = self._cache.get_chat_response(channel_id, query)
             if cached:
@@ -293,7 +296,7 @@ class ChatUseCase:
                     query=query,
                     response=cached.get("response", ""),
                     sources=sources,
-                    session_id=None,
+                    session_id=session_id_response,
                 )
 
         # Pass lazy loader so DB history is only queried on checkpoint miss

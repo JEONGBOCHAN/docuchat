@@ -723,8 +723,13 @@ class TestMultiTurnConversation:
 
         app.dependency_overrides.pop(get_chat_use_case, None)
 
-    def test_chat_without_session_no_context(self, client_with_db: TestClient, test_db):
-        """Test that chat without session_id doesn't maintain context."""
+    def test_chat_without_session_auto_bootstraps(self, client_with_db: TestClient, test_db):
+        """Test that chat without explicit session_id auto-creates a session.
+
+        Auto-session bootstrap ensures every request is stateful from the
+        first turn. The conversation_history passed to the agent should be
+        a callable (lazy loader) rather than an empty list.
+        """
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
             name="fileSearchStores/test-store",
@@ -732,9 +737,11 @@ class TestMultiTurnConversation:
         )
 
         received_histories = []
+        received_thread_ids = []
 
         def mock_execute(query, channel_id, conversation_history=None, **kwargs):
-            received_histories.append(conversation_history or [])
+            received_histories.append(conversation_history)
+            received_thread_ids.append(kwargs.get("thread_id"))
             return QueryResult(
                 response=f"Response to: {query}",
                 sources=[],
@@ -751,21 +758,21 @@ class TestMultiTurnConversation:
         )
         app.dependency_overrides[get_chat_use_case] = lambda: use_case
 
-        # First message without session
-        client_with_db.post(
+        # First message without session — should auto-create session
+        resp1 = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat",
             json={"query": "What is Python?"},
         )
 
-        # Second message without session
-        client_with_db.post(
-            "/api/v1/channels/fileSearchStores/test-store/chat",
-            json={"query": "Tell me more about it"},
-        )
+        # Response should contain auto-generated session_id
+        assert resp1.status_code == 200
+        data1 = resp1.json()
+        assert data1.get("session_id") is not None
 
-        # Both calls should have empty history
-        assert received_histories[0] == []
-        assert received_histories[1] == []
+        # conversation_history should be a lazy loader (callable), not []
+        assert callable(received_histories[0])
+        # thread_id should be set (same as session_id)
+        assert received_thread_ids[0] is not None
 
         app.dependency_overrides.pop(get_chat_use_case, None)
 
