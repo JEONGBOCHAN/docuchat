@@ -6,6 +6,9 @@ export type { ChatSource };
 export interface ChatResponse {
   response: string;
   sources: ChatSource[];
+  session_id?: string;
+  session_renewed?: boolean;
+  old_session_id?: string;
 }
 
 export interface ChatMessage {
@@ -31,6 +34,7 @@ export interface SummarizeResponse {
 export interface StreamCallbacks {
   onChunk: (chunk: string) => void;
   onSources?: (sources: ChatSource[]) => void;
+  onSession?: (sessionId: string, renewed: boolean, oldSessionId?: string) => void;
   onError?: (error: Error) => void;
   onComplete?: () => void;
 }
@@ -46,18 +50,21 @@ export interface StreamController {
 }
 
 export const chatApi = {
-  sendMessage: (channelId: string, message: string) => {
+  sendMessage: (channelId: string, message: string, sessionId?: string) => {
     const decodedId = decodeURIComponent(channelId);
-    return apiClient.post<ChatResponse>(`/api/v1/channels/${encodeURIComponent(decodedId)}/chat`, {
-      query: message,
-    });
+    const body: { query: string; session_id?: string } = { query: message };
+    if (sessionId) {
+      body.session_id = sessionId;
+    }
+    return apiClient.post<ChatResponse>(`/api/v1/channels/${encodeURIComponent(decodedId)}/chat`, body);
   },
 
   streamMessage: (
     channelId: string,
     message: string,
     callbacks: StreamCallbacks,
-    options: StreamOptions = {}
+    options: StreamOptions = {},
+    sessionId?: string
   ): StreamController => {
     const { timeout = 300000 } = options; // 5 minutes default
 
@@ -106,7 +113,7 @@ export const chatApi = {
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ query: message }),
+            body: JSON.stringify(sessionId ? { query: message, session_id: sessionId } : { query: message }),
             signal: abortController.signal,
           }
         );
@@ -147,6 +154,13 @@ export const chatApi = {
                   if (parsed.error) {
                     callbacks.onError?.(new Error(parsed.error));
                     return;
+                  }
+                  if (parsed.session_id) {
+                    callbacks.onSession?.(
+                      parsed.session_id,
+                      !!parsed.session_renewed,
+                      parsed.old_session_id
+                    );
                   }
                   if (parsed.chunk) {
                     callbacks.onChunk(parsed.chunk);

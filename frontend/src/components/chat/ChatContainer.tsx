@@ -10,6 +10,17 @@ import TypingIndicator from './TypingIndicator';
 let messageIdCounter = 0;
 const generateMessageId = () => `msg_${Date.now()}_${++messageIdCounter}`;
 
+// Session storage helpers
+const SESSION_STORAGE_PREFIX = 'chalssak_session_';
+function getStoredSessionId(channelId: string): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(`${SESSION_STORAGE_PREFIX}${channelId}`);
+}
+function storeSessionId(channelId: string, sessionId: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(`${SESSION_STORAGE_PREFIX}${channelId}`, sessionId);
+}
+
 interface ChatContainerProps {
   channelId: string;
   onSaveAsNote?: (content: string, sources: ChatSource[]) => void;
@@ -26,6 +37,7 @@ export default function ChatContainer({ channelId, onSaveAsNote }: ChatContainer
   const streamingContentRef = useRef('');
   const streamingSourcesRef = useRef<ChatSource[]>([]);
   const streamControllerRef = useRef<StreamController | null>(null);
+  const sessionIdRef = useRef<string | null>(getStoredSessionId(channelId));
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,6 +96,10 @@ export default function ChatContainer({ channelId, onSaveAsNote }: ChatContainer
         onSources: (sources) => {
           streamingSourcesRef.current = sources;
           setStreamingSources(sources);
+        },
+        onSession: (sessionId, _renewed, _oldSessionId) => {
+          sessionIdRef.current = sessionId;
+          storeSessionId(channelId, sessionId);
         },
         onError: (err) => {
           console.error('Streaming error:', err.message);
@@ -147,7 +163,8 @@ export default function ChatContainer({ channelId, onSaveAsNote }: ChatContainer
           streamControllerRef.current = null;
         },
       },
-      { timeout: 300000 } // 5 minute timeout for long agent operations
+      { timeout: 300000 }, // 5 minute timeout for long agent operations
+      sessionIdRef.current ?? undefined
     );
   };
 
