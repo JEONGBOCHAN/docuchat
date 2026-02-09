@@ -25,7 +25,6 @@ class ChatRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=2000, description="User's question")
     session_id: str | None = Field(default=None, description="Session ID for multi-turn conversation. Required to maintain context across messages; without it each query is treated as a standalone request.")
-    use_agent: bool = Field(default=True, description="Use agentic loop for document Q&A (ReAct pattern)")
 
 
 class ChatResponse(BaseModel):
