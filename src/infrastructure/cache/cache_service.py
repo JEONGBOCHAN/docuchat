@@ -3,6 +3,7 @@
 
 import hashlib
 import json
+import threading
 from datetime import datetime, UTC
 from functools import lru_cache
 from typing import Any, TypeVar, Generic
@@ -37,6 +38,9 @@ class CacheService:
             document_maxsize: Maximum number of document list cache entries
             channel_maxsize: Maximum number of channel info cache entries
         """
+        # Thread-safety lock for all cache operations
+        self._lock = threading.Lock()
+
         # Chat response cache: key = hash(channel_id + query)
         self._chat_cache: TTLCache = TTLCache(
             maxsize=chat_maxsize,
@@ -104,12 +108,13 @@ class CacheService:
             Cached response dict or None if not found
         """
         key = self._generate_chat_key(channel_id, query)
-        result = self._chat_cache.get(key)
+        with self._lock:
+            result = self._chat_cache.get(key)
 
-        if result is not None:
-            self._stats["chat"]["hits"] += 1
-        else:
-            self._stats["chat"]["misses"] += 1
+            if result is not None:
+                self._stats["chat"]["hits"] += 1
+            else:
+                self._stats["chat"]["misses"] += 1
 
         return result
 
@@ -127,20 +132,21 @@ class CacheService:
             response: The response to cache
         """
         key = self._generate_chat_key(channel_id, query)
-        self._chat_cache[key] = {
-            **response,
-            "_cached_at": datetime.now(UTC).isoformat(),
-        }
-        # Track key for channel-level invalidation
-        if channel_id not in self._chat_channel_keys:
-            self._chat_channel_keys[channel_id] = set()
-        else:
-            # Prune stale keys that TTL-expired from the cache
-            self._chat_channel_keys[channel_id] = {
-                k for k in self._chat_channel_keys[channel_id]
-                if k in self._chat_cache
+        with self._lock:
+            self._chat_cache[key] = {
+                **response,
+                "_cached_at": datetime.now(UTC).isoformat(),
             }
-        self._chat_channel_keys[channel_id].add(key)
+            # Track key for channel-level invalidation
+            if channel_id not in self._chat_channel_keys:
+                self._chat_channel_keys[channel_id] = set()
+            else:
+                # Prune stale keys that TTL-expired from the cache
+                self._chat_channel_keys[channel_id] = {
+                    k for k in self._chat_channel_keys[channel_id]
+                    if k in self._chat_cache
+                }
+            self._chat_channel_keys[channel_id].add(key)
 
     def invalidate_chat_cache(self, channel_id: str) -> int:
         """Invalidate all chat cache entries for a channel.
@@ -153,12 +159,13 @@ class CacheService:
         Returns:
             Number of entries invalidated
         """
-        keys = self._chat_channel_keys.pop(channel_id, set())
-        count = 0
-        for key in keys:
-            if key in self._chat_cache:
-                del self._chat_cache[key]
-                count += 1
+        with self._lock:
+            keys = self._chat_channel_keys.pop(channel_id, set())
+            count = 0
+            for key in keys:
+                if key in self._chat_cache:
+                    del self._chat_cache[key]
+                    count += 1
         return count
 
     # ========== Document List Cache ==========
@@ -172,12 +179,13 @@ class CacheService:
         Returns:
             Cached document list or None if not found
         """
-        result = self._document_cache.get(channel_id)
+        with self._lock:
+            result = self._document_cache.get(channel_id)
 
-        if result is not None:
-            self._stats["document"]["hits"] += 1
-        else:
-            self._stats["document"]["misses"] += 1
+            if result is not None:
+                self._stats["document"]["hits"] += 1
+            else:
+                self._stats["document"]["misses"] += 1
 
         return result
 
@@ -192,7 +200,8 @@ class CacheService:
             channel_id: The channel ID
             documents: The document list to cache
         """
-        self._document_cache[channel_id] = documents
+        with self._lock:
+            self._document_cache[channel_id] = documents
 
     def invalidate_document_cache(self, channel_id: str) -> bool:
         """Invalidate document cache for a channel.
@@ -203,9 +212,10 @@ class CacheService:
         Returns:
             True if entry was removed
         """
-        if channel_id in self._document_cache:
-            del self._document_cache[channel_id]
-            return True
+        with self._lock:
+            if channel_id in self._document_cache:
+                del self._document_cache[channel_id]
+                return True
         return False
 
     # ========== Channel Info Cache ==========
@@ -219,12 +229,13 @@ class CacheService:
         Returns:
             Cached channel info or None if not found
         """
-        result = self._channel_cache.get(channel_id)
+        with self._lock:
+            result = self._channel_cache.get(channel_id)
 
-        if result is not None:
-            self._stats["channel"]["hits"] += 1
-        else:
-            self._stats["channel"]["misses"] += 1
+            if result is not None:
+                self._stats["channel"]["hits"] += 1
+            else:
+                self._stats["channel"]["misses"] += 1
 
         return result
 
@@ -239,7 +250,8 @@ class CacheService:
             channel_id: The channel ID
             info: The channel info to cache
         """
-        self._channel_cache[channel_id] = info
+        with self._lock:
+            self._channel_cache[channel_id] = info
 
     def invalidate_channel_cache(self, channel_id: str) -> bool:
         """Invalidate channel cache.
@@ -250,9 +262,10 @@ class CacheService:
         Returns:
             True if entry was removed
         """
-        if channel_id in self._channel_cache:
-            del self._channel_cache[channel_id]
-            return True
+        with self._lock:
+            if channel_id in self._channel_cache:
+                del self._channel_cache[channel_id]
+                return True
         return False
 
     # ========== Store List Cache ==========
@@ -263,12 +276,13 @@ class CacheService:
         Returns:
             Cached store list or None if not found
         """
-        result = self._store_cache.get("stores")
+        with self._lock:
+            result = self._store_cache.get("stores")
 
-        if result is not None:
-            self._stats["store"]["hits"] += 1
-        else:
-            self._stats["store"]["misses"] += 1
+            if result is not None:
+                self._stats["store"]["hits"] += 1
+            else:
+                self._stats["store"]["misses"] += 1
 
         return result
 
@@ -278,7 +292,8 @@ class CacheService:
         Args:
             stores: The store list to cache
         """
-        self._store_cache["stores"] = stores
+        with self._lock:
+            self._store_cache["stores"] = stores
 
     def invalidate_store_cache(self) -> bool:
         """Invalidate store list cache.
@@ -286,9 +301,10 @@ class CacheService:
         Returns:
             True if entry was removed
         """
-        if "stores" in self._store_cache:
-            del self._store_cache["stores"]
-            return True
+        with self._lock:
+            if "stores" in self._store_cache:
+                del self._store_cache["stores"]
+                return True
         return False
 
     # ========== Cache Management ==========
@@ -313,11 +329,12 @@ class CacheService:
 
     def clear_all(self) -> None:
         """Clear all caches."""
-        self._chat_cache.clear()
-        self._chat_channel_keys.clear()
-        self._document_cache.clear()
-        self._channel_cache.clear()
-        self._store_cache.clear()
+        with self._lock:
+            self._chat_cache.clear()
+            self._chat_channel_keys.clear()
+            self._document_cache.clear()
+            self._channel_cache.clear()
+            self._store_cache.clear()
 
     def get_stats(self) -> dict[str, Any]:
         """Get cache statistics.
