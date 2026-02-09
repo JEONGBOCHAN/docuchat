@@ -2,7 +2,7 @@
 """Audio Overview (Podcast) API endpoints."""
 
 import asyncio
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, UTC
 from typing import Annotated
 
@@ -43,6 +43,9 @@ from src.infrastructure.di.container import (
 )
 
 router = APIRouter(prefix="/channels", tags=["audio"])
+
+# Bounded thread pool for audio generation to prevent unbounded thread creation
+_audio_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="audio-gen")
 
 
 def get_channel_port() -> ChannelPort:
@@ -192,11 +195,7 @@ def generate_audio_overview(
         host_a_voice=body.host_a_voice.value,
         host_b_voice=body.host_b_voice.value,
     )
-    thread = threading.Thread(
-        target=_run_audio_generation_in_background,
-        args=(gen_request,),
-    )
-    thread.start()
+    _audio_executor.submit(_run_audio_generation_in_background, gen_request)
 
     return _audio_dto_to_response(audio_dto, channel_id)
 

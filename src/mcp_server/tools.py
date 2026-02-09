@@ -6,6 +6,7 @@ Clean Architecture based implementation of MCP tools.
 All tools use ProcessQueryUseCase and other application layer components.
 """
 
+import time
 from datetime import datetime, UTC
 from typing import Any
 import uuid
@@ -14,11 +15,26 @@ from src.mcp_server.state import AgentStateStore, get_global_state_store
 
 
 # ============================================================
-# Session Storage (In-Memory for now)
+# Session Storage (In-Memory with TTL and capacity limits)
 # ============================================================
 
 _sessions: dict[str, dict[str, Any]] = {}
 _chat_histories: dict[str, list[dict[str, Any]]] = {}
+
+SESSION_TTL_SECONDS = 3600  # 1 hour
+MAX_SESSIONS = 500
+
+
+def _cleanup_stale_sessions() -> None:
+    """Remove sessions that have exceeded the TTL."""
+    now = time.monotonic()
+    expired = [
+        sid for sid, data in _sessions.items()
+        if now - data.get("_last_seen", 0) > SESSION_TTL_SECONDS
+    ]
+    for sid in expired:
+        _sessions.pop(sid, None)
+        _chat_histories.pop(sid, None)
 
 
 def _generate_session_id() -> str:
@@ -166,11 +182,20 @@ async def create_session(channel_id: str) -> dict[str, Any]:
             "error": f"Invalid channel: {channel_id}",
         }
 
+    # Cleanup expired sessions and enforce capacity limit
+    _cleanup_stale_sessions()
+    if len(_sessions) >= MAX_SESSIONS:
+        return {
+            "success": False,
+            "error": "Maximum number of MCP tool sessions reached. Try again later.",
+        }
+
     session_id = _generate_session_id()
     _sessions[session_id] = {
         "session_id": session_id,
         "channel_id": channel_id,
         "created_at": datetime.now(UTC).isoformat(),
+        "_last_seen": time.monotonic(),
     }
     _chat_histories[session_id] = []
 
