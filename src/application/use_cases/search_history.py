@@ -94,6 +94,15 @@ class SearchHistoryUseCase:
             )
         return meta.id
 
+    def _resolve_channel_locally(self, channel_id: str) -> int | None:
+        """Resolve gemini_store_id to DB primary key using local DB only.
+
+        Returns None if channel is not found locally (no external API call).
+        Used for read-only operations to avoid external API dependency.
+        """
+        meta = self._channel_repo.get_by_gemini_id(channel_id)
+        return meta.id if meta else None
+
     def _to_dto(self, history_dto, channel_id: str) -> SearchHistoryItemDTO:
         """Convert persistence DTO to application DTO."""
         return SearchHistoryItemDTO(
@@ -115,10 +124,12 @@ class SearchHistoryUseCase:
     ) -> SearchHistoryListDTO:
         """Get search history for a channel.
 
-        Raises:
-            ChannelNotFoundError: If channel doesn't exist.
+        Uses local DB only (no external API call) for resilience.
+        Returns empty list if channel has no local record.
         """
-        db_channel_id = self._resolve_channel(channel_id)
+        db_channel_id = self._resolve_channel_locally(channel_id)
+        if db_channel_id is None:
+            return SearchHistoryListDTO(history=[], total=0)
 
         history = self._search_history_repo.get_history(
             db_channel_id, limit=limit, offset=offset,
@@ -140,10 +151,11 @@ class SearchHistoryUseCase:
     ) -> SearchSuggestionListDTO:
         """Get search suggestions based on query prefix.
 
-        Raises:
-            ChannelNotFoundError: If channel doesn't exist.
+        Uses local DB only (no external API call) for resilience.
         """
-        db_channel_id = self._resolve_channel(channel_id)
+        db_channel_id = self._resolve_channel_locally(channel_id)
+        if db_channel_id is None:
+            return SearchSuggestionListDTO(suggestions=[], query=prefix)
 
         suggestions = self._search_history_repo.get_suggestions(
             db_channel_id, prefix, limit=limit,
@@ -166,10 +178,11 @@ class SearchHistoryUseCase:
     ) -> SearchSuggestionListDTO:
         """Get popular searches for a channel.
 
-        Raises:
-            ChannelNotFoundError: If channel doesn't exist.
+        Uses local DB only (no external API call) for resilience.
         """
-        db_channel_id = self._resolve_channel(channel_id)
+        db_channel_id = self._resolve_channel_locally(channel_id)
+        if db_channel_id is None:
+            return SearchSuggestionListDTO(suggestions=[], query="")
 
         popular = self._search_history_repo.get_popular(db_channel_id, limit=limit)
 

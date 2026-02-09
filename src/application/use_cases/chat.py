@@ -431,11 +431,9 @@ class ChatUseCase:
     ) -> ChatHistoryResultDTO:
         """Get chat history for a channel.
 
-        Raises:
-            ChannelNotFoundError: Channel not found.
+        Uses local DB only (no external API call) for resilience.
+        Returns empty list if channel has no local record.
         """
-        self._validate_channel(channel_id)
-
         channel_meta = self._channel_repo.get_by_gemini_id(channel_id)
         if not channel_meta:
             return ChatHistoryResultDTO(

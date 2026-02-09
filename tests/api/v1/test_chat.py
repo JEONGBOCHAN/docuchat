@@ -228,7 +228,7 @@ class TestGetChatHistory:
         app.dependency_overrides.pop(get_chat_use_case, None)
 
     def test_get_history_channel_not_found(self, client_with_db: TestClient, test_db):
-        """Test getting history for non-existent channel."""
+        """Test getting history for non-existent channel returns empty (local-first)."""
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = None
 
@@ -239,7 +239,11 @@ class TestGetChatHistory:
             "/api/v1/channels/fileSearchStores/not-exists/chat/history",
         )
 
-        assert response.status_code == 404
+        # Local-first: returns empty history instead of 404
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 0
+        assert data["messages"] == []
 
         app.dependency_overrides.pop(get_chat_use_case, None)
 
