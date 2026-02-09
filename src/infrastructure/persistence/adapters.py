@@ -235,7 +235,9 @@ class ChatHistoryRepositoryAdapter(ChatHistoryRepositoryPort):
         if not session:
             return []
 
-        messages = self._repo.get_session_history(session, limit)
+        # Use context_window as limit override when provided
+        effective_limit = context_window if context_window is not None else limit
+        messages = self._repo.get_session_history(session, effective_limit)
         return [_chat_message_to_dto(m) for m in messages]
 
     def clear_history(self, channel_id: int) -> int:
