@@ -429,8 +429,11 @@ async def mcp_message(
 
 
 @router.get("/message")
-async def mcp_message_stream(request: Request):
-    """Handle MCP Streamable HTTP GET requests (SSE stream).
+async def mcp_message_stream(
+    request: Request,
+    _admin: Annotated[str, Depends(require_admin_key)],
+):
+    """Handle MCP Streamable HTTP GET requests (SSE stream). Requires admin key.
 
     Opens an SSE stream for server-initiated messages.
     Currently returns 405 as we don't support server-initiated streams.
@@ -444,8 +447,11 @@ async def mcp_message_stream(request: Request):
 
 
 @router.delete("/message")
-async def mcp_message_delete(request: Request):
-    """Handle session termination.
+async def mcp_message_delete(
+    request: Request,
+    _admin: Annotated[str, Depends(require_admin_key)],
+):
+    """Handle session termination. Requires admin key.
 
     Allows clients to explicitly terminate their session.
     """

@@ -518,7 +518,7 @@ class TestMCPStreamableHTTP:
         # Delete session
         response = client.delete(
             "/api/v1/mcp/message",
-            headers={"Mcp-Session-Id": session_id},
+            headers=_ah({"Mcp-Session-Id": session_id}),
         )
 
         assert response.status_code == 204
@@ -539,7 +539,7 @@ class TestMCPStreamableHTTP:
 
     def test_get_message_not_supported(self, client):
         """Test GET /message returns 405."""
-        response = client.get("/api/v1/mcp/message")
+        response = client.get("/api/v1/mcp/message", headers=_ah())
         assert response.status_code == 405
 
     def test_state_endpoint(self, client):
@@ -575,6 +575,19 @@ class TestMCPStreamableHTTP:
     def test_mcp_state_without_admin_key_rejected(self, client):
         """Test that MCP state endpoint rejects requests without admin key."""
         response = client.get("/api/v1/mcp/state")
+        assert response.status_code in (401, 422)
+
+    def test_mcp_get_message_without_admin_key_rejected(self, client):
+        """Test that GET /mcp/message rejects requests without admin key."""
+        response = client.get("/api/v1/mcp/message")
+        assert response.status_code in (401, 422)
+
+    def test_mcp_delete_message_without_admin_key_rejected(self, client):
+        """Test that DELETE /mcp/message rejects requests without admin key."""
+        response = client.delete(
+            "/api/v1/mcp/message",
+            headers={"Mcp-Session-Id": "some-session"},
+        )
         assert response.status_code in (401, 422)
 
 
