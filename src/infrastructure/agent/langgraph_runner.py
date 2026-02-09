@@ -359,10 +359,26 @@ If the question is clearly about external/current events not covered in these do
         try:
             agent = self._create_agent(channel_id, config)
 
-            # Build messages: if checkpointer + thread_id, only send new message
-            # (checkpointer auto-restores conversation history)
+            # Build messages: if checkpointer + thread_id, check checkpoint state
             if self._checkpointer and thread_id:
-                messages = [("user", query)]
+                checkpoint_config = {"configurable": {"thread_id": thread_id}}
+                has_checkpoint = self._checkpointer.get_tuple(checkpoint_config) is not None
+                if has_checkpoint:
+                    # Checkpoint exists → only send new message
+                    messages = [("user", query)]
+                else:
+                    # Checkpoint miss (e.g. server restart) → use DB history as fallback
+                    logger.info("Checkpoint miss for thread_id=%s, using DB history fallback", thread_id)
+                    messages = []
+                    if conversation_history:
+                        for msg in conversation_history:
+                            role = msg.get("role", "user")
+                            content = msg.get("content", "")
+                            if role == "user":
+                                messages.append(("user", content))
+                            else:
+                                messages.append(("assistant", content))
+                    messages.append(("user", query))
             else:
                 messages = []
                 if conversation_history:
@@ -576,9 +592,24 @@ If the question is clearly about external/current events not covered in these do
         try:
             agent = self._create_agent(channel_id, config, streaming=True)
 
-            # Build messages: if checkpointer + thread_id, only send new message
+            # Build messages: if checkpointer + thread_id, check checkpoint state
             if self._checkpointer and thread_id:
-                messages = [("user", query)]
+                checkpoint_config = {"configurable": {"thread_id": thread_id}}
+                has_checkpoint = self._checkpointer.get_tuple(checkpoint_config) is not None
+                if has_checkpoint:
+                    messages = [("user", query)]
+                else:
+                    logger.info("Checkpoint miss for thread_id=%s, using DB history fallback (stream)", thread_id)
+                    messages = []
+                    if conversation_history:
+                        for msg in conversation_history:
+                            role = msg.get("role", "user")
+                            content = msg.get("content", "")
+                            if role == "user":
+                                messages.append(("user", content))
+                            else:
+                                messages.append(("assistant", content))
+                    messages.append(("user", query))
             else:
                 messages = []
                 if conversation_history:

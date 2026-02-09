@@ -53,6 +53,7 @@ class ChatResultDTO:
     sources: list[SourceDTO]
     session_id: str | None = None
     session_renewed: bool = False
+    old_session_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -157,27 +158,31 @@ class ChatUseCase:
 
     def _resolve_session(
         self, channel_db_id: int, session_id: str | None
-    ) -> tuple[str | None, bool]:
-        """Resolve session, returning (session_id, session_renewed).
+    ) -> tuple[str | None, bool, str | None]:
+        """Resolve session, returning (session_id, session_renewed, old_session_id).
 
         When the requested session_id is expired or not found,
         get_or_create silently creates a new session. The boolean
         flag indicates this happened so callers can inform the client.
+        old_session_id is set when renewal occurs so the client can
+        detect session changes.
         """
         if not session_id:
-            return None, False
+            return None, False, None
         session_dto, created = self._session_repo.get_or_create(
             channel_id=channel_db_id,
             session_id=session_id,
         )
         resolved_id = session_dto.session_id if session_dto else session_id
         renewed = created and resolved_id != session_id
+        old_sid = None
         if renewed:
+            old_sid = session_id
             logger.warning(
                 "Session renewed: requested %s → created %s",
                 session_id, resolved_id,
             )
-        return resolved_id, renewed
+        return resolved_id, renewed, old_sid
 
     def _get_conversation_history(self, session_id: str | None) -> list[dict[str, str]]:
         """Get conversation history for context."""
@@ -268,7 +273,7 @@ class ChatUseCase:
             channel_id, channel.display_name
         )
 
-        session_id_response, session_renewed = self._resolve_session(
+        session_id_response, session_renewed, old_session_id = self._resolve_session(
             channel_meta.id, session_id
         )
         document_context = self._summaries.build_context_string(channel_id)
@@ -291,12 +296,15 @@ class ChatUseCase:
                     session_id=None,
                 )
 
+        # Load DB history as fallback for checkpoint miss (e.g. server restart)
+        conversation_history = self._get_conversation_history(session_id_response)
+
         # Run agent with thread_id for checkpointer-based context
         use_case = self._process_query_factory()
         result = use_case.execute(
             query=query,
             channel_id=channel_id,
-            conversation_history=None,
+            conversation_history=conversation_history,
             max_iterations=15,
             document_context=document_context,
             thread_id=session_id_response,
@@ -328,6 +336,7 @@ class ChatUseCase:
             sources=sources,
             session_id=session_id_response,
             session_renewed=session_renewed,
+            old_session_id=old_session_id,
         )
 
     def prepare_stream(
@@ -335,14 +344,14 @@ class ChatUseCase:
         channel_id: str,
         query: str,
         session_id: str | None = None,
-    ) -> tuple[str | None, bool, Generator[dict, None, dict | None]]:
+    ) -> tuple[str | None, bool, str | None, Generator[dict, None, dict | None]]:
         """Prepare streaming chat. Validates synchronously, returns generator.
 
         Validation (channel, session) happens synchronously so errors
         can be caught before StreamingResponse is created.
 
         Returns:
-            Tuple of (session_id_response, session_renewed, event_generator).
+            Tuple of (session_id_response, session_renewed, old_session_id, event_generator).
             Events: {"type": "content", "chunk": str},
                     {"type": "sources", "sources": list},
                     {"type": "done"},
@@ -356,9 +365,11 @@ class ChatUseCase:
             channel_id, channel.display_name
         )
 
-        session_id_response, session_renewed = self._resolve_session(
+        session_id_response, session_renewed, old_session_id = self._resolve_session(
             channel_meta.id, session_id
         )
+        # Load DB history as fallback for checkpoint miss (e.g. server restart)
+        conversation_history = self._get_conversation_history(session_id_response)
         document_context = self._summaries.build_context_string(channel_id)
 
         def generate() -> Generator[dict, None, dict | None]:
@@ -367,7 +378,7 @@ class ChatUseCase:
             stream_gen = use_case.execute_stream(
                 query=query,
                 channel_id=channel_id,
-                conversation_history=None,
+                conversation_history=conversation_history,
                 max_iterations=15,
                 document_context=document_context,
                 thread_id=session_id_response,
@@ -422,7 +433,7 @@ class ChatUseCase:
                 yield {"type": "error", "error": "No result from agent"}
                 return None
 
-        return session_id_response, session_renewed, generate()
+        return session_id_response, session_renewed, old_session_id, generate()
 
     # ---- Chat history ----
 
