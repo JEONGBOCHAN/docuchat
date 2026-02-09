@@ -67,10 +67,9 @@ def gemini_service(gemini_api_key):
         ],
         delete_store=lambda store_name, force=True: channel_adapter.delete_channel(store_name, force),
         # Document operations (mapped to GeminiDocumentAdapter)
-        upload_file=lambda store_name, file_path, display_name=None: {
-            "name": document_adapter.upload_document(store_name, file_path, display_name).operation_name,
-            "done": document_adapter.upload_document(store_name, file_path, display_name).done,
-        },
+        upload_file=lambda store_name, file_path, display_name=None: (
+            lambda result: {"name": result.operation_name, "done": result.done}
+        )(document_adapter.upload_document(store_name, file_path, display_name)),
         list_store_files=lambda store_name: [
             {"name": doc.name, "display_name": doc.display_name, "size_bytes": doc.size_bytes, "state": doc.state}
             for doc in document_adapter.list_documents(store_name)
