@@ -64,7 +64,7 @@ class ChatSession(BaseModel):
     channel_id: str = Field(..., description="Channel ID")
     created_at: datetime = Field(default_factory=_utc_now)
     last_activity_at: datetime = Field(default_factory=_utc_now)
-    context_window: int = Field(default=10, description="Number of recent messages to display in session history (LLM context is managed automatically via checkpointer)")
+    context_window: int = Field(default=10, description="Number of recent messages to load for session history display and LLM fallback context on checkpoint miss")
 
 
 class SessionHistoryRequest(BaseModel):
@@ -76,4 +76,4 @@ class SessionHistoryRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     """Request model for creating a new session."""
 
-    context_window: int = Field(default=10, ge=1, le=50, description="Number of recent messages to display in session history (LLM context is managed automatically)")
+    context_window: int = Field(default=10, ge=1, le=50, description="Number of recent messages to load for session history display and LLM fallback context on checkpoint miss")
