@@ -57,6 +57,28 @@ class SearchHistoryRepository:
         self.db.refresh(history)
         return history
 
+    def get_recent(
+        self,
+        channel: ChannelMetadata,
+        limit: int = 10,
+    ) -> list[SearchHistoryDB]:
+        """Get recent search queries for a channel.
+
+        Args:
+            channel: The channel metadata
+            limit: Maximum number of entries
+
+        Returns:
+            List of recent search history entries (most recent first)
+        """
+        return (
+            self.db.query(SearchHistoryDB)
+            .filter(SearchHistoryDB.channel_id == channel.id)
+            .order_by(SearchHistoryDB.last_searched_at.desc())
+            .limit(limit)
+            .all()
+        )
+
     def get_history(
         self,
         channel: ChannelMetadata,
