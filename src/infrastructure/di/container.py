@@ -705,7 +705,7 @@ def create_channel_crud_use_case(db=None):
     """Create ChannelCrudUseCase with all dependencies wired.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         Fully configured ChannelCrudUseCase.
@@ -724,7 +724,7 @@ def create_note_crud_use_case(db=None):
     """Create NoteCrudUseCase with all dependencies wired.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         Fully configured NoteCrudUseCase.
@@ -742,7 +742,7 @@ def create_favorite_crud_use_case(db=None):
     """Create FavoriteCrudUseCase with all dependencies wired.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         Fully configured FavoriteCrudUseCase.
@@ -759,7 +759,7 @@ def create_search_history_use_case(db=None):
     """Create SearchHistoryUseCase with all dependencies wired.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         Fully configured SearchHistoryUseCase.
@@ -776,7 +776,7 @@ def create_chat_use_case(db=None):
     """Create ChatUseCase with all dependencies wired.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         Fully configured ChatUseCase.
@@ -802,7 +802,7 @@ def create_document_crud_use_case(db=None):
     """Create DocumentCrudUseCase with all dependencies wired.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         Fully configured DocumentCrudUseCase.
@@ -843,7 +843,7 @@ def create_channel_repository_port(db=None) -> ChannelRepositoryPort:
     """Create channel repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         ChannelRepositoryPort implementation.
@@ -856,7 +856,7 @@ def create_chat_history_repository_port(db=None) -> ChatHistoryRepositoryPort:
     """Create chat history repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         ChatHistoryRepositoryPort implementation.
@@ -869,7 +869,7 @@ def create_chat_session_repository_port(db=None) -> ChatSessionRepositoryPort:
     """Create chat session repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         ChatSessionRepositoryPort implementation.
@@ -882,7 +882,7 @@ def create_note_repository_port(db=None) -> NoteRepositoryPort:
     """Create note repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         NoteRepositoryPort implementation.
@@ -895,7 +895,7 @@ def create_favorite_repository_port(db=None) -> FavoriteRepositoryPort:
     """Create favorite repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         FavoriteRepositoryPort implementation.
@@ -908,7 +908,7 @@ def create_search_history_repository_port(db=None) -> SearchHistoryRepositoryPor
     """Create search history repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         SearchHistoryRepositoryPort implementation.
@@ -921,7 +921,7 @@ def create_trash_repository_port(db=None) -> TrashRepositoryPort:
     """Create trash repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         TrashRepositoryPort implementation.
@@ -934,7 +934,7 @@ def create_audio_repository_port(db=None) -> AudioRepositoryPort:
     """Create audio repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         AudioRepositoryPort implementation.
@@ -947,7 +947,7 @@ def create_document_preview_cache_repository_port(db=None) -> DocumentPreviewCac
     """Create document preview cache repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         DocumentPreviewCacheRepositoryPort implementation.
@@ -1128,7 +1128,7 @@ def create_document_summary_cache_port(db=None) -> DocumentSummaryCachePort:
     """Create document summary cache repository port.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         DocumentSummaryCachePort implementation.
@@ -1143,7 +1143,7 @@ def create_generate_document_summary_use_case(db=None):
     """Create GenerateDocumentSummaryUseCase with dependencies.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         Fully configured GenerateDocumentSummaryUseCase.
@@ -1167,7 +1167,7 @@ def create_get_channel_summaries_use_case(db=None):
     """Create GetChannelDocumentSummariesUseCase with dependencies.
 
     Args:
-        db: Optional database session. If None, creates one from get_db().
+        db: Database session. Passed through to the adapter as-is.
 
     Returns:
         Fully configured GetChannelDocumentSummariesUseCase.
