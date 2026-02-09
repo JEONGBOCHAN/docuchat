@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 from src.models.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelList
 from src.application.use_cases.channel_crud import ChannelCrudUseCase, ChannelDetailDTO
 from src.core.database import get_db
+from src.application.use_cases.exceptions import UpstreamError
 from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/channels", tags=["channels"])
@@ -58,6 +59,8 @@ def create_channel(
     try:
         dto = use_case.create(data.name, data.description)
         return _dto_to_response(dto)
+    except UpstreamError:
+        raise  # Let global handler convert to 502
     except Exception as e:
         logger.error("Failed to create channel", exc_info=e)
         raise HTTPException(
@@ -89,6 +92,8 @@ def list_channels(
             channels=[_dto_to_response(ch) for ch in result.channels],
             total=result.total,
         )
+    except UpstreamError:
+        raise  # Let global handler convert to 502
     except Exception as e:
         logger.error("Failed to list channels", exc_info=e)
         raise HTTPException(
@@ -185,6 +190,8 @@ def delete_channel(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete channel",
         )
+    except UpstreamError:
+        raise  # Let global handler convert to 502
     except Exception as e:
         logger.error("Failed to delete channel from Gemini", exc_info=e)
         raise HTTPException(
