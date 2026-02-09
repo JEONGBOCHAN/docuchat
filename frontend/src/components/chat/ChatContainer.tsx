@@ -39,6 +39,11 @@ export default function ChatContainer({ channelId, onSaveAsNote }: ChatContainer
   const streamControllerRef = useRef<StreamController | null>(null);
   const sessionIdRef = useRef<string | null>(getStoredSessionId(channelId));
 
+  // Sync session ref when channel changes
+  useEffect(() => {
+    sessionIdRef.current = getStoredSessionId(channelId);
+  }, [channelId]);
+
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
@@ -201,6 +206,11 @@ export default function ChatContainer({ channelId, onSaveAsNote }: ChatContainer
     try {
       await chatApi.clearHistory(channelId);
       setMessages([]);
+      // Clear stored session so a fresh session starts on next message
+      sessionIdRef.current = null;
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`${SESSION_STORAGE_PREFIX}${channelId}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to clear history');
     }
