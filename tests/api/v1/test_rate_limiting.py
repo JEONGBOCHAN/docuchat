@@ -42,11 +42,16 @@ def mock_channel_port():
         error=None,
     )
 
+    mock_session_repo = MagicMock()
+    mock_session_dto = MagicMock()
+    mock_session_dto.session_id = "test-session"
+    mock_session_repo.get_or_create.return_value = (mock_session_dto, True)
+
     use_case = ChatUseCase(
         channel_port=mock_port,
         channel_repo=MagicMock(),
         chat_history_repo=MagicMock(),
-        session_repo=MagicMock(),
+        session_repo=mock_session_repo,
         search_history_repo=MagicMock(),
         cache=mock_cache,
         summaries_use_case=mock_summaries,

@@ -195,10 +195,16 @@ class ChatUseCase:
         old_session_id is set when renewal occurs so the client can
         detect session changes.
         """
-        session_dto, created = self._session_repo.get_or_create(
+        result = self._session_repo.get_or_create(
             channel_id=channel_db_id,
             session_id=session_id,
         )
+        if not isinstance(result, tuple) or len(result) != 2:
+            raise ChatAgentError(
+                f"Session repository returned unexpected format: "
+                f"expected (session_dto, created), got {type(result).__name__}"
+            )
+        session_dto, created = result
         resolved_id = session_dto.session_id if session_dto else session_id
         renewed = created and bool(session_id) and resolved_id != session_id
         old_sid = None
