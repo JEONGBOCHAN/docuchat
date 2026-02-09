@@ -790,8 +790,8 @@ def create_conversation_memory_service(db):
         session_memory_repo=create_session_memory_repository_port(db),
         summary_port=create_conversation_summary_port(),
         token_counter=create_token_counter(),
-        compaction_trigger_turns=getattr(settings, "memory_compaction_trigger_turns", 30),
-        compaction_target_tokens=getattr(settings, "memory_compaction_target_tokens", 1200),
+        compaction_trigger_turns=settings.memory_compaction_trigger_turns,
+        compaction_target_tokens=settings.memory_compaction_target_tokens,
     )
 
 
@@ -805,6 +805,8 @@ def create_chat_use_case(db):
         Fully configured ChatUseCase.
     """
     from src.application.use_cases.chat import ChatUseCase
+    from src.core.config import get_settings
+    settings = get_settings()
     return ChatUseCase(
         channel_port=create_channel_port(),
         channel_repo=create_channel_repository_port(db),
@@ -820,6 +822,7 @@ def create_chat_use_case(db):
         ),
         conversation_memory=create_conversation_memory_service(db),
         session_memory_repo=create_session_memory_repository_port(db),
+        memory_mode=settings.memory_mode,
     )
 
 

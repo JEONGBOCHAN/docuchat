@@ -328,6 +328,34 @@ If the question is clearly about external/current events not covered in these do
 - Be efficient: gather what you need and provide your answer. Do not keep searching endlessly.
 """
 
+    @staticmethod
+    def _history_to_messages(
+        history: list,
+        query: str,
+    ) -> list[tuple[str, str]]:
+        """Convert conversation history to invoke-ready message tuples.
+
+        Handles two formats:
+        - Pre-assembled tuples from ConversationMemoryService (already includes query)
+        - Legacy dicts with 'role'/'content' keys (query appended)
+        """
+        if not history:
+            return [("user", query)]
+        # Pre-assembled tuples from memory service (already includes query)
+        if isinstance(history[0], tuple):
+            return list(history)
+        # Legacy dict format
+        messages: list[tuple[str, str]] = []
+        for msg in history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role == "user":
+                messages.append(("user", content))
+            else:
+                messages.append(("assistant", content))
+        messages.append(("user", query))
+        return messages
+
     def run(
         self,
         query: str,
@@ -349,6 +377,7 @@ If the question is clearly about external/current events not covered in these do
         conversation_history_raw = context.get("conversation_history", [])
         thread_id = context.get("thread_id")
         session_id = context.get("session_id") or generate_session_id()
+        memory_mode = context.get("memory_mode")
 
         # Support lazy loading: callable defers DB query until actually needed
         if callable(conversation_history_raw):
@@ -367,8 +396,12 @@ If the question is clearly about external/current events not covered in these do
         try:
             agent = self._create_agent(channel_id, config)
 
-            # Build messages: if checkpointer + thread_id, check checkpoint state
-            if self._checkpointer and thread_id:
+            # Build messages based on memory_mode
+            if memory_mode == "hybrid_strict":
+                # Always use assembled context (summary+recent+query), skip checkpoint
+                conversation_history = _load_history()
+                messages = self._history_to_messages(conversation_history, query)
+            elif self._checkpointer and thread_id:
                 checkpoint_config = {"configurable": {"thread_id": thread_id}}
                 has_checkpoint = self._checkpointer.get_tuple(checkpoint_config) is not None
                 if has_checkpoint:
@@ -376,7 +409,7 @@ If the question is clearly about external/current events not covered in these do
                     self._checkpoint_hit_count += 1
                     messages = [("user", query)]
                 else:
-                    # Checkpoint miss (e.g. server restart) → load DB history as fallback
+                    # Checkpoint miss (e.g. server restart) → load history as fallback
                     self._checkpoint_miss_count += 1
                     logger.info(
                         "Checkpoint miss for thread_id=%s, using DB history fallback "
@@ -384,28 +417,10 @@ If the question is clearly about external/current events not covered in these do
                         thread_id, self._checkpoint_miss_count, self._checkpoint_hit_count,
                     )
                     conversation_history = _load_history()
-                    messages = []
-                    if conversation_history:
-                        for msg in conversation_history:
-                            role = msg.get("role", "user")
-                            content = msg.get("content", "")
-                            if role == "user":
-                                messages.append(("user", content))
-                            else:
-                                messages.append(("assistant", content))
-                    messages.append(("user", query))
+                    messages = self._history_to_messages(conversation_history, query)
             else:
                 conversation_history = _load_history()
-                messages = []
-                if conversation_history:
-                    for msg in conversation_history:
-                        role = msg.get("role", "user")
-                        content = msg.get("content", "")
-                        if role == "user":
-                            messages.append(("user", content))
-                        else:
-                            messages.append(("assistant", content))
-                messages.append(("user", query))
+                messages = self._history_to_messages(conversation_history, query)
 
             # Build invoke config
             invoke_config = {"recursion_limit": config.max_iterations * 2 + 1}
@@ -594,6 +609,7 @@ If the question is clearly about external/current events not covered in these do
         conversation_history_raw = context.get("conversation_history", [])
         thread_id = context.get("thread_id")
         session_id = context.get("session_id") or generate_session_id()
+        memory_mode = context.get("memory_mode")
 
         # Support lazy loading: callable defers DB query until actually needed
         if callable(conversation_history_raw):
@@ -614,8 +630,12 @@ If the question is clearly about external/current events not covered in these do
         try:
             agent = self._create_agent(channel_id, config, streaming=True)
 
-            # Build messages: if checkpointer + thread_id, check checkpoint state
-            if self._checkpointer and thread_id:
+            # Build messages based on memory_mode
+            if memory_mode == "hybrid_strict":
+                # Always use assembled context (summary+recent+query), skip checkpoint
+                conversation_history = _load_history()
+                messages = self._history_to_messages(conversation_history, query)
+            elif self._checkpointer and thread_id:
                 checkpoint_config = {"configurable": {"thread_id": thread_id}}
                 has_checkpoint = self._checkpointer.get_tuple(checkpoint_config) is not None
                 if has_checkpoint:
@@ -630,28 +650,10 @@ If the question is clearly about external/current events not covered in these do
                         thread_id, self._checkpoint_miss_count, self._checkpoint_hit_count,
                     )
                     conversation_history = _load_history()
-                    messages = []
-                    if conversation_history:
-                        for msg in conversation_history:
-                            role = msg.get("role", "user")
-                            content = msg.get("content", "")
-                            if role == "user":
-                                messages.append(("user", content))
-                            else:
-                                messages.append(("assistant", content))
-                    messages.append(("user", query))
+                    messages = self._history_to_messages(conversation_history, query)
             else:
                 conversation_history = _load_history()
-                messages = []
-                if conversation_history:
-                    for msg in conversation_history:
-                        role = msg.get("role", "user")
-                        content = msg.get("content", "")
-                        if role == "user":
-                            messages.append(("user", content))
-                        else:
-                            messages.append(("assistant", content))
-                messages.append(("user", query))
+                messages = self._history_to_messages(conversation_history, query)
 
             # Track tool calls dynamically
             tool_start_times: dict[str, datetime] = {}

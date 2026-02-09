@@ -119,6 +119,7 @@ class ChatUseCase:
         process_query_factory: Callable[[], ProcessQueryUseCase],
         conversation_memory: ConversationMemoryService | None = None,
         session_memory_repo: ChatSessionMemoryRepositoryPort | None = None,
+        memory_mode: str | None = None,
     ):
         self._channel_port = channel_port
         self._channel_repo = channel_repo
@@ -130,6 +131,7 @@ class ChatUseCase:
         self._process_query_factory = process_query_factory
         self._conversation_memory = conversation_memory
         self._session_memory_repo = session_memory_repo
+        self._memory_mode = memory_mode
 
     # ---- Private helpers ----
 
@@ -329,6 +331,7 @@ class ChatUseCase:
             max_iterations=15,
             document_context=document_context,
             thread_id=session_id_response,
+            memory_mode=self._memory_mode if self._conversation_memory else None,
         )
 
         if result.error:
@@ -414,6 +417,7 @@ class ChatUseCase:
         # Capture references for use inside generator closure
         _conversation_memory = self._conversation_memory
         _search_history = self._search_history
+        _memory_mode = self._memory_mode if self._conversation_memory else None
 
         def generate() -> Generator[dict, None, dict | None]:
             """Generate stream events."""
@@ -425,6 +429,7 @@ class ChatUseCase:
                 max_iterations=15,
                 document_context=document_context,
                 thread_id=session_id_response,
+                memory_mode=_memory_mode,
             )
 
             accumulated_content = ""

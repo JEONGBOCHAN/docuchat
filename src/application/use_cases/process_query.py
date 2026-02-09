@@ -135,6 +135,7 @@ class ProcessQueryUseCase:
         session_id: str | None = None,
         document_context: str | None = None,
         thread_id: str | None = None,
+        memory_mode: str | None = None,
     ) -> QueryResult:
         """Execute the query processing.
 
@@ -180,6 +181,8 @@ class ProcessQueryUseCase:
             }
             if thread_id:
                 context["thread_id"] = thread_id
+            if memory_mode:
+                context["memory_mode"] = memory_mode
 
             # Run agent (runner emits start/complete/error events)
             agent_result = self.agent_runner.run(
@@ -216,6 +219,7 @@ class ProcessQueryUseCase:
         session_id: str | None = None,
         document_context: str | None = None,
         thread_id: str | None = None,
+        memory_mode: str | None = None,
     ) -> Generator[dict, None, QueryResult]:
         """Execute query processing with streaming events.
 
@@ -260,6 +264,8 @@ class ProcessQueryUseCase:
             }
             if thread_id:
                 context["thread_id"] = thread_id
+            if memory_mode:
+                context["memory_mode"] = memory_mode
 
             # Run agent with streaming - yield all events
             agent_result = None

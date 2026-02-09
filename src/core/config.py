@@ -88,6 +88,13 @@ class Settings(BaseSettings):
     checkpoint_db_path: str = "./data/checkpoints.db"
     strict_checkpointer: bool = True  # Fail-fast on SqliteSaver init failure; set STRICT_CHECKPOINTER=false to allow MemorySaver fallback in dev
 
+    # Conversation Memory
+    memory_mode: str = "hybrid_default"  # "hybrid_default" or "hybrid_strict"
+    memory_token_budget: int = 12000
+    memory_recent_turns: int = 80
+    memory_compaction_trigger_turns: int = 30
+    memory_compaction_target_tokens: int = 1200
+
     # Channel Lifecycle
     channel_inactive_days: int = 90  # Days before channel is considered inactive
     max_files_per_channel: int = 100
