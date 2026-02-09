@@ -37,7 +37,8 @@ class TestGeminiConversationSummaryAdapter:
             ],
         )
 
-        assert "Facts" in result
+        assert result.success
+        assert "Facts" in result.summary
         mock_client.models.generate_content.assert_called_once()
         call_args = mock_client.models.generate_content.call_args
         assert "Conversation Turns" in call_args.kwargs.get("contents", call_args[1].get("contents", [""]))[0]
@@ -56,7 +57,8 @@ class TestGeminiConversationSummaryAdapter:
             ],
         )
 
-        assert "Decisions" in result
+        assert result.success
+        assert "Decisions" in result.summary
         call_args = mock_client.models.generate_content.call_args
         content = call_args.kwargs.get("contents", call_args[1].get("contents", [""]))[0]
         assert "Previous Summary" in content
@@ -67,7 +69,8 @@ class TestGeminiConversationSummaryAdapter:
             previous_summary="existing summary",
             new_turns=[],
         )
-        assert result == "existing summary"
+        assert result.success
+        assert result.summary == "existing summary"
         mock_client.models.generate_content.assert_not_called()
 
     def test_summarize_api_error_returns_previous(self, adapter, mock_client):
@@ -78,7 +81,9 @@ class TestGeminiConversationSummaryAdapter:
             previous_summary="safe fallback",
             new_turns=[{"role": "user", "content": "test"}],
         )
-        assert result == "safe fallback"
+        assert not result.success
+        assert result.summary == "safe fallback"
+        assert result.error is not None
 
     def test_summarize_empty_response_returns_previous(self, adapter, mock_client):
         """Empty API response should fallback to previous summary."""
@@ -90,7 +95,8 @@ class TestGeminiConversationSummaryAdapter:
             previous_summary="fallback",
             new_turns=[{"role": "user", "content": "test"}],
         )
-        assert result == "fallback"
+        assert not result.success
+        assert result.summary == "fallback"
 
     def test_max_tokens_passed_to_prompt(self, adapter, mock_client):
         """max_tokens should appear in the prompt."""

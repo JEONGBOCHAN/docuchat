@@ -10,7 +10,7 @@ import logging
 from google import genai
 from google.genai import types
 
-from src.application.ports.conversation_summary import ConversationSummaryPort
+from src.application.ports.conversation_summary import ConversationSummaryPort, SummaryResult
 from src.core.config import get_settings, GeminiModels
 
 logger = logging.getLogger(__name__)
@@ -60,10 +60,10 @@ class GeminiConversationSummaryAdapter(ConversationSummaryPort):
         previous_summary: str,
         new_turns: list[dict[str, str]],
         max_tokens: int = 1200,
-    ) -> str:
+    ) -> SummaryResult:
         """Generate incremental summary using Gemini."""
         if not new_turns:
-            return previous_summary
+            return SummaryResult(summary=previous_summary, success=True)
 
         # Build conversation text from turns
         turns_text = "\n".join(
@@ -99,9 +99,14 @@ class GeminiConversationSummaryAdapter(ConversationSummaryPort):
             result = response.text.strip() if response.text else ""
             if not result:
                 logger.warning("Empty summary from Gemini, falling back to previous")
-                return previous_summary
-            return result
-        except Exception:
+                return SummaryResult(
+                    summary=previous_summary, success=False,
+                    error="Empty response from Gemini",
+                )
+            return SummaryResult(summary=result, success=True)
+        except Exception as e:
             logger.error("Failed to generate conversation summary", exc_info=True)
-            # Fallback: return previous summary unchanged
-            return previous_summary
+            return SummaryResult(
+                summary=previous_summary, success=False,
+                error=str(e),
+            )

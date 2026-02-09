@@ -7,6 +7,15 @@ into a rolling summary.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class SummaryResult:
+    """Result of a summary generation attempt."""
+    summary: str
+    success: bool
+    error: str | None = None
 
 
 class ConversationSummaryPort(ABC):
@@ -18,7 +27,7 @@ class ConversationSummaryPort(ABC):
         previous_summary: str,
         new_turns: list[dict[str, str]],
         max_tokens: int = 1200,
-    ) -> str:
+    ) -> SummaryResult:
         """Generate an incremental summary by merging previous summary with new turns.
 
         Args:
@@ -27,6 +36,6 @@ class ConversationSummaryPort(ABC):
             max_tokens: Target maximum token count for the output summary.
 
         Returns:
-            Updated rolling summary string.
+            SummaryResult with summary text, success flag, and optional error.
         """
         ...

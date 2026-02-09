@@ -150,24 +150,33 @@ class ConversationMemoryService:
         ]
 
         # Generate updated summary
-        updated_summary = self._summary_port.summarize_incremental(
+        result = self._summary_port.summarize_incremental(
             previous_summary=previous_summary,
             new_turns=new_turns,
             max_tokens=self._compaction_target_tokens,
         )
 
+        # Only advance cursor on success
+        if not result.success:
+            logger.warning(
+                "Compaction failed for session %s: %s — cursor NOT advanced, "
+                "will retry on next trigger",
+                session_id, result.error,
+            )
+            return
+
         # Persist
         last_id = new_messages[-1].id if new_messages else last_compacted_id
         self._session_memory.upsert(
             session_id=session_id,
-            rolling_summary=updated_summary,
+            rolling_summary=result.summary,
             last_compacted_message_id=last_id,
             increment_compaction=True,
         )
 
         logger.info(
             "Compaction complete for session %s: summary length=%d chars, last_id=%s",
-            session_id, len(updated_summary), last_id,
+            session_id, len(result.summary), last_id,
         )
 
     # ------------------------------------------------------------------

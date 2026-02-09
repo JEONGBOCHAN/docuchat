@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.application.ports.conversation_summary import SummaryResult
 from src.application.use_cases.conversation_memory import ConversationMemoryService
 
 
@@ -231,7 +232,7 @@ class TestMaybeCompact:
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(1, 6)  # exactly 5, meets threshold
         ]
-        summary_port.summarize_incremental.return_value = "New summary"
+        summary_port.summarize_incremental.return_value = SummaryResult(summary="New summary", success=True)
 
         service.maybe_compact("sess_1")
 
@@ -252,7 +253,7 @@ class TestMaybeCompact:
             for i in range(1, 10)  # messages 1-9
         ]
         # Messages 4-9 are new (6 messages, above threshold of 5)
-        summary_port.summarize_incremental.return_value = "Updated summary"
+        summary_port.summarize_incremental.return_value = SummaryResult(summary="Updated summary", success=True)
 
         service.maybe_compact("sess_1")
 
@@ -286,9 +287,50 @@ class TestMaybeCompact:
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(1, 6)
         ]
-        summary_port.summarize_incremental.return_value = "summary"
+        summary_port.summarize_incremental.return_value = SummaryResult(summary="summary", success=True)
 
         service.maybe_compact("sess_1")
 
         # Verify limit=0 is passed (bypasses context_window default)
         chat_history_repo.get_session_history.assert_called_once_with("sess_1", limit=0)
+
+    def test_summary_failure_does_not_advance_cursor(self, service, session_memory_repo, chat_history_repo, summary_port):
+        """When summary generation fails, cursor should NOT advance."""
+        session_memory_repo.get_by_session_id.return_value = None
+        chat_history_repo.get_session_history.return_value = [
+            FakeMessageDTO(id=i, role="user", content=f"msg {i}")
+            for i in range(1, 6)  # 5 messages, meets threshold
+        ]
+        summary_port.summarize_incremental.return_value = SummaryResult(
+            summary="", success=False, error="API timeout",
+        )
+
+        service.maybe_compact("sess_1")
+
+        summary_port.summarize_incremental.assert_called_once()
+        # Cursor must NOT advance on failure
+        session_memory_repo.upsert.assert_not_called()
+
+    def test_summary_failure_retries_on_next_trigger(self, service, session_memory_repo, chat_history_repo, summary_port):
+        """After summary failure, same messages should be retried on next compaction trigger."""
+        session_memory_repo.get_by_session_id.return_value = FakeMemoryDTO(
+            rolling_summary="Old", last_compacted_message_id=3,
+        )
+        chat_history_repo.get_session_history.return_value = [
+            FakeMessageDTO(id=i, role="user", content=f"msg {i}")
+            for i in range(1, 10)  # ids 1-9, new = 4-9 (6 msgs, above threshold)
+        ]
+        # First call fails
+        summary_port.summarize_incremental.return_value = SummaryResult(
+            summary="Old", success=False, error="timeout",
+        )
+        service.maybe_compact("sess_1")
+        session_memory_repo.upsert.assert_not_called()
+
+        # Second call succeeds — same messages should be eligible
+        summary_port.summarize_incremental.return_value = SummaryResult(
+            summary="Updated", success=True,
+        )
+        service.maybe_compact("sess_1")
+        session_memory_repo.upsert.assert_called_once()
+        assert session_memory_repo.upsert.call_args.kwargs["rolling_summary"] == "Updated"
