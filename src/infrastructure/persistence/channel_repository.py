@@ -239,7 +239,7 @@ class ChatHistoryRepository:
         """
         return self.db.query(ChatMessageDB).filter(
             ChatMessageDB.channel_id == channel.id
-        ).order_by(ChatMessageDB.created_at.asc()).limit(limit).all()
+        ).order_by(ChatMessageDB.created_at.asc(), ChatMessageDB.id.asc()).limit(limit).all()
 
     def get_session_history(self, session: ChatSessionDB, limit: int | None = None) -> list[ChatMessageDB]:
         """Get chat history for a specific session.
@@ -259,12 +259,12 @@ class ChatHistoryRepository:
             # Get most recent N messages (DESC + limit), then reverse to ASC
             rows = self.db.query(ChatMessageDB).filter(
                 ChatMessageDB.session_id == session.id
-            ).order_by(ChatMessageDB.created_at.desc()).limit(effective_limit).all()
+            ).order_by(ChatMessageDB.created_at.desc(), ChatMessageDB.id.desc()).limit(effective_limit).all()
             return list(reversed(rows))
 
         return self.db.query(ChatMessageDB).filter(
             ChatMessageDB.session_id == session.id
-        ).order_by(ChatMessageDB.created_at.asc()).all()
+        ).order_by(ChatMessageDB.created_at.asc(), ChatMessageDB.id.asc()).all()
 
     def clear_history(self, channel: ChannelMetadata) -> int:
         """Clear chat history for a channel.
