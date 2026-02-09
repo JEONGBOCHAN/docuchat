@@ -1293,3 +1293,183 @@ class TestCheckpointMissFallbackStream:
         messages = call_args[0][0]["messages"]
         assert len(messages) == 1
         assert messages[0] == ("user", "new question")
+
+
+class TestSqliteSaverIntegration:
+    """Integration tests for SqliteSaver real path (CHA-172)."""
+
+    def test_sqlite_saver_put_and_get_tuple(self, tmp_path):
+        """SqliteSaver can store and retrieve checkpoints via real SQLite file."""
+        import sqlite3
+        from langgraph.checkpoint.sqlite import SqliteSaver
+
+        db_path = str(tmp_path / "test_checkpoints.db")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        saver = SqliteSaver(conn)
+        saver.setup()
+
+        thread_id = "integration_thread_1"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": "", "checkpoint_id": ""}}
+
+        # Initially no checkpoint
+        assert saver.get_tuple({"configurable": {"thread_id": thread_id}}) is None
+
+        # Put a checkpoint
+        saver.put(
+            config=config,
+            checkpoint={
+                "v": 1,
+                "id": "ckpt-int-1",
+                "ts": "2026-01-01T00:00:00+00:00",
+                "channel_values": {},
+                "channel_versions": {},
+                "versions_seen": {},
+                "pending_sends": [],
+            },
+            metadata={"source": "input", "step": 0, "writes": {}, "parents": {}},
+            new_versions={},
+        )
+
+        # Now get_tuple should return non-None
+        result = saver.get_tuple({"configurable": {"thread_id": thread_id}})
+        assert result is not None
+
+        conn.close()
+
+    def test_sqlite_saver_survives_reconnect(self, tmp_path):
+        """Checkpoint persists after closing and reopening the SQLite connection."""
+        import sqlite3
+        from langgraph.checkpoint.sqlite import SqliteSaver
+
+        db_path = str(tmp_path / "persist_checkpoints.db")
+
+        # First connection: write checkpoint
+        conn1 = sqlite3.connect(db_path, check_same_thread=False)
+        saver1 = SqliteSaver(conn1)
+        saver1.setup()
+
+        thread_id = "persist_thread"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": "", "checkpoint_id": ""}}
+        saver1.put(
+            config=config,
+            checkpoint={
+                "v": 1,
+                "id": "ckpt-persist-1",
+                "ts": "2026-01-01T00:00:00+00:00",
+                "channel_values": {},
+                "channel_versions": {},
+                "versions_seen": {},
+                "pending_sends": [],
+            },
+            metadata={"source": "input", "step": 0, "writes": {}, "parents": {}},
+            new_versions={},
+        )
+        conn1.close()
+
+        # Second connection: verify checkpoint survived
+        conn2 = sqlite3.connect(db_path, check_same_thread=False)
+        saver2 = SqliteSaver(conn2)
+        saver2.setup()
+
+        result = saver2.get_tuple({"configurable": {"thread_id": thread_id}})
+        assert result is not None
+        conn2.close()
+
+    def test_sqlite_saver_with_runner_checkpoint_miss(self, tmp_path):
+        """LangGraphAgentRunner correctly detects miss/hit with real SqliteSaver."""
+        import sqlite3
+        from langgraph.checkpoint.sqlite import SqliteSaver
+        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.application.ports.agent_runner import AgentConfig
+
+        db_path = str(tmp_path / "runner_checkpoints.db")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        saver = SqliteSaver(conn)
+        saver.setup()
+
+        runner = LangGraphAgentRunner(checkpointer=saver)
+
+        loader_called = []
+
+        def lazy_loader():
+            loader_called.append(True)
+            return [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
+
+        mock_agent = MagicMock()
+        mock_agent.invoke.return_value = {
+            "messages": [MagicMock(content="response", type="ai", tool_calls=[])]
+        }
+        runner._create_agent = MagicMock(return_value=mock_agent)
+
+        config = AgentConfig(max_iterations=5)
+        context = {
+            "channel_id": "test-channel",
+            "conversation_history": lazy_loader,
+            "thread_id": "sqlite_thread_miss",
+        }
+
+        # First call: no checkpoint → miss → loader called
+        runner.run(query="question", config=config, context=context)
+        assert len(loader_called) == 1
+        assert runner._checkpoint_miss_count == 1
+        assert runner._checkpoint_hit_count == 0
+
+        conn.close()
+
+    def test_get_checkpointer_returns_sqlite_saver(self, tmp_path, monkeypatch):
+        """get_checkpointer() returns SqliteSaver when properly configured."""
+        import src.infrastructure.di.container as container_module
+
+        # Reset singleton
+        container_module._checkpointer = None
+
+        # Patch settings to use tmp path
+        monkeypatch.setenv("CHECKPOINT_DB_PATH", str(tmp_path / "cp.db"))
+        monkeypatch.setenv("STRICT_CHECKPOINTER", "false")
+
+        # Clear settings cache so new env vars are picked up
+        from src.core.config import get_settings
+        get_settings.cache_clear()
+
+        try:
+            cp = container_module.get_checkpointer()
+            assert type(cp).__name__ == "SqliteSaver"
+        finally:
+            # Cleanup
+            container_module._checkpointer = None
+            get_settings.cache_clear()
+
+    def test_strict_checkpointer_raises_on_failure(self, tmp_path, monkeypatch):
+        """When strict_checkpointer=True and SqliteSaver fails, RuntimeError is raised."""
+        import src.infrastructure.di.container as container_module
+
+        # Reset singleton
+        container_module._checkpointer = None
+
+        # Set strict mode and invalid path to force failure
+        monkeypatch.setenv("STRICT_CHECKPOINTER", "true")
+        # Use an invalid db path that will cause SqliteSaver import to fail
+        monkeypatch.setattr(
+            "src.infrastructure.di.container.get_checkpointer.__module__",
+            "src.infrastructure.di.container",
+        )
+
+        from src.core.config import get_settings
+        get_settings.cache_clear()
+
+        # Patch SqliteSaver import to simulate failure
+        original_get_checkpointer = container_module.get_checkpointer
+
+        def patched_get_checkpointer():
+            container_module._checkpointer = None
+            # Temporarily make SqliteSaver import fail
+            import unittest.mock
+            with unittest.mock.patch.dict("sys.modules", {"langgraph.checkpoint.sqlite": None}):
+                return original_get_checkpointer()
+
+        try:
+            with pytest.raises(RuntimeError, match="strict_checkpointer=True"):
+                patched_get_checkpointer()
+        finally:
+            container_module._checkpointer = None
+            get_settings.cache_clear()
