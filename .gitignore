@@ -40,6 +40,7 @@ data/
 # Claude Code 내부 문서
 CLAUDE.md
 .claude/
+.mcp.json
 docs/
 result_*.txt
 reviews/
