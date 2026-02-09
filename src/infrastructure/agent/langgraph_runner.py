@@ -424,8 +424,11 @@ If the question is clearly about external/current events not covered in these do
 
             # Build invoke config
             invoke_config = {"recursion_limit": config.max_iterations * 2 + 1}
-            if self._checkpointer and thread_id:
+            if self._checkpointer and thread_id and memory_mode != "hybrid_strict":
                 invoke_config["configurable"] = {"thread_id": thread_id}
+
+            if memory_mode == "hybrid_strict":
+                logger.debug("hybrid_strict: checkpoint_bypassed=true, thread_id not injected")
 
             # Run agent
             agent_start_time = datetime.now()
@@ -686,8 +689,11 @@ If the question is clearly about external/current events not covered in these do
 
             # Build stream config
             stream_config = {"recursion_limit": config.max_iterations * 2 + 1}
-            if self._checkpointer and thread_id:
+            if self._checkpointer and thread_id and memory_mode != "hybrid_strict":
                 stream_config["configurable"] = {"thread_id": thread_id}
+
+            if memory_mode == "hybrid_strict":
+                logger.debug("hybrid_strict stream: checkpoint_bypassed=true, thread_id not injected")
 
             for msg, metadata in agent.stream(
                 {"messages": messages},

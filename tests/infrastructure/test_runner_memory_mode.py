@@ -119,6 +119,9 @@ class TestMemoryModeRun:
         invoked_messages = invoke_call[0][0]["messages"]
         assert len(invoked_messages) == 3
         assert invoked_messages[0] == ("user", "[Conversation Memory]\nSummary")
+        # Verify thread_id NOT in invoke config (F-01/F-04)
+        invoke_config = invoke_call[1].get("config", invoke_call[0][1] if len(invoke_call[0]) > 1 else {})
+        assert "configurable" not in invoke_config
 
     def test_hybrid_strict_skips_checkpoint_check(self, runner, mock_agent):
         """hybrid_strict should not check checkpoint state."""
@@ -140,6 +143,10 @@ class TestMemoryModeRun:
 
         # Checkpoint should NOT be checked
         mock_checkpointer.get_tuple.assert_not_called()
+        # Verify thread_id NOT in invoke config (F-01/F-04)
+        invoke_call = mock_agent.invoke.call_args
+        invoke_config = invoke_call[1].get("config", invoke_call[0][1] if len(invoke_call[0]) > 1 else {})
+        assert "configurable" not in invoke_config
 
     def test_hybrid_default_checkpoint_hit_query_only(self, runner, mock_agent):
         """hybrid_default with checkpoint hit should use query-only."""
@@ -299,6 +306,9 @@ class TestMemoryModeRunStream:
         stream_call = mock_agent.stream.call_args
         streamed_messages = stream_call[0][0]["messages"]
         assert len(streamed_messages) == 3
+        # Verify thread_id NOT in stream config (F-01/F-04)
+        stream_config = stream_call[1].get("config", stream_call[0][1] if len(stream_call[0]) > 1 else {})
+        assert "configurable" not in stream_config
 
     def test_stream_hybrid_default_hit_query_only(self, runner, mock_agent):
         """hybrid_default stream with checkpoint hit should be query-only."""
