@@ -75,4 +75,4 @@ class SessionHistoryRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     """Request model for creating a new session."""
 
-    context_window: int = Field(default=10, ge=1, le=50, description="Number of recent messages to load for session history display and LLM fallback context on checkpoint miss")
+    context_window: int = Field(default=10, ge=1, le=1000, description="Number of recent messages to load for session history display and LLM fallback context on checkpoint miss")
