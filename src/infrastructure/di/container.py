@@ -107,6 +107,7 @@ from src.mcp_server.state import get_global_state_store
 
 _event_store: InMemoryEventStore | None = None
 _state_store_adapter: StateStoreAdapter | None = None
+_checkpointer = None  # MemorySaver singleton
 
 
 def get_event_store() -> InMemoryEventStore:
@@ -119,6 +120,19 @@ def get_event_store() -> InMemoryEventStore:
     if _event_store is None:
         _event_store = InMemoryEventStore()
     return _event_store
+
+
+def get_checkpointer():
+    """Get the global checkpointer (singleton).
+
+    Returns:
+        MemorySaver instance for LangGraph conversation persistence.
+    """
+    global _checkpointer
+    if _checkpointer is None:
+        from langgraph.checkpoint.memory import MemorySaver
+        _checkpointer = MemorySaver()
+    return _checkpointer
 
 
 def get_state_store_adapter() -> StateStoreAdapter:
@@ -197,6 +211,7 @@ def create_agent_runner(
         event_sink=event_sink,
         dashboard_middleware=dashboard_middleware,
         token_counter=token_counter,
+        checkpointer=get_checkpointer(),
     )
 
 

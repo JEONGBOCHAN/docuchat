@@ -666,18 +666,18 @@ class TestMultiTurnConversation:
     """Tests for multi-turn conversation with session context."""
 
     def test_chat_with_session_maintains_context(self, client_with_db: TestClient, test_db):
-        """Test that chat with session_id maintains conversation context."""
+        """Test that chat with session_id passes thread_id for checkpointer-based context."""
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
             name="fileSearchStores/test-store",
             display_name="Test Channel",
         )
 
-        # Track conversation history passed to use case
-        received_histories = []
+        # Track thread_id passed to use case
+        received_thread_ids = []
 
         def mock_execute(query, channel_id, conversation_history=None, **kwargs):
-            received_histories.append(conversation_history or [])
+            received_thread_ids.append(kwargs.get("thread_id"))
             return QueryResult(
                 response=f"Response to: {query}",
                 sources=[],
@@ -710,23 +710,16 @@ class TestMultiTurnConversation:
         assert response1.status_code == 200
         assert response1.json()["session_id"] == session_id
 
-        # Second message - should include first message in context
+        # Second message
         response2 = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat",
             json={"query": "Tell me more about it", "session_id": session_id},
         )
         assert response2.status_code == 200
 
-        # Verify context was passed
-        # First call has no history
-        assert received_histories[0] == []
-
-        # Second call should have context
-        assert len(received_histories[1]) == 2
-        assert received_histories[1][0]["role"] == "user"
-        assert received_histories[1][0]["content"] == "What is Python?"
-        assert received_histories[1][1]["role"] == "assistant"
-        assert "Response to: What is Python?" in received_histories[1][1]["content"]
+        # Verify thread_id was passed (same session_id for both calls)
+        assert received_thread_ids[0] == session_id
+        assert received_thread_ids[1] == session_id
 
         app.dependency_overrides.pop(get_chat_use_case, None)
 
@@ -828,18 +821,18 @@ class TestMultiTurnConversation:
         app.dependency_overrides.pop(get_chat_use_case, None)
 
     def test_stream_with_session(self, client_with_db: TestClient, test_db):
-        """Test streaming chat with session maintains context."""
+        """Test streaming chat with session passes thread_id for checkpointer-based context."""
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
             name="fileSearchStores/test-store",
             display_name="Test Channel",
         )
 
-        received_histories = []
+        received_thread_ids = []
 
-        # Mock ProcessQueryUseCase.execute_stream to capture history
+        # Mock ProcessQueryUseCase.execute_stream to capture thread_id
         def mock_execute_stream(query, channel_id, conversation_history=None, **kwargs):
-            received_histories.append(conversation_history or [])
+            received_thread_ids.append(kwargs.get("thread_id"))
             def generator():
                 yield {"event": "content", "content": f"Streamed: {query}"}
                 yield {"event": "agent_completed"}
@@ -882,12 +875,9 @@ class TestMultiTurnConversation:
         )
         _ = response2.text  # Consume response
 
-        # First call has no history
-        assert received_histories[0] == []
-
-        # Second call should have context
-        assert len(received_histories[1]) == 2
-        assert received_histories[1][0]["content"] == "First question"
+        # Both calls should have same thread_id (= session_id)
+        assert received_thread_ids[0] == session_id
+        assert received_thread_ids[1] == session_id
 
         app.dependency_overrides.pop(get_chat_use_case, None)
 

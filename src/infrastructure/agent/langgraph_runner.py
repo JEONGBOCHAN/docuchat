@@ -21,6 +21,7 @@ warnings.filterwarnings(
     message="create_react_agent has been moved",
 )
 from langgraph.prebuilt import create_react_agent
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         model: str = GeminiModels.DEFAULT,
         dashboard_middleware: DashboardMiddleware | None = None,
         token_counter: TokenCounterPort | None = None,
+        checkpointer: MemorySaver | None = None,
     ):
         """Initialize the LangGraph runner.
 
@@ -90,6 +92,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
             model: The Gemini model to use.
             dashboard_middleware: Optional DashboardMiddleware for LLM node display.
             token_counter: Optional TokenCounterPort for real-time token counting.
+            checkpointer: Optional MemorySaver for conversation persistence.
         """
         self._event_sink = event_sink
         if document_search is None:
@@ -101,6 +104,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self._settings = get_settings()
         self._dashboard_middleware = dashboard_middleware
         self._token_counter = token_counter
+        self._checkpointer = checkpointer
 
     def _create_agent(self, channel_id: str, config: AgentConfig, streaming: bool = False):
         """Create a LangGraph agent for the specified channel.
@@ -182,13 +186,13 @@ If the question is clearly about external/current events not covered in these do
 
         # Create the agent with prompt parameter
         # Suppress LangGraph 1.0 deprecation at call site (pytest resets module-level filters)
+        agent_kwargs = dict(model=llm, tools=tools, prompt=system_prompt)
+        if self._checkpointer is not None:
+            agent_kwargs["checkpointer"] = self._checkpointer
+
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="create_react_agent has been moved")
-            agent = create_react_agent(
-                model=llm,
-                tools=tools,
-                prompt=system_prompt,
-            )
+            agent = create_react_agent(**agent_kwargs)
 
         return agent
 
@@ -341,6 +345,7 @@ If the question is clearly about external/current events not covered in these do
         context = context or {}
         channel_id = context.get("channel_id", "")
         conversation_history = context.get("conversation_history", [])
+        thread_id = context.get("thread_id")
         session_id = context.get("session_id") or generate_session_id()
 
         # Emit: Agent Started
@@ -354,24 +359,32 @@ If the question is clearly about external/current events not covered in these do
         try:
             agent = self._create_agent(channel_id, config)
 
-            # Build messages
-            messages = []
-            if conversation_history:
-                for msg in conversation_history:
-                    role = msg.get("role", "user")
-                    content = msg.get("content", "")
-                    if role == "user":
-                        messages.append(("user", content))
-                    else:
-                        messages.append(("assistant", content))
+            # Build messages: if checkpointer + thread_id, only send new message
+            # (checkpointer auto-restores conversation history)
+            if self._checkpointer and thread_id:
+                messages = [("user", query)]
+            else:
+                messages = []
+                if conversation_history:
+                    for msg in conversation_history:
+                        role = msg.get("role", "user")
+                        content = msg.get("content", "")
+                        if role == "user":
+                            messages.append(("user", content))
+                        else:
+                            messages.append(("assistant", content))
+                messages.append(("user", query))
 
-            messages.append(("user", query))
+            # Build invoke config
+            invoke_config = {"recursion_limit": config.max_iterations * 2 + 1}
+            if self._checkpointer and thread_id:
+                invoke_config["configurable"] = {"thread_id": thread_id}
 
             # Run agent
             agent_start_time = datetime.now()
             result = agent.invoke(
                 {"messages": messages},
-                config={"recursion_limit": config.max_iterations * 2 + 1}
+                config=invoke_config,
             )
             agent_duration_ms = (datetime.now() - agent_start_time).total_seconds() * 1000
 
@@ -547,6 +560,7 @@ If the question is clearly about external/current events not covered in these do
         context = context or {}
         channel_id = context.get("channel_id", "")
         conversation_history = context.get("conversation_history", [])
+        thread_id = context.get("thread_id")
         session_id = context.get("session_id") or generate_session_id()
 
         # Emit: Agent Started
@@ -562,18 +576,20 @@ If the question is clearly about external/current events not covered in these do
         try:
             agent = self._create_agent(channel_id, config, streaming=True)
 
-            # Build messages
-            messages = []
-            if conversation_history:
-                for msg in conversation_history:
-                    role = msg.get("role", "user")
-                    content = msg.get("content", "")
-                    if role == "user":
-                        messages.append(("user", content))
-                    else:
-                        messages.append(("assistant", content))
-
-            messages.append(("user", query))
+            # Build messages: if checkpointer + thread_id, only send new message
+            if self._checkpointer and thread_id:
+                messages = [("user", query)]
+            else:
+                messages = []
+                if conversation_history:
+                    for msg in conversation_history:
+                        role = msg.get("role", "user")
+                        content = msg.get("content", "")
+                        if role == "user":
+                            messages.append(("user", content))
+                        else:
+                            messages.append(("assistant", content))
+                messages.append(("user", query))
 
             # Track tool calls dynamically
             tool_start_times: dict[str, datetime] = {}
@@ -604,9 +620,14 @@ If the question is clearly about external/current events not covered in these do
             last_token_update_time = datetime.now()
             token_update_interval_ms = 100  # Throttle: update at most every 100ms
 
+            # Build stream config
+            stream_config = {"recursion_limit": config.max_iterations * 2 + 1}
+            if self._checkpointer and thread_id:
+                stream_config["configurable"] = {"thread_id": thread_id}
+
             for msg, metadata in agent.stream(
                 {"messages": messages},
-                config={"recursion_limit": config.max_iterations * 2 + 1},
+                config=stream_config,
                 stream_mode="messages",
             ):
                 final_messages.append(msg)

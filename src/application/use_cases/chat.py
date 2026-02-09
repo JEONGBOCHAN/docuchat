@@ -271,7 +271,6 @@ class ChatUseCase:
         session_id_response, session_renewed = self._resolve_session(
             channel_meta.id, session_id
         )
-        conversation_history = self._get_conversation_history(session_id_response)
         document_context = self._summaries.build_context_string(channel_id)
 
         # Check cache (only for non-session queries)
@@ -292,14 +291,15 @@ class ChatUseCase:
                     session_id=None,
                 )
 
-        # Run agent
+        # Run agent with thread_id for checkpointer-based context
         use_case = self._process_query_factory()
         result = use_case.execute(
             query=query,
             channel_id=channel_id,
-            conversation_history=conversation_history,
+            conversation_history=None,
             max_iterations=15,
             document_context=document_context,
+            thread_id=session_id_response,
         )
 
         if result.error:
@@ -359,7 +359,6 @@ class ChatUseCase:
         session_id_response, session_renewed = self._resolve_session(
             channel_meta.id, session_id
         )
-        conversation_history = self._get_conversation_history(session_id_response)
         document_context = self._summaries.build_context_string(channel_id)
 
         def generate() -> Generator[dict, None, dict | None]:
@@ -368,9 +367,10 @@ class ChatUseCase:
             stream_gen = use_case.execute_stream(
                 query=query,
                 channel_id=channel_id,
-                conversation_history=conversation_history,
+                conversation_history=None,
                 max_iterations=15,
                 document_context=document_context,
+                thread_id=session_id_response,
             )
 
             accumulated_content = ""

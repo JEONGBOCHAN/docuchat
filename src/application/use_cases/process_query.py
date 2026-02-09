@@ -134,6 +134,7 @@ class ProcessQueryUseCase:
         max_iterations: int = 15,
         session_id: str | None = None,
         document_context: str | None = None,
+        thread_id: str | None = None,
     ) -> QueryResult:
         """Execute the query processing.
 
@@ -175,6 +176,8 @@ class ProcessQueryUseCase:
                 "conversation_history": conversation_history or [],
                 "session_id": session_id,
             }
+            if thread_id:
+                context["thread_id"] = thread_id
 
             # Run agent (runner emits start/complete/error events)
             agent_result = self.agent_runner.run(
@@ -210,6 +213,7 @@ class ProcessQueryUseCase:
         max_iterations: int = 15,
         session_id: str | None = None,
         document_context: str | None = None,
+        thread_id: str | None = None,
     ) -> Generator[dict, None, QueryResult]:
         """Execute query processing with streaming events.
 
@@ -251,6 +255,8 @@ class ProcessQueryUseCase:
                 "conversation_history": conversation_history or [],
                 "session_id": session_id,
             }
+            if thread_id:
+                context["thread_id"] = thread_id
 
             # Run agent with streaming - yield all events
             agent_result = None
