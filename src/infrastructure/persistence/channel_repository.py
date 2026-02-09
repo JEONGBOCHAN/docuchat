@@ -285,7 +285,7 @@ class ChatHistoryRepository:
 class ChatSessionRepository:
     """Repository for chat session operations."""
 
-    SESSION_TIMEOUT_HOURS = 24  # Sessions expire after 24 hours of inactivity
+    SESSION_TIMEOUT_HOURS = 168  # Sessions expire after 7 days of inactivity
 
     def __init__(self, db: Session):
         """Initialize repository with database session."""
