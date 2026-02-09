@@ -18,7 +18,7 @@ This replaces rule-based routing with LLM-based decision making.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Generator
+from typing import Any, Callable, Generator
 
 from src.application.ports import (
     AgentRunnerPort,
@@ -130,7 +130,7 @@ class ProcessQueryUseCase:
         self,
         query: str,
         channel_id: str,
-        conversation_history: list[dict[str, str]] | None = None,
+        conversation_history: list[dict[str, str]] | Callable[[], list[dict[str, str]]] | None = None,
         max_iterations: int = 15,
         session_id: str | None = None,
         document_context: str | None = None,
@@ -147,7 +147,9 @@ class ProcessQueryUseCase:
         Args:
             query: The user's question
             channel_id: The channel context for document search
-            conversation_history: Previous conversation for context
+            conversation_history: Previous conversation for context.
+                Accepts a list of message dicts or a callable that returns one
+                (lazy loading — the runner invokes it only when needed).
             max_iterations: Maximum agent iterations
             session_id: Optional session ID (generated if not provided)
             document_context: Optional document summaries to inject into prompt
@@ -209,7 +211,7 @@ class ProcessQueryUseCase:
         self,
         query: str,
         channel_id: str,
-        conversation_history: list[dict[str, str]] | None = None,
+        conversation_history: list[dict[str, str]] | Callable[[], list[dict[str, str]]] | None = None,
         max_iterations: int = 15,
         session_id: str | None = None,
         document_context: str | None = None,
@@ -223,7 +225,8 @@ class ProcessQueryUseCase:
         Args:
             query: The user's question
             channel_id: The channel context for document search
-            conversation_history: Previous conversation for context
+            conversation_history: Previous conversation for context.
+                Accepts a list of message dicts or a callable (lazy loading).
             max_iterations: Maximum agent iterations
             session_id: Optional session ID (generated if not provided)
             document_context: Optional document summaries to inject into prompt

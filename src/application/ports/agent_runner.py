@@ -91,6 +91,10 @@ class AgentRunnerPort(ABC):
             - "event_sink": Optional EventSinkPort for emitting events
             - "session_id": Optional session identifier for tracking
             - "channel_id": Channel being queried
+            - "conversation_history": list[dict] or Callable[[], list[dict]].
+              When a callable is provided, implementations should invoke it
+              lazily (e.g. only on checkpoint miss) to avoid unnecessary DB I/O.
+            - "thread_id": Optional thread ID for checkpointer-based context
 
     Example:
         # Using LangGraph
