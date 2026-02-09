@@ -189,18 +189,28 @@ class TestApiLayerBoundaries:
 # Infrastructure Layer Tests
 # ──────────────────────────────────────────────────────────
 
-# Infrastructure must not import from API layer or use web frameworks.
-INFRA_FORBIDDEN = ["src.api", "fastapi"]
-INFRA_EXCEPTIONS: set[str] = set()
+# Infrastructure must not import from API layer, web frameworks, or presentation models.
+# src.models.db_models is allowed (infrastructure owns persistence).
+INFRA_FORBIDDEN = ["src.api", "fastapi", "src.models"]
+INFRA_ALLOWED = ["src.models.db_models"]
+# Existing violations registered for gradual resolution:
+INFRA_EXCEPTIONS: set[str] = {
+    "src/infrastructure/persistence/audio_repository.py",
+    "src/infrastructure/persistence/trash_repository.py",
+    "src/infrastructure/external/tts/tts_service.py",
+    "src/infrastructure/external/youtube/youtube_service.py",
+    "src/infrastructure/external/adapters.py",
+}
 
 
 class TestInfrastructureLayerBoundaries:
     """Ensure infrastructure does not depend on API/presentation layers."""
 
     def test_infrastructure_does_not_import_api(self):
-        """Infrastructure must not import from src.api or fastapi."""
+        """Infrastructure must not import from src.api, fastapi, or src.models (except db_models)."""
         violations = _find_violations(
             INFRASTRUCTURE_DIR, INFRA_FORBIDDEN, INFRA_EXCEPTIONS,
+            allowed_prefixes=INFRA_ALLOWED,
         )
         if violations:
             msg = (
