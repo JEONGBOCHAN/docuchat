@@ -6,13 +6,17 @@ This provides browser access to the agent dashboard UI for testing purposes.
 In production, the dashboard is served via MCP protocol.
 """
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pathlib import Path
 import json
 
 from src.mcp_server.state import get_global_state_store
 from src.core.config import GeminiModels
+from src.core.rate_limiter import limiter, RateLimits
+from src.api.deps import require_admin_key
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -67,15 +71,24 @@ async def get_dashboard_state(channel_id: str | None = None):
 
 
 @router.post("/reset")
-async def reset_dashboard_state():
-    """Reset agent state to initial idle state."""
+@limiter.limit(RateLimits.DEFAULT)
+async def reset_dashboard_state(
+    request: Request,
+    _admin: Annotated[str, Depends(require_admin_key)],
+):
+    """Reset agent state to initial idle state. Requires admin key."""
     state_store = get_global_state_store()
     state_store.reset()
     return JSONResponse(content={"status": "reset", "state": state_store.get_state()})
 
 
 @router.post("/simulate/{event_type}")
-async def simulate_event(event_type: str):
+@limiter.limit(RateLimits.DEFAULT)
+async def simulate_event(
+    request: Request,
+    event_type: str,
+    _admin: Annotated[str, Depends(require_admin_key)],
+):
     """Simulate agent events for testing the dashboard.
 
     Event types:
