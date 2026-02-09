@@ -298,7 +298,7 @@ class ChatSessionRepository:
     def create(
         self,
         channel: ChannelMetadata,
-        context_window: int = 10,
+        context_window: int = 100,
     ) -> ChatSessionDB:
         """Create a new chat session.
 
@@ -337,7 +337,7 @@ class ChatSessionRepository:
         self,
         channel: ChannelMetadata,
         session_id: str | None = None,
-        context_window: int = 10,
+        context_window: int = 100,
     ) -> tuple[ChatSessionDB, bool]:
         """Get existing session or create a new one.
 

@@ -264,7 +264,7 @@ class ChatSessionRepositoryPort(ABC):
     def create(
         self,
         channel_id: int,
-        context_window: int = 10,
+        context_window: int = 100,
     ) -> ChatSessionDTO:
         """Create a new chat session."""
         ...
@@ -279,7 +279,7 @@ class ChatSessionRepositoryPort(ABC):
         self,
         channel_id: int,
         session_id: str | None = None,
-        context_window: int = 10,
+        context_window: int = 100,
     ) -> tuple[ChatSessionDTO, bool]:
         """Get existing session or create a new one."""
         ...

@@ -492,7 +492,7 @@ class ChatUseCase:
     # ---- Session management ----
 
     def create_session(
-        self, channel_id: str, context_window: int = 10
+        self, channel_id: str, context_window: int = 100
     ) -> SessionInfoDTO:
         """Create a new chat session.
 

@@ -78,7 +78,7 @@ class ChatSessionDB(Base):
     channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     last_activity_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
-    context_window = Column(Integer, default=10)  # Number of messages to include as context
+    context_window = Column(Integer, default=100)  # Number of messages to include as context
 
     # Relationship to channel
     channel = relationship("ChannelMetadata", back_populates="sessions")

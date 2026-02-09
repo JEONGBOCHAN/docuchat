@@ -271,7 +271,7 @@ class ChatSessionRepositoryAdapter(ChatSessionRepositoryPort):
     def create(
         self,
         channel_id: int,
-        context_window: int = 10,
+        context_window: int = 100,
     ) -> ChatSessionDTO:
         channel = self._db.query(ChannelMetadata).filter(
             ChannelMetadata.id == channel_id
@@ -288,7 +288,7 @@ class ChatSessionRepositoryAdapter(ChatSessionRepositoryPort):
         self,
         channel_id: int,
         session_id: str | None = None,
-        context_window: int = 10,
+        context_window: int = 100,
     ) -> tuple[ChatSessionDTO, bool]:
         channel = self._db.query(ChannelMetadata).filter(
             ChannelMetadata.id == channel_id
