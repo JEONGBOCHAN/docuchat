@@ -24,7 +24,7 @@ class ChatRequest(BaseModel):
     """Request model for chat query."""
 
     query: str = Field(..., min_length=1, max_length=2000, description="User's question")
-    session_id: str | None = Field(default=None, description="Session ID for multi-turn conversation")
+    session_id: str | None = Field(default=None, description="Session ID for multi-turn conversation. Required to maintain context across messages; without it each query is treated as a standalone request.")
     use_agent: bool = Field(default=True, description="Use agentic loop for document Q&A (ReAct pattern)")
 
 
@@ -36,6 +36,7 @@ class ChatResponse(BaseModel):
     sources: list[GroundingSource] = Field(default_factory=list, description="Grounding sources")
     session_id: str | None = Field(default=None, description="Session ID for multi-turn conversation")
     session_renewed: bool = Field(default=False, description="True when the requested session was expired and a new one was created")
+    old_session_id: str | None = Field(default=None, description="Previous session ID when session was renewed due to expiration")
     created_at: datetime = Field(default_factory=_utc_now)
 
 
@@ -63,7 +64,7 @@ class ChatSession(BaseModel):
     channel_id: str = Field(..., description="Channel ID")
     created_at: datetime = Field(default_factory=_utc_now)
     last_activity_at: datetime = Field(default_factory=_utc_now)
-    context_window: int = Field(default=10, description="Number of messages to include as context")
+    context_window: int = Field(default=10, description="Number of recent messages to display in session history (LLM context is managed automatically via checkpointer)")
 
 
 class SessionHistoryRequest(BaseModel):
@@ -75,4 +76,4 @@ class SessionHistoryRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     """Request model for creating a new session."""
 
-    context_window: int = Field(default=10, ge=1, le=50, description="Number of messages to include as context")
+    context_window: int = Field(default=10, ge=1, le=50, description="Number of recent messages to display in session history (LLM context is managed automatically)")
