@@ -270,15 +270,16 @@ class ChatHistoryRepositoryAdapter(ChatHistoryRepositoryPort):
 class ChatSessionRepositoryAdapter(ChatSessionRepositoryPort):
     """Adapter that implements ChatSessionRepositoryPort."""
 
-    def __init__(self, db):
+    def __init__(self, db, session_timeout_hours: int = 168):
         """Initialize adapter with database session.
 
         Args:
             db: Database session (required).
+            session_timeout_hours: Hours of inactivity before a session expires.
         """
         from src.infrastructure.persistence.channel_repository import ChatSessionRepository
         self._db = db
-        self._repo = ChatSessionRepository(self._db)
+        self._repo = ChatSessionRepository(self._db, session_timeout_hours=session_timeout_hours)
 
     def create(
         self,

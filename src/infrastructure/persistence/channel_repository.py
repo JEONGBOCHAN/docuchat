@@ -289,11 +289,15 @@ class ChatHistoryRepository:
 class ChatSessionRepository:
     """Repository for chat session operations."""
 
-    SESSION_TIMEOUT_HOURS = 168  # Sessions expire after 7 days of inactivity
+    def __init__(self, db: Session, session_timeout_hours: int = 168):
+        """Initialize repository with database session.
 
-    def __init__(self, db: Session):
-        """Initialize repository with database session."""
+        Args:
+            db: Database session.
+            session_timeout_hours: Hours of inactivity before a session expires.
+        """
         self.db = db
+        self.session_timeout_hours = session_timeout_hours
 
     def create(
         self,
@@ -384,7 +388,7 @@ class ChatSessionRepository:
         Returns:
             True if expired
         """
-        cutoff = datetime.now(UTC) - timedelta(hours=self.SESSION_TIMEOUT_HOURS)
+        cutoff = datetime.now(UTC) - timedelta(hours=self.session_timeout_hours)
         # Handle timezone-naive datetime from SQLite
         last_activity = session.last_activity_at
         if last_activity.tzinfo is None:
@@ -413,7 +417,7 @@ class ChatSessionRepository:
         Returns:
             Number of deleted sessions
         """
-        cutoff = datetime.now(UTC) - timedelta(hours=self.SESSION_TIMEOUT_HOURS)
+        cutoff = datetime.now(UTC) - timedelta(hours=self.session_timeout_hours)
         count = self.db.query(ChatSessionDB).filter(
             ChatSessionDB.last_activity_at < cutoff
         ).delete()

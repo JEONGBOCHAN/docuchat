@@ -966,8 +966,10 @@ def create_chat_session_repository_port(db) -> ChatSessionRepositoryPort:
     Returns:
         ChatSessionRepositoryPort implementation.
     """
+    from src.core.config import get_settings
     from src.infrastructure.persistence.adapters import ChatSessionRepositoryAdapter
-    return ChatSessionRepositoryAdapter(db)
+    settings = get_settings()
+    return ChatSessionRepositoryAdapter(db, session_timeout_hours=settings.session_timeout_hours)
 
 
 def create_note_repository_port(db) -> NoteRepositoryPort:

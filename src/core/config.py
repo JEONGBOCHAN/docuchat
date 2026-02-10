@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     memory_compaction_trigger_turns: int = 30
     memory_compaction_target_tokens: int = 1200
 
+    # Session Lifecycle
+    session_timeout_hours: int = 168  # Sessions expire after 7 days of inactivity
+
     # Channel Lifecycle
     channel_inactive_days: int = 90  # Days before channel is considered inactive
     max_files_per_channel: int = 100
