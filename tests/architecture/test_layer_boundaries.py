@@ -6,20 +6,16 @@ These tests statically scan imports to prevent dependency violations.
 If a test fails, it means someone introduced an import that crosses
 a forbidden layer boundary.
 
-Layer rules:
-  ┌──────────────┐
-  │   API (src/api)      │  → May import: application, models, core, domain
-  │                      │  → Must NOT import: infrastructure (except DI container)
-  ├──────────────┤
-  │ Application          │  → May import: application, core, domain
-  │ (src/application)    │  → Must NOT import: models, infrastructure, fastapi, sqlalchemy
-  ├──────────────┤
-  │ Infrastructure       │  → May import: application, core, domain, models.db_models
-  │ (src/infrastructure) │  → Must NOT import: api, fastapi
-  ├──────────────┤
+Layer rules (post-migration modular monolith):
+  ┌──────────────────┐
+  │ Infrastructure     │  → May import: shared kernel, domain
+  │ (src/infrastructure) │  → Must NOT import: module presentation, fastapi
+  ├──────────────────┤
   │ Domain (src/domain)  │  → May import: stdlib only
   │                      │  → Must NOT import: any src.* layer
-  └──────────────┘
+  └──────────────────┘
+
+Module-internal boundaries are enforced by separate gate tests.
 """
 
 import ast
@@ -33,8 +29,6 @@ import pytest
 # ──────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-APPLICATION_DIR = PROJECT_ROOT / "src" / "application"
-API_DIR = PROJECT_ROOT / "src" / "api"
 INFRASTRUCTURE_DIR = PROJECT_ROOT / "src" / "infrastructure"
 DOMAIN_DIR = PROJECT_ROOT / "src" / "domain"
 
@@ -111,105 +105,28 @@ def _find_violations(
 
 
 # ──────────────────────────────────────────────────────────
-# Application Layer Tests
-# ──────────────────────────────────────────────────────────
-
-# Forbidden import prefixes for the application layer.
-APP_FORBIDDEN = [
-    "src.models",
-    "src.infrastructure",
-    "fastapi",
-    "sqlalchemy",
-]
-APP_EXCEPTIONS: set[str] = set()
-
-
-class TestApplicationLayerBoundaries:
-    """Ensure the application layer does not depend on outer layers."""
-
-    def test_no_forbidden_imports_in_application_layer(self):
-        """Application layer must not import from models, infrastructure,
-        fastapi, or sqlalchemy."""
-        violations = _find_violations(
-            APPLICATION_DIR, APP_FORBIDDEN, APP_EXCEPTIONS,
-        )
-        if violations:
-            msg = (
-                "Application layer boundary violations detected!\n\n"
-                + "\n".join(f"  - {v}" for v in violations)
-                + "\n\nFix: move the dependency behind a port/DTO, "
-                "or perform the conversion in the API/infrastructure layer."
-            )
-            pytest.fail(msg)
-
-    @pytest.mark.parametrize("prefix", APP_FORBIDDEN)
-    def test_individual_forbidden_prefix(self, prefix: str):
-        """Granular check per forbidden prefix for clearer failure messages."""
-        violations = _find_violations(
-            APPLICATION_DIR, [prefix], APP_EXCEPTIONS,
-        )
-        if violations:
-            msg = (
-                f"Application layer imports from '{prefix}':\n\n"
-                + "\n".join(f"  - {v}" for v in violations)
-            )
-            pytest.fail(msg)
-
-
-# ──────────────────────────────────────────────────────────
-# API Layer Tests
-# ──────────────────────────────────────────────────────────
-
-# API must not reach directly into infrastructure, except via DI container.
-API_FORBIDDEN = ["src.infrastructure"]
-API_ALLOWED: list[str] = []
-API_EXCEPTIONS: set[str] = set()
-
-
-class TestApiLayerBoundaries:
-    """Ensure the API layer only reaches infrastructure through DI."""
-
-    def test_api_does_not_import_infrastructure_directly(self):
-        """API layer must not import from src.infrastructure,
-        except src.infrastructure.di.container for wiring."""
-        violations = _find_violations(
-            API_DIR, API_FORBIDDEN, API_EXCEPTIONS,
-            allowed_prefixes=API_ALLOWED,
-        )
-        if violations:
-            msg = (
-                "API layer imports infrastructure directly!\n\n"
-                + "\n".join(f"  - {v}" for v in violations)
-                + "\n\nFix: inject dependencies via DI container or ports."
-            )
-            pytest.fail(msg)
-
-
-# ──────────────────────────────────────────────────────────
 # Infrastructure Layer Tests
 # ──────────────────────────────────────────────────────────
 
-# Infrastructure must not import from API layer, web frameworks, or presentation models.
+# Infrastructure must not import from module presentation layers or web frameworks.
 INFRA_FORBIDDEN = ["src.api", "fastapi", "src.models"]
-INFRA_ALLOWED: list[str] = []
 INFRA_EXCEPTIONS: set[str] = set()
 
 
 class TestInfrastructureLayerBoundaries:
-    """Ensure infrastructure does not depend on API/presentation layers."""
+    """Ensure infrastructure does not depend on presentation layers."""
 
-    def test_infrastructure_does_not_import_api(self):
-        """Infrastructure must not import from src.api, fastapi, or src.models (except db_models)."""
+    def test_infrastructure_does_not_import_presentation(self):
+        """Infrastructure must not import from presentation layers or web frameworks."""
         violations = _find_violations(
             INFRASTRUCTURE_DIR, INFRA_FORBIDDEN, INFRA_EXCEPTIONS,
-            allowed_prefixes=INFRA_ALLOWED,
         )
         if violations:
             msg = (
-                "Infrastructure layer imports API/web framework!\n\n"
+                "Infrastructure layer imports presentation/web framework!\n\n"
                 + "\n".join(f"  - {v}" for v in violations)
                 + "\n\nFix: infrastructure should only depend on "
-                "application ports and domain."
+                "shared kernel contracts and domain."
             )
             pytest.fail(msg)
 
