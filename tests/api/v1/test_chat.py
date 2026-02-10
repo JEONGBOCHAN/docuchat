@@ -40,11 +40,13 @@ def _make_chat_use_case(
     from src.application.use_cases.chat import ChatUseCase
 
     if db is not None:
-        from src.infrastructure.di.container import (
+        from src.modules.workspace.public import (
             create_channel_repository_port,
+            create_search_history_repository_port,
+        )
+        from src.modules.conversation.public import (
             create_chat_history_repository_port,
             create_chat_session_repository_port,
-            create_search_history_repository_port,
         )
         channel_repo = create_channel_repository_port(db)
         chat_history_repo = create_chat_history_repository_port(db)

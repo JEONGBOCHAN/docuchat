@@ -16,7 +16,7 @@ from src.infrastructure.persistence.search_repository import SearchHistoryReposi
 def _make_use_case(test_db, channel_port=None):
     """Create a SearchHistoryUseCase with real DB repos and mocked external port."""
     from src.application.use_cases.search_history import SearchHistoryUseCase
-    from src.infrastructure.di.container import (
+    from src.modules.workspace.public import (
         create_channel_repository_port,
         create_search_history_repository_port,
     )
@@ -391,11 +391,13 @@ class TestSearchHistoryIntegration:
     def test_chat_saves_to_search_history(self, client_with_db: TestClient, test_db):
         """Test that chat queries are saved to search history."""
         from src.application.use_cases.chat import ChatUseCase
-        from src.infrastructure.di.container import (
+        from src.modules.workspace.public import (
             create_channel_repository_port,
+            create_search_history_repository_port,
+        )
+        from src.modules.conversation.public import (
             create_chat_history_repository_port,
             create_chat_session_repository_port,
-            create_search_history_repository_port,
         )
 
         mock_port = MagicMock()
@@ -457,11 +459,13 @@ class TestSearchHistoryIntegration:
     def test_repeated_query_increments_count(self, client_with_db: TestClient, test_db):
         """Test that repeated queries increment search count."""
         from src.application.use_cases.chat import ChatUseCase
-        from src.infrastructure.di.container import (
+        from src.modules.workspace.public import (
             create_channel_repository_port,
+            create_search_history_repository_port,
+        )
+        from src.modules.conversation.public import (
             create_chat_history_repository_port,
             create_chat_session_repository_port,
-            create_search_history_repository_port,
         )
 
         mock_port = MagicMock()
