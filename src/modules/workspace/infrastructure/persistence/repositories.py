@@ -6,7 +6,9 @@ between SQLAlchemy models and application DTOs.
 """
 
 import json
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, UTC
+
+from sqlalchemy import func
 
 from src.shared.kernel.contracts.ports.persistence import (
     ChannelMetadataDTO,
@@ -27,6 +29,7 @@ from src.shared.kernel.contracts.ports.persistence import (
 from src.modules.workspace.infrastructure.persistence.models import (
     ChannelMetadata,
     NoteDB,
+    FavoriteDB,
     DocumentPreviewCacheDB,
 )
 
@@ -72,17 +75,15 @@ def _note_to_dto(note: NoteDB) -> NoteDTO:
 # =============================================================================
 
 class ChannelRepositoryAdapter(ChannelRepositoryPort):
-    """Adapter that implements ChannelRepositoryPort using existing repository."""
+    """Adapter that implements ChannelRepositoryPort with direct SQLAlchemy queries."""
 
     def __init__(self, db):
-        """Initialize adapter with database session.
-
-        Args:
-            db: Database session (required).
-        """
-        from src.infrastructure.persistence.channel_repository import ChannelRepository
         self._db = db
-        self._repo = ChannelRepository(self._db)
+
+    def _get_by_gemini_id(self, gemini_store_id: str) -> ChannelMetadata | None:
+        return self._db.query(ChannelMetadata).filter(
+            ChannelMetadata.gemini_store_id == gemini_store_id
+        ).first()
 
     def create(
         self,
@@ -90,11 +91,18 @@ class ChannelRepositoryAdapter(ChannelRepositoryPort):
         name: str,
         description: str | None = None,
     ) -> ChannelMetadataDTO:
-        channel = self._repo.create(gemini_store_id, name, description)
+        channel = ChannelMetadata(
+            gemini_store_id=gemini_store_id,
+            name=name,
+            description=description,
+        )
+        self._db.add(channel)
+        self._db.commit()
+        self._db.refresh(channel)
         return _channel_to_dto(channel)
 
     def get_by_gemini_id(self, gemini_store_id: str) -> ChannelMetadataDTO | None:
-        channel = self._repo.get_by_gemini_id(gemini_store_id)
+        channel = self._get_by_gemini_id(gemini_store_id)
         return _channel_to_dto(channel) if channel else None
 
     def get_all(
@@ -102,14 +110,20 @@ class ChannelRepositoryAdapter(ChannelRepositoryPort):
         limit: int | None = None,
         offset: int = 0,
     ) -> list[ChannelMetadataDTO]:
-        channels = self._repo.get_all(limit, offset)
-        return [_channel_to_dto(c) for c in channels]
+        query = self._db.query(ChannelMetadata).offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+        return [_channel_to_dto(c) for c in query.all()]
 
     def count(self) -> int:
-        return self._repo.count()
+        return self._db.query(ChannelMetadata).count()
 
     def touch(self, gemini_store_id: str) -> ChannelMetadataDTO | None:
-        channel = self._repo.touch(gemini_store_id)
+        channel = self._get_by_gemini_id(gemini_store_id)
+        if channel:
+            channel.last_accessed_at = datetime.now(UTC)
+            self._db.commit()
+            self._db.refresh(channel)
         return _channel_to_dto(channel) if channel else None
 
     def update_stats(
@@ -118,7 +132,14 @@ class ChannelRepositoryAdapter(ChannelRepositoryPort):
         file_count: int | None = None,
         total_size_bytes: int | None = None,
     ) -> ChannelMetadataDTO | None:
-        channel = self._repo.update_stats(gemini_store_id, file_count, total_size_bytes)
+        channel = self._get_by_gemini_id(gemini_store_id)
+        if channel:
+            if file_count is not None:
+                channel.file_count = file_count
+            if total_size_bytes is not None:
+                channel.total_size_bytes = total_size_bytes
+            self._db.commit()
+            self._db.refresh(channel)
         return _channel_to_dto(channel) if channel else None
 
     def update(
@@ -127,18 +148,37 @@ class ChannelRepositoryAdapter(ChannelRepositoryPort):
         name: str | None = None,
         description: str | None = None,
     ) -> ChannelMetadataDTO | None:
-        channel = self._repo.update(gemini_store_id, name, description)
+        channel = self._get_by_gemini_id(gemini_store_id)
+        if channel:
+            if name is not None:
+                channel.name = name
+            if description is not None:
+                channel.description = description
+            channel.last_accessed_at = datetime.now(UTC)
+            self._db.commit()
+            self._db.refresh(channel)
         return _channel_to_dto(channel) if channel else None
 
     def delete(self, gemini_store_id: str) -> bool:
-        return self._repo.delete(gemini_store_id)
+        channel = self._get_by_gemini_id(gemini_store_id)
+        if channel:
+            self._db.delete(channel)
+            self._db.commit()
+            return True
+        return False
 
     def get_inactive_channels(self, inactive_days: int) -> list[ChannelMetadataDTO]:
-        channels = self._repo.get_inactive_channels(inactive_days)
+        cutoff = datetime.now(UTC) - timedelta(days=inactive_days)
+        channels = self._db.query(ChannelMetadata).filter(
+            ChannelMetadata.last_accessed_at < cutoff
+        ).all()
         return [_channel_to_dto(c) for c in channels]
 
     def get_deleted_store_ids(self) -> set[str]:
-        return self._repo.get_deleted_store_ids()
+        rows = self._db.query(ChannelMetadata.gemini_store_id).filter(
+            ChannelMetadata.deleted_at.isnot(None)
+        ).all()
+        return {r[0] for r in rows}
 
 
 
@@ -147,17 +187,16 @@ class ChannelRepositoryAdapter(ChannelRepositoryPort):
 # =============================================================================
 
 class NoteRepositoryAdapter(NoteRepositoryPort):
-    """Adapter that implements NoteRepositoryPort."""
+    """Adapter that implements NoteRepositoryPort with direct SQLAlchemy queries."""
 
     def __init__(self, db):
-        """Initialize adapter with database session.
-
-        Args:
-            db: Database session (required).
-        """
-        from src.infrastructure.persistence.note_repository import NoteRepository
         self._db = db
-        self._repo = NoteRepository(self._db)
+
+    def _get_active_note(self, note_id: int) -> NoteDB | None:
+        return self._db.query(NoteDB).filter(
+            NoteDB.id == note_id,
+            NoteDB.deleted_at.is_(None),
+        ).first()
 
     def create(
         self,
@@ -166,15 +205,19 @@ class NoteRepositoryAdapter(NoteRepositoryPort):
         content: str,
         sources: list[dict],
     ) -> NoteDTO:
-        channel = self._db.query(ChannelMetadata).filter(
-            ChannelMetadata.id == channel_id
-        ).first()
-
-        note = self._repo.create(channel, title, content, sources)
+        note = NoteDB(
+            channel_id=channel_id,
+            title=title,
+            content=content,
+            sources_json=json.dumps(sources or []),
+        )
+        self._db.add(note)
+        self._db.commit()
+        self._db.refresh(note)
         return _note_to_dto(note)
 
     def get_by_id(self, note_id: int) -> NoteDTO | None:
-        note = self._repo.get_by_id(note_id)
+        note = self._get_active_note(note_id)
         return _note_to_dto(note) if note else None
 
     def get_by_channel(
@@ -183,25 +226,24 @@ class NoteRepositoryAdapter(NoteRepositoryPort):
         limit: int = 50,
         offset: int = 0,
     ) -> list[NoteDTO]:
-        channel = self._db.query(ChannelMetadata).filter(
-            ChannelMetadata.id == channel_id
-        ).first()
-
-        if not channel:
-            return []
-
-        notes = self._repo.get_by_channel(channel, limit, offset)
+        notes = (
+            self._db.query(NoteDB)
+            .filter(
+                NoteDB.channel_id == channel_id,
+                NoteDB.deleted_at.is_(None),
+            )
+            .order_by(NoteDB.updated_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
         return [_note_to_dto(n) for n in notes]
 
     def count_by_channel(self, channel_id: int) -> int:
-        channel = self._db.query(ChannelMetadata).filter(
-            ChannelMetadata.id == channel_id
-        ).first()
-
-        if not channel:
-            return 0
-
-        return self._repo.count_by_channel(channel)
+        return self._db.query(NoteDB).filter(
+            NoteDB.channel_id == channel_id,
+            NoteDB.deleted_at.is_(None),
+        ).count()
 
     def update(
         self,
@@ -209,18 +251,24 @@ class NoteRepositoryAdapter(NoteRepositoryPort):
         title: str | None = None,
         content: str | None = None,
     ) -> NoteDTO | None:
-        note = self._repo.get_by_id(note_id)
-        if note:
-            updated = self._repo.update(note, title, content)
-            return _note_to_dto(updated)
-        return None
+        note = self._get_active_note(note_id)
+        if not note:
+            return None
+        if title is not None:
+            note.title = title
+        if content is not None:
+            note.content = content
+        self._db.commit()
+        self._db.refresh(note)
+        return _note_to_dto(note)
 
     def delete(self, note_id: int) -> bool:
-        note = self._repo.get_by_id(note_id)
-        if note:
-            self._repo.delete(note)
-            return True
-        return False
+        note = self._get_active_note(note_id)
+        if not note:
+            return False
+        self._db.delete(note)
+        self._db.commit()
+        return True
 
 
 # =============================================================================
@@ -228,56 +276,69 @@ class NoteRepositoryAdapter(NoteRepositoryPort):
 # =============================================================================
 
 class FavoriteRepositoryAdapter(FavoriteRepositoryPort):
-    """Adapter that implements FavoriteRepositoryPort."""
+    """Adapter that implements FavoriteRepositoryPort with direct SQLAlchemy queries."""
 
     def __init__(self, db):
-        """Initialize adapter with database session.
-
-        Args:
-            db: Database session (required).
-        """
-        from src.infrastructure.persistence.favorite_repository import FavoriteRepository
-        from src.domain.value_objects import TargetType
         self._db = db
-        self._repo = FavoriteRepository(self._db)
-        self._TargetType = TargetType
 
-    def _str_to_target_type(self, target_type: str):
-        """Convert string to TargetType enum."""
-        return self._TargetType(target_type)
+    def _get(self, target_type: str, target_id: str) -> FavoriteDB | None:
+        return self._db.query(FavoriteDB).filter(
+            FavoriteDB.target_type == target_type,
+            FavoriteDB.target_id == target_id,
+        ).first()
 
-    def add(self, target_type: str, target_id: str) -> FavoriteDTO:
-        fav = self._repo.add(self._str_to_target_type(target_type), target_id)
+    @staticmethod
+    def _to_dto(f: FavoriteDB) -> FavoriteDTO:
         return FavoriteDTO(
-            id=fav.id,
-            target_type=fav.target_type,  # Already a string, no .value needed
-            target_id=fav.target_id,
-            display_order=fav.display_order,
-            created_at=fav.created_at,
+            id=f.id,
+            target_type=f.target_type,
+            target_id=f.target_id,
+            display_order=f.display_order,
+            created_at=f.created_at,
         )
 
+    def add(self, target_type: str, target_id: str) -> FavoriteDTO:
+        existing = self._get(target_type, target_id)
+        if existing:
+            return self._to_dto(existing)
+
+        max_order = (
+            self._db.query(func.max(FavoriteDB.display_order))
+            .filter(FavoriteDB.target_type == target_type)
+            .scalar()
+        )
+        fav = FavoriteDB(
+            target_type=target_type,
+            target_id=target_id,
+            display_order=(max_order or 0) + 1,
+        )
+        self._db.add(fav)
+        self._db.commit()
+        self._db.refresh(fav)
+        return self._to_dto(fav)
+
     def remove(self, target_type: str, target_id: str) -> bool:
-        return self._repo.remove(self._str_to_target_type(target_type), target_id)
+        fav = self._get(target_type, target_id)
+        if not fav:
+            return False
+        self._db.delete(fav)
+        self._db.commit()
+        return True
 
     def is_favorited(self, target_type: str, target_id: str) -> bool:
-        return self._repo.is_favorited(self._str_to_target_type(target_type), target_id)
+        return self._get(target_type, target_id) is not None
 
     def get_favorited_ids(self, target_type: str) -> set[str]:
-        return self._repo.get_favorited_ids(self._str_to_target_type(target_type))
+        rows = self._db.query(FavoriteDB.target_id).filter(
+            FavoriteDB.target_type == target_type
+        ).all()
+        return {r[0] for r in rows}
 
     def get_all(self, target_type: str | None = None) -> list[FavoriteDTO]:
-        tt = self._str_to_target_type(target_type) if target_type else None
-        favorites = self._repo.get_all(tt)
-        return [
-            FavoriteDTO(
-                id=f.id,
-                target_type=f.target_type,  # Already a string, no .value needed
-                target_id=f.target_id,
-                display_order=f.display_order,
-                created_at=f.created_at,
-            )
-            for f in favorites
-        ]
+        query = self._db.query(FavoriteDB)
+        if target_type:
+            query = query.filter(FavoriteDB.target_type == target_type)
+        return [self._to_dto(f) for f in query.order_by(FavoriteDB.display_order).all()]
 
     def list_all(
         self,
@@ -285,25 +346,24 @@ class FavoriteRepositoryAdapter(FavoriteRepositoryPort):
         limit: int = 50,
         offset: int = 0,
     ) -> list[FavoriteDTO]:
-        tt = self._str_to_target_type(target_type) if target_type else None
-        favorites = self._repo.list_all(tt, limit=limit, offset=offset)
-        return [
-            FavoriteDTO(
-                id=f.id,
-                target_type=f.target_type,
-                target_id=f.target_id,
-                display_order=f.display_order,
-                created_at=f.created_at,
-            )
-            for f in favorites
-        ]
+        query = self._db.query(FavoriteDB)
+        if target_type:
+            query = query.filter(FavoriteDB.target_type == target_type)
+        favs = query.order_by(FavoriteDB.display_order).offset(offset).limit(limit).all()
+        return [self._to_dto(f) for f in favs]
 
     def count(self, target_type: str | None = None) -> int:
-        tt = self._str_to_target_type(target_type) if target_type else None
-        return self._repo.count(tt)
+        query = self._db.query(func.count(FavoriteDB.id))
+        if target_type:
+            query = query.filter(FavoriteDB.target_type == target_type)
+        return query.scalar() or 0
 
     def reorder(self, favorite_ids: list[int]) -> None:
-        self._repo.reorder(favorite_ids)
+        for order, fav_id in enumerate(favorite_ids, start=1):
+            fav = self._db.query(FavoriteDB).filter(FavoriteDB.id == fav_id).first()
+            if fav:
+                fav.display_order = order
+        self._db.commit()
 
 
 # =============================================================================
