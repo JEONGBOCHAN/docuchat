@@ -17,6 +17,7 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = PROJECT_ROOT / "src"
+TESTS_DIR = PROJECT_ROOT / "tests"
 
 BANNED_DIRECTORIES = [
     "api",
@@ -25,6 +26,10 @@ BANNED_DIRECTORIES = [
     "infrastructure/di",
     "infrastructure/persistence",
     "models",
+]
+
+BANNED_TEST_DIRECTORIES = [
+    "domain",
 ]
 
 
@@ -41,6 +46,22 @@ class TestLegacyAbsence:
                 f"Legacy directory src/{rel_path} still exists!\n"
                 f"Files: {files}\n\n"
                 f"All code must live in src/modules/ or src/shared/."
+            )
+
+    @pytest.mark.parametrize("rel_path", BANNED_TEST_DIRECTORIES)
+    def test_legacy_test_directory_absent(self, rel_path: str):
+        """Legacy test directory must not exist."""
+        directory = TESTS_DIR / rel_path
+        if directory.exists():
+            files = sorted(
+                f.relative_to(TESTS_DIR).as_posix()
+                for f in directory.rglob("*")
+                if f.is_file()
+            )
+            pytest.fail(
+                f"Legacy test directory tests/{rel_path} still exists!\n"
+                f"Files: {files}\n\n"
+                f"All tests must live in module-aligned paths (e.g. tests/modules/...)."
             )
 
     def test_no_legacy_imports_in_src(self):
