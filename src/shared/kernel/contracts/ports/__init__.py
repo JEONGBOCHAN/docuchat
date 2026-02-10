@@ -135,6 +135,7 @@ from src.shared.kernel.contracts.ports.infrastructure import (
     # Ports
     ApiMetricsPort,
     SchedulerPort,
+    AudioGenerationTaskPort,
 )
 
 # Export DTOs
@@ -278,6 +279,7 @@ __all__ = [
     "JobHistoryDTO",
     "ApiMetricsPort",
     "SchedulerPort",
+    "AudioGenerationTaskPort",
     # Export DTOs
     "ExportFormat",
     "GroundingSourceDTO",

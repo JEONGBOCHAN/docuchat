@@ -18,6 +18,7 @@ from src.modules.knowledge.infrastructure.di import (  # noqa: F401
     create_tts_port,
     create_audio_repository_port,
     create_audio_job_dispatcher,
+    create_audio_generation_task_port,
     # Use case factories
     create_search_with_citations_use_case,
     create_generate_faq_use_case,
@@ -29,6 +30,7 @@ from src.modules.knowledge.infrastructure.di import (  # noqa: F401
     create_generate_quiz_use_case,
     create_generate_podcast_script_use_case,
     create_generate_audio_use_case,
+    create_audio_overview_use_case,
 )
 
 from src.modules.knowledge.infrastructure.runtime.audio_executor import (  # noqa: F401
@@ -47,6 +49,7 @@ __all__ = [
     "create_tts_port",
     "create_audio_repository_port",
     "create_audio_job_dispatcher",
+    "create_audio_generation_task_port",
     "create_search_with_citations_use_case",
     "create_generate_faq_use_case",
     "create_summarize_channel_use_case",
@@ -57,5 +60,6 @@ __all__ = [
     "create_generate_quiz_use_case",
     "create_generate_podcast_script_use_case",
     "create_generate_audio_use_case",
+    "create_audio_overview_use_case",
     "shutdown_audio_executor",
 ]

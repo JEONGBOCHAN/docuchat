@@ -273,3 +273,21 @@ class AudioJobDispatcherPort(ABC):
             wait: Whether to wait for running jobs to complete.
         """
         ...
+
+
+class AudioGenerationTaskPort(ABC):
+    """Port for enqueuing audio generation tasks.
+
+    Encapsulates the background execution details (session management,
+    event loop, use case wiring) so the application layer only needs
+    to submit a request.
+    """
+
+    @abstractmethod
+    def enqueue(self, request) -> None:
+        """Enqueue an audio generation request for background processing.
+
+        Args:
+            request: AudioGenerationRequest to process.
+        """
+        ...

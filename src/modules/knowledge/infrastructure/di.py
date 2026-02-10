@@ -137,3 +137,27 @@ def create_generate_audio_use_case(db):
         tts_port=create_tts_port(),
         script_use_case=create_generate_podcast_script_use_case(),
     )
+
+
+def create_audio_generation_task_port():
+    from src.shared.kernel.contracts.ports.infrastructure import AudioGenerationTaskPort
+    from src.modules.knowledge.infrastructure.runtime.audio_generation_task import (
+        ThreadPoolAudioGenerationTask,
+    )
+    return ThreadPoolAudioGenerationTask(dispatcher=create_audio_job_dispatcher())
+
+
+def create_audio_overview_use_case(db):
+    from src.modules.knowledge.application.use_cases.audio_overview import AudioOverviewUseCase
+    from src.modules.workspace.public import (
+        create_channel_port,
+        create_channel_repository_port,
+    )
+    return AudioOverviewUseCase(
+        channel_port=create_channel_port(),
+        audio_repo=create_audio_repository_port(db),
+        channel_repo=create_channel_repository_port(db),
+        tts_port=create_tts_port(),
+        task_port=create_audio_generation_task_port(),
+        script_use_case=create_generate_podcast_script_use_case(),
+    )
