@@ -41,8 +41,21 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODULES_DIR = PROJECT_ROOT / "src" / "modules"
 
-MODULE_NAMES = ["workspace", "conversation", "knowledge", "ops"]
 MODULE_INTERNAL_LAYERS = ["domain", "application", "infrastructure", "presentation"]
+
+
+def _discover_module_names() -> list[str]:
+    """Auto-discover module names by scanning src/modules/ directories."""
+    if not MODULES_DIR.exists():
+        return []
+    return sorted(
+        d.name
+        for d in MODULES_DIR.iterdir()
+        if d.is_dir() and not d.name.startswith("__")
+    )
+
+
+MODULE_NAMES = _discover_module_names()
 
 
 # ──────────────────────────────────────────────────────────
@@ -171,6 +184,24 @@ def _find_domain_isolation_violations(module_name: str) -> list[str]:
     return violations
 
 
+def _has_real_exports(public_py: Path) -> bool:
+    """Check if a public.py has at least one real export (def/class/__all__)."""
+    source = public_py.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(source, filename=str(public_py))
+    except SyntaxError:
+        return False
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return True
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "__all__":
+                    return True
+    return False
+
+
 # ──────────────────────────────────────────────────────────
 # Tests: Cross-module boundary
 # ──────────────────────────────────────────────────────────
@@ -218,6 +249,13 @@ class TestModuleDomainIsolation:
 
 class TestModuleStructure:
     """Ensure all modules have the required structure."""
+
+    def test_modules_are_auto_discovered(self):
+        """At least one module must exist under src/modules/."""
+        assert len(MODULE_NAMES) > 0, (
+            "No modules discovered under src/modules/. "
+            "Expected at least one module directory."
+        )
 
     @pytest.mark.parametrize("module_name", MODULE_NAMES)
     def test_module_has_public_api(self, module_name: str):
