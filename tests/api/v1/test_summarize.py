@@ -214,6 +214,33 @@ class TestSummarizeChannel:
         app.dependency_overrides.pop(get_document_port_factory, None)
 
 
+class TestValidationPrecedence:
+    """Regression: channel validation must precede document-port factory invocation."""
+
+    def test_channel_not_found_skips_document_port_factory(
+        self, client_with_db: TestClient, test_db
+    ):
+        """When channel is not found, the document-port factory must NOT be called."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
+
+        mock_factory = MagicMock()
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port_factory] = lambda: mock_factory
+
+        response = client_with_db.post(
+            "/api/v1/channels/fileSearchStores/not-exists/summarize",
+            json={},
+        )
+
+        assert response.status_code == 404
+        mock_factory.assert_not_called()
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
+
+
 class TestSummarizeDocument:
     """Tests for POST /api/v1/channels/{channel_id}/documents/{document_id}/summarize."""
 

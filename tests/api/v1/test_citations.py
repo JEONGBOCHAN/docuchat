@@ -343,6 +343,56 @@ class TestGetCitationDetail:
         app.dependency_overrides.pop(get_channel_port, None)
 
 
+class TestValidationPrecedence:
+    """Regression: channel validation must precede use-case factory invocation."""
+
+    def test_channel_not_found_skips_use_case_factory(self, client_with_db: TestClient, test_db):
+        """When channel is not found, the use-case factory must NOT be called."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
+
+        mock_factory = MagicMock()
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_citations_use_case_factory] = lambda: mock_factory
+
+        response = client_with_db.post(
+            "/api/v1/citations",
+            params={"channel_id": "fileSearchStores/not-exists"},
+            json={"query": "test query"},
+        )
+
+        assert response.status_code == 404
+        mock_factory.assert_not_called()
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_citations_use_case_factory, None)
+
+    def test_stream_channel_not_found_skips_use_case_factory(
+        self, client_with_db: TestClient, test_db
+    ):
+        """When channel is not found on stream endpoint, factory must NOT be called."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
+
+        mock_factory = MagicMock()
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_citations_use_case_factory] = lambda: mock_factory
+
+        response = client_with_db.post(
+            "/api/v1/citations/stream",
+            params={"channel_id": "fileSearchStores/not-exists"},
+            json={"query": "test query", "include_citations": True},
+        )
+
+        assert response.status_code == 404
+        mock_factory.assert_not_called()
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_citations_use_case_factory, None)
+
+
 class TestInlineCitationInsertion:
     """Tests for inline citation insertion logic."""
 

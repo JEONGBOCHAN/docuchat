@@ -209,6 +209,54 @@ class TestGenerateStudyGuide:
         app.dependency_overrides.pop(get_document_port_factory, None)
 
 
+class TestValidationPrecedence:
+    """Regression: channel validation must precede document-port factory invocation."""
+
+    def test_study_guide_channel_not_found_skips_factory(
+        self, client_with_db: TestClient, test_db
+    ):
+        """When channel is not found, study guide must NOT invoke document-port factory."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
+
+        mock_factory = MagicMock()
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port_factory] = lambda: mock_factory
+
+        response = client_with_db.post(
+            "/api/v1/channels/fileSearchStores/not-exists/generate-study-guide"
+        )
+
+        assert response.status_code == 404
+        mock_factory.assert_not_called()
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
+
+    def test_quiz_channel_not_found_skips_factory(
+        self, client_with_db: TestClient, test_db
+    ):
+        """When channel is not found, quiz must NOT invoke document-port factory."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = None
+
+        mock_factory = MagicMock()
+
+        app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
+        app.dependency_overrides[get_document_port_factory] = lambda: mock_factory
+
+        response = client_with_db.post(
+            "/api/v1/channels/fileSearchStores/not-exists/generate-quiz"
+        )
+
+        assert response.status_code == 404
+        mock_factory.assert_not_called()
+
+        app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
+
+
 class TestGenerateQuiz:
     """Tests for quiz generation endpoint."""
 
