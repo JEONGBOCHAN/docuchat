@@ -11,8 +11,11 @@ This is where the Clean Architecture comes together:
 - Easy to swap implementations for testing or different environments
 """
 
+import logging
 from functools import lru_cache
 from typing import Callable
+
+_container_logger = logging.getLogger(__name__)
 
 from src.application.ports import (
     AgentRunnerPort,
@@ -810,6 +813,25 @@ def _get_compaction_runner():
             service_factory=create_conversation_memory_service,
         )
     return _get_compaction_runner._instance
+
+
+def shutdown_compaction_runner(wait: bool = False) -> None:
+    """Shut down the singleton CompactionRunner if it exists.
+
+    Safe to call even if the runner was never created (no-op).
+    Exceptions are logged as warnings and swallowed so that app
+    shutdown is never blocked by compaction cleanup.
+    """
+    instance = getattr(_get_compaction_runner, "_instance", None)
+    if instance is None:
+        return
+    try:
+        instance.shutdown(wait=wait)
+        _container_logger.info("CompactionRunner shut down (wait=%s)", wait)
+    except Exception:
+        _container_logger.warning(
+            "CompactionRunner shutdown failed", exc_info=True,
+        )
 
 
 def create_chat_use_case(db):

@@ -269,3 +269,71 @@ class TestBoundedWorkers:
         runner.shutdown(wait=True)
 
         assert max_concurrent <= 2
+
+
+class TestShutdownHelper:
+    """Tests for shutdown_compaction_runner container helper."""
+
+    def test_shutdown_noop_when_no_instance(self):
+        """shutdown_compaction_runner should be safe to call without a runner instance."""
+        from src.infrastructure.di.container import (
+            _get_compaction_runner,
+            shutdown_compaction_runner,
+        )
+
+        # Ensure no instance exists
+        if hasattr(_get_compaction_runner, "_instance"):
+            saved = _get_compaction_runner._instance
+            del _get_compaction_runner._instance
+        else:
+            saved = None
+
+        try:
+            # Should not raise
+            shutdown_compaction_runner(wait=False)
+        finally:
+            if saved is not None:
+                _get_compaction_runner._instance = saved
+
+    def test_shutdown_calls_runner_shutdown(self):
+        """shutdown_compaction_runner should call shutdown on the runner instance."""
+        from src.infrastructure.di.container import (
+            _get_compaction_runner,
+            shutdown_compaction_runner,
+        )
+
+        mock_runner = MagicMock()
+        saved = getattr(_get_compaction_runner, "_instance", None)
+        _get_compaction_runner._instance = mock_runner
+
+        try:
+            shutdown_compaction_runner(wait=False)
+            mock_runner.shutdown.assert_called_once_with(wait=False)
+        finally:
+            if saved is not None:
+                _get_compaction_runner._instance = saved
+            else:
+                if hasattr(_get_compaction_runner, "_instance"):
+                    del _get_compaction_runner._instance
+
+    def test_shutdown_exception_does_not_propagate(self):
+        """Even if runner.shutdown raises, shutdown_compaction_runner should not propagate."""
+        from src.infrastructure.di.container import (
+            _get_compaction_runner,
+            shutdown_compaction_runner,
+        )
+
+        mock_runner = MagicMock()
+        mock_runner.shutdown.side_effect = RuntimeError("pool error")
+        saved = getattr(_get_compaction_runner, "_instance", None)
+        _get_compaction_runner._instance = mock_runner
+
+        try:
+            # Should not raise
+            shutdown_compaction_runner(wait=False)
+        finally:
+            if saved is not None:
+                _get_compaction_runner._instance = saved
+            else:
+                if hasattr(_get_compaction_runner, "_instance"):
+                    del _get_compaction_runner._instance
