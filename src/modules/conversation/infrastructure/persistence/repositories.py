@@ -17,7 +17,6 @@ from src.shared.kernel.contracts.ports.persistence import (
     ChatSessionRepositoryPort,
     ChatSessionMemoryRepositoryPort,
 )
-from src.modules.workspace.public import ChannelMetadata
 from src.modules.conversation.infrastructure.persistence.models import (
     ChatMessageDB,
     ChatSessionDB,

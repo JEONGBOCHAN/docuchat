@@ -41,11 +41,6 @@ from src.modules.workspace.application.use_cases.document_summary import (  # no
     GetChannelDocumentSummariesUseCase,
 )
 
-# ORM models exposed for cross-module queries (e.g. conversation joins)
-from src.modules.workspace.infrastructure.persistence.models import (  # noqa: F401
-    ChannelMetadata,
-)
-
 __all__ = [
     "create_channel_port",
     "create_document_port",
@@ -72,5 +67,4 @@ __all__ = [
     "create_export_service",
     "create_preview_service",
     "GetChannelDocumentSummariesUseCase",
-    "ChannelMetadata",
 ]
