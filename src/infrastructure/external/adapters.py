@@ -5,7 +5,7 @@ These adapters wrap the existing external service implementations and convert
 between service-specific types and application DTOs.
 """
 
-from src.application.ports.external_services import (
+from src.shared.kernel.contracts.ports.external_services import (
     YouTubePort,
     YouTubeTranscriptDTO,
     YouTubeMetadataDTO,
@@ -14,7 +14,7 @@ from src.application.ports.external_services import (
     TTSPort,
     TTSResultDTO,
 )
-from src.application.use_cases.exceptions import (
+from src.shared.kernel.contracts.errors.use_case_errors import (
     YouTubeError,
     InvalidVideoError,
     TranscriptNotAvailableError,
@@ -179,7 +179,7 @@ class TTSAdapter(TTSPort):
         output_path: str | None = None,
     ) -> str:
         """Synthesize text to speech."""
-        from src.application.dto.enums import VoiceType
+        from src.shared.kernel.contracts.dto.enums import VoiceType
 
         vt = VoiceType(voice_type)
         return await self._service.synthesize_text(text, vt, language, output_path)
@@ -193,7 +193,7 @@ class TTSAdapter(TTSPort):
     ) -> TTSResultDTO:
         """Generate complete podcast audio from script."""
         import json
-        from src.application.dto.enums import VoiceType
+        from src.shared.kernel.contracts.dto.enums import VoiceType
         from src.models.audio import PodcastScript, DialogueLine
 
         # Parse script JSON

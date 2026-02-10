@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from src.application.ports.arxiv_search import ArxivSearchPort, ArxivPaperResult
+from src.shared.kernel.contracts.ports.arxiv_search import ArxivSearchPort, ArxivPaperResult
 from src.core.config import get_settings
 
 logger = logging.getLogger(__name__)

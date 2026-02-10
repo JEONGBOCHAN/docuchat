@@ -10,7 +10,7 @@ import json
 from google import genai
 from google.genai import types
 
-from src.application.ports.podcast import (
+from src.shared.kernel.contracts.ports.podcast import (
     PodcastScriptPort,
     PodcastScriptDTO,
     DialogueLineDTO,

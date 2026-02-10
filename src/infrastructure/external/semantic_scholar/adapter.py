@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from src.application.ports.semantic_scholar import (
+from src.shared.kernel.contracts.ports.semantic_scholar import (
     SemanticScholarSearchPort,
     SemanticScholarPaper,
     SemanticScholarAuthor,

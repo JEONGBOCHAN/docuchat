@@ -10,7 +10,7 @@ from pathlib import Path
 
 import edge_tts
 
-from src.application.dto.enums import VoiceType
+from src.shared.kernel.contracts.dto.enums import VoiceType
 from src.models.audio import DialogueLine, PodcastScript
 
 

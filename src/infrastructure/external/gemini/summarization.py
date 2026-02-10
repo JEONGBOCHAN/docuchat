@@ -8,7 +8,7 @@ Implements SummarizationPort using Google Gemini API.
 from google import genai
 from google.genai import types
 
-from src.application.ports.summarization import SummarizationPort, SummaryDTO
+from src.shared.kernel.contracts.ports.summarization import SummarizationPort, SummaryDTO
 from src.core.config import get_settings, GeminiModels
 
 

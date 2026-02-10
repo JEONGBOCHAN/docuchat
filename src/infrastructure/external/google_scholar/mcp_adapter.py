@@ -14,7 +14,7 @@ import os
 import sys
 from typing import Any
 
-from src.application.ports.google_scholar import GoogleScholarSearchPort, GoogleScholarResult
+from src.shared.kernel.contracts.ports.google_scholar import GoogleScholarSearchPort, GoogleScholarResult
 
 logger = logging.getLogger(__name__)
 

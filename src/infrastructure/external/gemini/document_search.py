@@ -9,7 +9,7 @@ This adapter uses the Gemini API directly without depending on legacy services.
 from google import genai
 from google.genai import types
 
-from src.application.ports.document_search import DocumentSearchPort, SearchResult
+from src.shared.kernel.contracts.ports.document_search import DocumentSearchPort, SearchResult
 from src.core.config import get_settings, GeminiModels
 
 

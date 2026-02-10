@@ -11,7 +11,7 @@ from typing import Any
 from google import genai
 from google.genai import types
 
-from src.application.ports.faq_generation import FAQGenerationPort, FAQItemDTO
+from src.shared.kernel.contracts.ports.faq_generation import FAQGenerationPort, FAQItemDTO
 from src.core.config import get_settings, GeminiModels
 
 

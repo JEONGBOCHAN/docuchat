@@ -10,12 +10,12 @@ from typing import Callable
 
 from langchain_core.tools import tool
 
-from src.application.ports.document_search import DocumentSearchPort
-from src.application.ports.web_search import WebSearchPort
-from src.application.ports.arxiv_search import ArxivSearchPort
-from src.application.ports.semantic_scholar import SemanticScholarSearchPort
-from src.application.ports.crossref import CrossrefSearchPort
-from src.application.ports.google_scholar import GoogleScholarSearchPort
+from src.shared.kernel.contracts.ports.document_search import DocumentSearchPort
+from src.shared.kernel.contracts.ports.web_search import WebSearchPort
+from src.shared.kernel.contracts.ports.arxiv_search import ArxivSearchPort
+from src.shared.kernel.contracts.ports.semantic_scholar import SemanticScholarSearchPort
+from src.shared.kernel.contracts.ports.crossref import CrossrefSearchPort
+from src.shared.kernel.contracts.ports.google_scholar import GoogleScholarSearchPort
 
 
 def create_search_documents_tool(

@@ -10,7 +10,7 @@ from typing import Literal
 
 import arxiv
 
-from src.application.ports.arxiv_search import ArxivSearchPort, ArxivPaperResult
+from src.shared.kernel.contracts.ports.arxiv_search import ArxivSearchPort, ArxivPaperResult
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ Generates concise summaries suitable for system prompt injection.
 from google import genai
 from google.genai import types
 
-from src.application.ports.document_summary import DocumentSummaryGenerationPort
+from src.shared.kernel.contracts.ports.document_summary import DocumentSummaryGenerationPort
 from src.core.config import get_settings, GeminiModels
 
 

@@ -21,8 +21,8 @@ Usage:
 
 from datetime import datetime
 
-from src.application.ports.observability import AgentEventSinkPort
-from src.application.dto.agent_event import (
+from src.shared.kernel.contracts.ports.observability import AgentEventSinkPort
+from src.shared.kernel.contracts.dto.agent_event import (
     AgentEvent,
     EventType,
     AgentStartedEvent,

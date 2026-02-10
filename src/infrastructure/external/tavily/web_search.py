@@ -8,7 +8,7 @@ Tavily is designed for AI agents and returns LLM-friendly results.
 
 from typing import Any
 
-from src.application.ports.web_search import WebSearchPort, WebSearchResult
+from src.shared.kernel.contracts.ports.web_search import WebSearchPort, WebSearchResult
 from src.core.config import get_settings
 
 

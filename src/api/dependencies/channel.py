@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 
-from src.application.ports.channel import ChannelPort, ChannelDTO
+from src.shared.kernel.contracts.ports.channel import ChannelPort, ChannelDTO
 from src.modules.workspace.public import create_channel_port
 
 

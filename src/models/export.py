@@ -9,7 +9,7 @@ from src.models.note import NoteResponse
 
 # ExportFormat is defined in the application layer and re-exported here
 # for API layer consumers.
-from src.application.ports.export import ExportFormat
+from src.shared.kernel.contracts.ports.export import ExportFormat
 
 
 class NoteExportData(BaseModel):

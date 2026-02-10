@@ -6,7 +6,7 @@ from datetime import datetime, UTC
 from pydantic import BaseModel, Field
 
 # Re-export enum from application DTO layer for backward compatibility
-from src.application.dto.enums import TrashItemType  # noqa: F401
+from src.shared.kernel.contracts.dto.enums import TrashItemType  # noqa: F401
 
 
 def _utc_now() -> datetime:

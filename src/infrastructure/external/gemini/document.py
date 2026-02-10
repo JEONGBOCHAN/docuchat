@@ -8,7 +8,7 @@ Implements DocumentPort using Google Gemini File Search Store API.
 import requests
 from google import genai
 
-from src.application.ports.document import DocumentPort, DocumentDTO, UploadResultDTO
+from src.shared.kernel.contracts.ports.document import DocumentPort, DocumentDTO, UploadResultDTO
 from src.core.config import get_settings
 from src.core.logging import get_logger
 

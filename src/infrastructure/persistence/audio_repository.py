@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.infrastructure.persistence.db_models import AudioOverviewDB, ChannelMetadata
-from src.application.dto.enums import AudioStatus
+from src.shared.kernel.contracts.dto.enums import AudioStatus
 from src.models.audio import (
     PodcastScript,
     AudioOverviewResponse,

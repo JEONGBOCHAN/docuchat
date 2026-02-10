@@ -10,7 +10,7 @@ import json
 from google import genai
 from google.genai import types
 
-from src.application.ports.learning import (
+from src.shared.kernel.contracts.ports.learning import (
     QuizPort,
     QuizDTO,
     QuizQuestionDTO,

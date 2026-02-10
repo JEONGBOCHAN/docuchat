@@ -16,7 +16,7 @@ from typing import Any
 
 from habanero import Crossref
 
-from src.application.ports.crossref import (
+from src.shared.kernel.contracts.ports.crossref import (
     CrossrefSearchPort,
     CrossrefWork,
     CrossrefJournal,

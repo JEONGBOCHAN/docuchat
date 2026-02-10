@@ -10,7 +10,7 @@ import json
 from google import genai
 from google.genai import types
 
-from src.application.ports.timeline import TimelinePort, TimelineEventDTO
+from src.shared.kernel.contracts.ports.timeline import TimelinePort, TimelineEventDTO
 from src.core.config import get_settings, GeminiModels
 
 

@@ -6,7 +6,7 @@ Adapter implementations for scheduler-related ports.
 
 from typing import Callable
 
-from src.application.ports.infrastructure import (
+from src.shared.kernel.contracts.ports.infrastructure import (
     SchedulerPort,
     ScheduledJobDTO,
     JobHistoryDTO,

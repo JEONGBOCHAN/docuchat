@@ -9,7 +9,7 @@ Falls back to character-based estimation if local tokenizer is unavailable.
 import logging
 from typing import Any
 
-from src.application.ports.token_counter import TokenCounterPort
+from src.shared.kernel.contracts.ports.token_counter import TokenCounterPort
 from src.core.config import get_settings, GeminiModels
 
 logger = logging.getLogger(__name__)

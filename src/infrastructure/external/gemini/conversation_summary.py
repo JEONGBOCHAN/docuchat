@@ -10,7 +10,7 @@ import logging
 from google import genai
 from google.genai import types
 
-from src.application.ports.conversation_summary import ConversationSummaryPort, SummaryResult
+from src.shared.kernel.contracts.ports.conversation_summary import ConversationSummaryPort, SummaryResult
 from src.core.config import get_settings, GeminiModels
 
 logger = logging.getLogger(__name__)

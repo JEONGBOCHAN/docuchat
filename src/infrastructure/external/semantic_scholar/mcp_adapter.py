@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from src.application.ports.semantic_scholar import (
+from src.shared.kernel.contracts.ports.semantic_scholar import (
     SemanticScholarSearchPort,
     SemanticScholarPaper,
     SemanticScholarAuthor,

@@ -12,8 +12,8 @@ from collections import defaultdict
 from threading import Lock
 from typing import ClassVar
 
-from src.application.ports.observability import AgentEventSinkPort
-from src.application.dto.agent_event import AgentEvent
+from src.shared.kernel.contracts.ports.observability import AgentEventSinkPort
+from src.shared.kernel.contracts.dto.agent_event import AgentEvent
 
 
 class InMemoryEventStore(AgentEventSinkPort):

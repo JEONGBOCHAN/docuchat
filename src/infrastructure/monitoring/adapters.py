@@ -4,7 +4,7 @@
 Adapter implementations for monitoring-related ports.
 """
 
-from src.application.ports.infrastructure import (
+from src.shared.kernel.contracts.ports.infrastructure import (
     ApiMetricsPort,
     ApiStatsDTO,
     EndpointMetricsDTO,

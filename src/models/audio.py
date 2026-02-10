@@ -5,7 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 # Re-export enums from application DTO layer for backward compatibility
-from src.application.dto.enums import AudioStatus, VoiceType  # noqa: F401
+from src.shared.kernel.contracts.dto.enums import AudioStatus, VoiceType  # noqa: F401
 
 
 class DialogueLine(BaseModel):

@@ -7,7 +7,7 @@ the application port interface.
 
 from typing import Any
 
-from src.application.ports.cache import CachePort
+from src.shared.kernel.contracts.ports.cache import CachePort
 from src.infrastructure.cache.cache_service import CacheService
 
 

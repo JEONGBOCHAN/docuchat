@@ -10,8 +10,8 @@ import requests
 from google import genai
 from google.genai.errors import ClientError, ServerError, APIError
 
-from src.application.ports.channel import ChannelPort, ChannelDTO
-from src.application.use_cases.exceptions import UpstreamError
+from src.shared.kernel.contracts.ports.channel import ChannelPort, ChannelDTO
+from src.shared.kernel.contracts.errors.use_case_errors import UpstreamError
 from src.core.config import get_settings
 
 logger = logging.getLogger(__name__)

@@ -11,7 +11,7 @@ from typing import Generator, Any
 from google import genai
 from google.genai import types
 
-from src.application.ports.citation_search import (
+from src.shared.kernel.contracts.ports.citation_search import (
     CitationSearchPort,
     CitationDTO,
     CitationResultDTO,
