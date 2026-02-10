@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.favorites import get_favorite_crud_use_case_factory
+from src.modules.workspace.presentation.api.favorites import get_favorite_crud_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.infrastructure.persistence.db_models import NoteDB
 
@@ -532,7 +532,7 @@ class TestChannelListWithFavorites:
 
     def test_list_channels_with_favorites(self, client_with_db: TestClient, test_db):
         """Test that channel list includes is_favorited field."""
-        from src.api.v1.channels import get_channel_crud_use_case_factory
+        from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
         from src.application.use_cases.channel_crud import ChannelCrudUseCase
         from src.infrastructure.di.container import (
             create_channel_repository_port,
@@ -587,7 +587,7 @@ class TestChannelListWithFavorites:
 
     def test_get_channel_with_favorite_status(self, client_with_db: TestClient, test_db):
         """Test that get channel includes is_favorited field."""
-        from src.api.v1.channels import get_channel_crud_use_case_factory
+        from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
         from src.application.use_cases.channel_crud import ChannelCrudUseCase
         from src.infrastructure.di.container import (
             create_channel_repository_port,

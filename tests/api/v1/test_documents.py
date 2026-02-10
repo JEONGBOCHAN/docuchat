@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.documents import get_document_crud_use_case_factory
+from src.modules.workspace.presentation.api.documents import get_document_crud_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO, UploadResultDTO
 from src.infrastructure.external.crawler.crawler import CrawlResult

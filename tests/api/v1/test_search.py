@@ -6,8 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.search import get_search_history_use_case_factory
-from src.api.v1.chat import get_chat_use_case_factory
+from src.modules.workspace.presentation.api.search import get_search_history_use_case_factory
+from src.modules.conversation.presentation.api.chat import get_chat_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.infrastructure.persistence.search_repository import SearchHistoryRepository

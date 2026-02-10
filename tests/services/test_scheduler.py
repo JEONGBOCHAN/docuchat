@@ -7,7 +7,7 @@ import time
 
 from src.infrastructure.scheduler.scheduler import SchedulerService, get_scheduler
 from src.main import app
-from src.api.deps import require_admin_key
+from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
 
 
 class TestSchedulerService:

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.core.rate_limiter import RateLimits
-from src.api.v1.chat import get_chat_use_case_factory
+from src.modules.conversation.presentation.api.chat import get_chat_use_case_factory
 from src.application.ports.channel import ChannelDTO
 
 
@@ -160,23 +160,23 @@ class TestEndpointRateLimits:
 
     def test_chat_endpoint_has_rate_limit_decorator(self):
         """Verify chat endpoint has rate limit decorator."""
-        from src.api.v1.chat import send_message
+        from src.modules.conversation.presentation.api.chat import send_message
         # Check that the function has been wrapped by limiter
         assert hasattr(send_message, "__wrapped__") or hasattr(send_message, "__self__")
 
     def test_chat_stream_endpoint_has_rate_limit_decorator(self):
         """Verify chat stream endpoint has rate limit decorator."""
-        from src.api.v1.chat import send_message_stream
+        from src.modules.conversation.presentation.api.chat import send_message_stream
         assert hasattr(send_message_stream, "__wrapped__") or hasattr(send_message_stream, "__self__")
 
     def test_document_upload_endpoint_has_rate_limit_decorator(self):
         """Verify document upload endpoint has rate limit decorator."""
-        from src.api.v1.documents import upload_document
+        from src.modules.workspace.presentation.api.documents import upload_document
         assert hasattr(upload_document, "__wrapped__") or hasattr(upload_document, "__self__")
 
     def test_document_url_upload_endpoint_has_rate_limit_decorator(self):
         """Verify document URL upload endpoint has rate limit decorator."""
-        from src.api.v1.documents import upload_from_url
+        from src.modules.workspace.presentation.api.documents import upload_from_url
         assert hasattr(upload_from_url, "__wrapped__") or hasattr(upload_from_url, "__self__")
 
 

@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.deps import get_channel_port
+from src.shared.kernel.presentation.dependencies.channel_validation import get_channel_port
 from src.application.ports.channel import ChannelDTO
 from src.application.use_cases.timeline_briefing import TimelineResult, BriefingResult
 from src.application.ports.timeline import TimelineEventDTO, BriefingSectionDTO

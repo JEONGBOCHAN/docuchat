@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.citations import get_channel_port, get_citations_use_case_factory
+from src.modules.knowledge.presentation.api.citations import get_channel_port, get_citations_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.core.database import get_db
 from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase, CitationSearchResult

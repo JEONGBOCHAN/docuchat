@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from src.main import app
-from src.api.deps import require_admin_key
+from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
 
 
 @pytest.fixture(autouse=True)

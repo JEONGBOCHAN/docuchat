@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.audio import get_channel_port
+from src.modules.knowledge.presentation.api.audio import get_channel_port
 from src.application.ports.channel import ChannelDTO
 from src.models.audio import AudioStatus, VoiceType
 from src.infrastructure.persistence.db_models import ChannelMetadata, AudioOverviewDB

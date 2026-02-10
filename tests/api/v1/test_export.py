@@ -9,8 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.export import get_channel_port
-from src.api.v1.notes import get_note_crud_use_case_factory
+from src.modules.workspace.presentation.api.export import get_channel_port
+from src.modules.workspace.presentation.api.notes import get_note_crud_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB, ChatMessageDB
 

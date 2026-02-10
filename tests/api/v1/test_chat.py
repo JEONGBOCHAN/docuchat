@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.chat import get_chat_use_case_factory
+from src.modules.conversation.presentation.api.chat import get_chat_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.application.use_cases.process_query import QueryResult
 

@@ -7,12 +7,12 @@ import pytest
 from unittest.mock import Mock, patch
 from fastapi import HTTPException
 
-from src.api.dependencies.channel import (
-    get_validated_channel,
+from src.shared.kernel.presentation.dependencies.channel_validation import (
+    validate_channel_with_touch,
     get_channel_port,
     ValidatedChannel,
 )
-from src.application.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
 
 
 class TestGetChannelPort:
@@ -20,7 +20,7 @@ class TestGetChannelPort:
 
     def test_returns_channel_port(self):
         """Test that get_channel_port returns a ChannelPort instance."""
-        with patch('src.api.dependencies.channel.create_channel_port') as mock_create:
+        with patch('src.shared.kernel.presentation.dependencies.channel_validation.create_channel_port') as mock_create:
             mock_port = Mock()
             mock_create.return_value = mock_port
 
@@ -30,32 +30,35 @@ class TestGetChannelPort:
             mock_create.assert_called_once()
 
 
-class TestGetValidatedChannel:
-    """Tests for get_validated_channel dependency."""
+class TestValidateChannelWithTouch:
+    """Tests for validate_channel_with_touch dependency."""
 
     def test_returns_validated_channel_when_exists(self):
         """Test successful channel validation."""
         mock_port = Mock()
+        mock_repo = Mock()
         mock_channel = ChannelDTO(
             name="fileSearchStores/test-123",
             display_name="Test Channel"
         )
         mock_port.get_channel.return_value = mock_channel
 
-        result = get_validated_channel("fileSearchStores/test-123", mock_port)
+        result = validate_channel_with_touch("fileSearchStores/test-123", mock_port, mock_repo)
 
         assert isinstance(result, ValidatedChannel)
         assert result.channel_id == "fileSearchStores/test-123"
         assert result.channel == mock_channel
         mock_port.get_channel.assert_called_once_with("fileSearchStores/test-123")
+        mock_repo.touch.assert_called_once_with("fileSearchStores/test-123")
 
     def test_raises_404_when_channel_not_found(self):
         """Test that 404 is raised when channel doesn't exist."""
         mock_port = Mock()
+        mock_repo = Mock()
         mock_port.get_channel.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
-            get_validated_channel("fileSearchStores/nonexistent", mock_port)
+            validate_channel_with_touch("fileSearchStores/nonexistent", mock_port, mock_repo)
 
         assert exc_info.value.status_code == 404
         assert "Channel not found" in exc_info.value.detail
@@ -64,10 +67,11 @@ class TestGetValidatedChannel:
     def test_passes_channel_id_to_port(self):
         """Test that channel_id is correctly passed to the port."""
         mock_port = Mock()
+        mock_repo = Mock()
         mock_channel = ChannelDTO(name="ch-1", display_name="CH1")
         mock_port.get_channel.return_value = mock_channel
 
-        get_validated_channel("special/channel/id", mock_port)
+        validate_channel_with_touch("special/channel/id", mock_port, mock_repo)
 
         mock_port.get_channel.assert_called_once_with("special/channel/id")
 

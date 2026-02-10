@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.capacity import get_channel_port
+from src.modules.workspace.presentation.api.capacity import get_channel_port
 from src.application.ports.channel import ChannelDTO
 from src.infrastructure.persistence.channel_repository import ChannelRepository
 

@@ -8,10 +8,10 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB
-from src.api.v1.trash import get_channel_port
-from src.api.v1.channels import get_channel_crud_use_case_factory
-from src.api.v1.notes import get_note_crud_use_case_factory
-from src.api.deps import require_admin_key
+from src.modules.workspace.presentation.api.trash import get_channel_port
+from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
+from src.modules.workspace.presentation.api.notes import get_note_crud_use_case_factory
+from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
 from src.application.use_cases.channel_crud import ChannelCrudUseCase
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
