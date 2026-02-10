@@ -14,12 +14,7 @@ from src.core.rate_limiter import limiter
 from src.core.sentry import setup_sentry
 from src.middleware.metrics import MetricsMiddleware
 from src.middleware.request_logging import RequestLoggingMiddleware
-from src.infrastructure.scheduler.scheduler import get_scheduler
-from src.infrastructure.scheduler.scheduler_jobs import (
-    scan_inactive_channels,
-    update_channel_statistics,
-    cleanup_expired_trash,
-)
+from src.modules.ops.public import setup_scheduler, shutdown_scheduler
 from src.application.use_cases.exceptions import UpstreamError
 
 # Initialize structured logging first
@@ -27,37 +22,6 @@ setup_logging()
 
 settings = get_settings()
 logger = get_logger(__name__)
-
-
-def setup_scheduler():
-    """Configure and start the background scheduler."""
-    scheduler = get_scheduler()
-
-    # Scan for inactive channels daily at 2 AM UTC
-    scheduler.add_cron_job(
-        job_id="scan_inactive_channels",
-        func=scan_inactive_channels,
-        hour=2,
-        minute=0,
-    )
-
-    # Update channel statistics every 6 hours
-    scheduler.add_interval_job(
-        job_id="update_channel_statistics",
-        func=update_channel_statistics,
-        hours=6,
-    )
-
-    # Clean up expired trash daily at 3 AM UTC
-    scheduler.add_cron_job(
-        job_id="cleanup_expired_trash",
-        func=cleanup_expired_trash,
-        hour=3,
-        minute=0,
-    )
-
-    scheduler.start()
-    logger.info("Background scheduler configured and started")
 
 
 @asynccontextmanager
@@ -69,7 +33,7 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize database tables
     init_db()
 
-    # Startup: Start background scheduler
+    # Startup: Start background scheduler (ops module)
     setup_scheduler()
 
     logger.info(
@@ -82,7 +46,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown: Stop compaction runner, audio executor, then scheduler
-    from src.infrastructure.di.container import shutdown_compaction_runner
+    from src.modules.conversation.public import shutdown_compaction_runner
     shutdown_compaction_runner(wait=False)
     logger.info("Compaction runner shutdown complete")
 
@@ -90,8 +54,7 @@ async def lifespan(app: FastAPI):
     shutdown_audio_executor(wait=False)
     logger.info("Audio executor shutdown complete")
 
-    scheduler = get_scheduler()
-    scheduler.shutdown(wait=False)
+    shutdown_scheduler(wait=False)
     logger.info("Scheduler shutdown complete")
 
 

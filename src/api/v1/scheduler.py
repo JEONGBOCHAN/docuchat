@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from src.application.ports.infrastructure import SchedulerPort
-from src.infrastructure.di.container import create_scheduler_port
+from src.modules.ops.public import create_scheduler_port
 from src.core.rate_limiter import limiter, RateLimits
 from src.api.deps import require_admin_key
 

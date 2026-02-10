@@ -14,7 +14,7 @@ from src.core.rate_limiter import limiter, RateLimits
 from src.core.database import get_db
 from src.application.services.admin_stats import AdminStatsService
 from src.application.ports.infrastructure import ApiMetricsPort
-from src.infrastructure.di.container import (
+from src.modules.ops.public import (
     create_admin_stats_service,
     create_api_metrics_port,
 )

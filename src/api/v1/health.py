@@ -2,7 +2,7 @@
 from fastapi import APIRouter
 
 from src.core.config import get_settings
-from src.infrastructure.di.container import get_checkpointer_type
+from src.modules.conversation.public import get_checkpointer_type
 
 router = APIRouter()
 
