@@ -22,7 +22,7 @@ from src.models.chat import (
     CreateSessionRequest,
     GroundingSource,
 )
-from src.application.use_cases.chat import ChatUseCase, ChatAgentError
+from src.modules.conversation.application.use_cases.chat import ChatUseCase, ChatAgentError
 from src.application.use_cases.exceptions import (
     ChannelNotFoundError,
     SessionNotFoundError,
@@ -38,7 +38,7 @@ def get_chat_use_case(
     db: Session = Depends(get_db),
 ) -> ChatUseCase:
     """Get chat use case instance."""
-    from src.infrastructure.di.container import create_chat_use_case
+    from src.modules.conversation.public import create_chat_use_case
     return create_chat_use_case(db)
 
 

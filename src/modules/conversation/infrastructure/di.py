@@ -18,7 +18,7 @@ from src.application.ports import (
     ChatSessionRepositoryPort,
     TokenCounterPort,
 )
-from src.application.use_cases.process_query import ProcessQueryUseCase
+from src.modules.conversation.application.use_cases.process_query import ProcessQueryUseCase
 
 _container_logger = logging.getLogger(__name__)
 _compaction_runner_lock = threading.Lock()
@@ -79,7 +79,7 @@ def get_checkpointer():
 
 
 def _create_checkpoint_store():
-    from src.infrastructure.agent.checkpoint_adapter import LangGraphCheckpointAdapter
+    from src.modules.conversation.infrastructure.agent.checkpoint_adapter import LangGraphCheckpointAdapter
     return LangGraphCheckpointAdapter(get_checkpointer())
 
 
@@ -122,7 +122,7 @@ def create_agent_runner(
     dashboard_middleware=None,
     token_counter=None,
 ) -> AgentRunnerPort:
-    from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+    from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
     return LangGraphAgentRunner(
         event_sink=event_sink,
         dashboard_middleware=dashboard_middleware,
@@ -244,7 +244,7 @@ def reset_use_case_cache() -> None:
 
 
 def create_conversation_memory_service(db):
-    from src.application.use_cases.conversation_memory import ConversationMemoryService
+    from src.modules.conversation.application.use_cases.conversation_memory import ConversationMemoryService
     from src.core.config import get_settings
     settings = get_settings()
     return ConversationMemoryService(
@@ -265,7 +265,7 @@ def _get_compaction_runner():
         instance = getattr(_get_compaction_runner, "_instance", None)
         if instance is not None:
             return instance
-        from src.infrastructure.compaction.runner import CompactionRunner
+        from src.modules.conversation.infrastructure.compaction.runner import CompactionRunner
         from src.core.database import SessionLocal
         instance = CompactionRunner(
             session_factory=SessionLocal,
@@ -293,7 +293,7 @@ def shutdown_compaction_runner(wait: bool = False) -> None:
 
 
 def create_chat_use_case(db):
-    from src.application.use_cases.chat import ChatUseCase
+    from src.modules.conversation.application.use_cases.chat import ChatUseCase
     from src.core.config import get_settings
     from src.modules.workspace.public import (
         create_channel_port,
