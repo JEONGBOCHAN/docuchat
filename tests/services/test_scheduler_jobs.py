@@ -9,8 +9,8 @@ import pytest
 from datetime import datetime, timedelta, UTC
 from unittest.mock import MagicMock, patch, Mock
 
-from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB
-from src.infrastructure.persistence.trash_repository import TrashRepository
+from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata, NoteDB
+from src.modules.workspace.infrastructure.persistence.repositories import TrashRepositoryAdapter as TrashRepository
 
 # Patch target: the actual module where cleanup_expired_trash is defined
 _JOBS = "src.modules.ops.infrastructure.scheduler.scheduler_jobs"

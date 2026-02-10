@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.modules.workspace.presentation.api.favorites import get_favorite_crud_use_case_factory
 from src.application.ports.channel import ChannelDTO
-from src.infrastructure.persistence.db_models import NoteDB
+from src.modules.workspace.infrastructure.persistence.models import NoteDB
 
 
 def _make_use_case(test_db, channel_port=None):

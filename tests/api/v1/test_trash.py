@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB
+from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata, NoteDB
 from src.modules.workspace.presentation.api.trash import get_channel_port
 from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
 from src.modules.workspace.presentation.api.notes import get_note_crud_use_case_factory

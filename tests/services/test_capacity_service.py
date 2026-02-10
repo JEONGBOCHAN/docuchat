@@ -8,7 +8,7 @@ from src.application.services.capacity_service import (
     CapacityExceededError,
     CapacityUsage,
 )
-from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.modules.workspace.infrastructure.persistence.repositories import ChannelRepositoryAdapter as ChannelRepository
 from src.modules.workspace.public import create_capacity_service
 
 
@@ -52,8 +52,7 @@ class TestCapacityService:
     def test_validate_upload_file_count_exceeded(self, service, channel, test_db):
         """Test validation fails when file count exceeded."""
         # Set file count to max
-        channel.file_count = 100
-        test_db.commit()
+        ChannelRepository(test_db).update_stats("store/capacity-test", file_count=100)
 
         with pytest.raises(CapacityExceededError) as exc_info:
             service.validate_upload("store/capacity-test", file_size=1024)
@@ -64,8 +63,7 @@ class TestCapacityService:
     def test_validate_upload_size_exceeded(self, service, channel, test_db):
         """Test validation fails when size exceeded."""
         # Set size close to max (500MB - 1KB)
-        channel.total_size_bytes = 500 * 1024 * 1024 - 1024
-        test_db.commit()
+        ChannelRepository(test_db).update_stats("store/capacity-test", total_size_bytes=500 * 1024 * 1024 - 1024)
 
         # Try to upload 2KB (would exceed)
         with pytest.raises(CapacityExceededError) as exc_info:
@@ -105,9 +103,7 @@ class TestCapacityService:
     def test_update_after_delete(self, service, channel, test_db):
         """Test updating capacity after file deletion."""
         # Setup: channel has some files
-        channel.file_count = 5
-        channel.total_size_bytes = 5000
-        test_db.commit()
+        ChannelRepository(test_db).update_stats("store/capacity-test", file_count=5, total_size_bytes=5000)
 
         # Delete one file
         usage = service.update_after_delete("store/capacity-test", file_size=1000)
@@ -125,17 +121,16 @@ class TestCapacityService:
 
     def test_can_upload_false_when_at_limit(self, service, channel, test_db):
         """Test can_upload is False when at limits."""
-        channel.file_count = 100  # At file limit
-        test_db.commit()
+        ChannelRepository(test_db).update_stats("store/capacity-test", file_count=100)
 
         usage = service.get_usage("store/capacity-test")
         assert usage.can_upload is False
 
     def test_usage_percent_calculation(self, service, channel, test_db):
         """Test percentage calculations."""
-        channel.file_count = 25  # 25% of 100
-        channel.total_size_bytes = 250 * 1024 * 1024  # 50% of 500MB
-        test_db.commit()
+        ChannelRepository(test_db).update_stats(
+            "store/capacity-test", file_count=25, total_size_bytes=250 * 1024 * 1024,
+        )
 
         usage = service.get_usage("store/capacity-test")
         assert usage.file_usage_percent == 25.0
@@ -143,9 +138,9 @@ class TestCapacityService:
 
     def test_remaining_calculation(self, service, channel, test_db):
         """Test remaining capacity calculations."""
-        channel.file_count = 30
-        channel.total_size_bytes = 100 * 1024 * 1024  # 100MB
-        test_db.commit()
+        ChannelRepository(test_db).update_stats(
+            "store/capacity-test", file_count=30, total_size_bytes=100 * 1024 * 1024,
+        )
 
         usage = service.get_usage("store/capacity-test")
         assert usage.remaining_files == 70

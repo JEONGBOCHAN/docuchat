@@ -6,13 +6,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base
-from src.infrastructure.persistence.db_models import (
-    ChannelMetadata,
+from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata
+from src.modules.conversation.infrastructure.persistence.models import (
     ChatSessionDB,
     ChatSessionMemoryDB,
 )
-from src.infrastructure.persistence.session_memory_repository import ChatSessionMemoryRepository
-from src.infrastructure.persistence.adapters import ChatSessionMemoryRepositoryAdapter
+from src.modules.conversation.infrastructure.persistence.repositories import (
+    ChatSessionMemoryRepositoryAdapter,
+)
+
+# Alias for backward-compatible test naming
+ChatSessionMemoryRepository = ChatSessionMemoryRepositoryAdapter
 
 
 @pytest.fixture

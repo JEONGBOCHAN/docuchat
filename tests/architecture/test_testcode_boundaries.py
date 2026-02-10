@@ -91,13 +91,7 @@ DB_MODELS_FORBIDDEN = [
 
 # Legacy exceptions: existing files that still use db_models directly.
 # New files must NOT be added here — use module-level model paths instead.
-DB_MODELS_LEGACY_EXCEPTIONS: set[str] = {
-    "tests/api/v1/test_audio.py",
-    "tests/api/v1/test_channels.py",
-    "tests/api/v1/test_export.py",
-    "tests/api/v1/test_favorites.py",
-    "tests/api/v1/test_trash.py",
-}
+DB_MODELS_LEGACY_EXCEPTIONS: set[str] = set()
 
 
 class TestApiTestDbModelsImportBoundaries:

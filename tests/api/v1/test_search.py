@@ -9,8 +9,8 @@ from src.main import app
 from src.modules.workspace.presentation.api.search import get_search_history_use_case_factory
 from src.modules.conversation.presentation.api.chat import get_chat_use_case_factory
 from src.application.ports.channel import ChannelDTO
-from src.infrastructure.persistence.channel_repository import ChannelRepository
-from src.infrastructure.persistence.search_repository import SearchHistoryRepository
+from src.modules.workspace.infrastructure.persistence.repositories import ChannelRepositoryAdapter as ChannelRepository
+from src.modules.workspace.infrastructure.persistence.repositories import SearchHistoryRepositoryAdapter as SearchHistoryRepository
 
 
 def _make_use_case(test_db, channel_port=None):
@@ -72,8 +72,8 @@ class TestGetSearchHistory:
         )
 
         search_repo = SearchHistoryRepository(test_db)
-        search_repo.add_or_update(channel, "first query")
-        search_repo.add_or_update(channel, "second query")
+        search_repo.add_or_update(channel.id,"first query")
+        search_repo.add_or_update(channel.id,"second query")
 
         response = client_with_db.get(
             "/api/v1/search/history",
@@ -154,9 +154,9 @@ class TestGetSearchSuggestions:
         )
 
         search_repo = SearchHistoryRepository(test_db)
-        search_repo.add_or_update(channel, "what is machine learning")
-        search_repo.add_or_update(channel, "what is deep learning")
-        search_repo.add_or_update(channel, "how does it work")
+        search_repo.add_or_update(channel.id,"what is machine learning")
+        search_repo.add_or_update(channel.id,"what is deep learning")
+        search_repo.add_or_update(channel.id,"how does it work")
 
         response = client_with_db.get(
             "/api/v1/search/suggestions",
@@ -190,10 +190,10 @@ class TestGetSearchSuggestions:
 
         search_repo = SearchHistoryRepository(test_db)
         # Search "popular query" multiple times
-        search_repo.add_or_update(channel, "popular query")
-        search_repo.add_or_update(channel, "popular query")
-        search_repo.add_or_update(channel, "popular query")
-        search_repo.add_or_update(channel, "less popular")
+        search_repo.add_or_update(channel.id,"popular query")
+        search_repo.add_or_update(channel.id,"popular query")
+        search_repo.add_or_update(channel.id,"popular query")
+        search_repo.add_or_update(channel.id,"less popular")
 
         response = client_with_db.get(
             "/api/v1/search/suggestions",
@@ -254,12 +254,12 @@ class TestGetPopularSearches:
         )
 
         search_repo = SearchHistoryRepository(test_db)
-        search_repo.add_or_update(channel, "query A")
-        search_repo.add_or_update(channel, "query B")
-        search_repo.add_or_update(channel, "query B")
-        search_repo.add_or_update(channel, "query C")
-        search_repo.add_or_update(channel, "query C")
-        search_repo.add_or_update(channel, "query C")
+        search_repo.add_or_update(channel.id,"query A")
+        search_repo.add_or_update(channel.id,"query B")
+        search_repo.add_or_update(channel.id,"query B")
+        search_repo.add_or_update(channel.id,"query C")
+        search_repo.add_or_update(channel.id,"query C")
+        search_repo.add_or_update(channel.id,"query C")
 
         response = client_with_db.get(
             "/api/v1/search/popular",
@@ -301,7 +301,7 @@ class TestDeleteSearchHistory:
         )
 
         search_repo = SearchHistoryRepository(test_db)
-        history = search_repo.add_or_update(channel, "to delete")
+        history = search_repo.add_or_update(channel.id,"to delete")
 
         # Delete the entry
         response = client_with_db.delete(
@@ -363,9 +363,9 @@ class TestClearSearchHistory:
         )
 
         search_repo = SearchHistoryRepository(test_db)
-        search_repo.add_or_update(channel, "query 1")
-        search_repo.add_or_update(channel, "query 2")
-        search_repo.add_or_update(channel, "query 3")
+        search_repo.add_or_update(channel.id,"query 1")
+        search_repo.add_or_update(channel.id,"query 2")
+        search_repo.add_or_update(channel.id,"query 3")
 
         # Clear all history
         response = client_with_db.delete(

@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, UTC
 
 import pytest
 
-from src.infrastructure.persistence.channel_repository import ChannelRepository, ChatHistoryRepository
+from src.modules.workspace.infrastructure.persistence.repositories import ChannelRepositoryAdapter as ChannelRepository
+from src.modules.conversation.infrastructure.persistence.repositories import ChatHistoryRepositoryAdapter as ChatHistoryRepository
 
 
 class TestChannelRepository:
@@ -119,8 +120,12 @@ class TestChannelRepository:
         channel1 = repo.create(gemini_store_id="store/active", name="Active")
         channel2 = repo.create(gemini_store_id="store/inactive", name="Inactive")
 
-        # Manually set last_accessed_at for inactive channel
-        channel2.last_accessed_at = datetime.now(UTC) - timedelta(days=100)
+        # Manually set last_accessed_at for inactive channel via raw model
+        from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata
+        ch2_model = test_db.query(ChannelMetadata).filter(
+            ChannelMetadata.gemini_store_id == "store/inactive"
+        ).one()
+        ch2_model.last_accessed_at = datetime.now(UTC) - timedelta(days=100)
         test_db.commit()
 
         # Get channels inactive for 90 days
@@ -141,25 +146,25 @@ class TestChatHistoryRepository:
 
         # Add user message
         user_msg = chat_repo.add_message(
-            channel=channel,
+            channel_id=channel.id,
             role="user",
             content="What is the capital of France?",
         )
         assert user_msg.id is not None
         assert user_msg.role == "user"
         assert user_msg.content == "What is the capital of France?"
-        assert user_msg.sources_json == "[]"
+        assert user_msg.sources == []
 
         # Add assistant message with sources
         sources = [{"source": "doc1.pdf", "content": "Paris is the capital"}]
         assistant_msg = chat_repo.add_message(
-            channel=channel,
+            channel_id=channel.id,
             role="assistant",
             content="Paris is the capital of France.",
             sources=sources,
         )
         assert assistant_msg.role == "assistant"
-        assert json.loads(assistant_msg.sources_json) == sources
+        assert assistant_msg.sources == sources
 
     def test_get_history(self, test_db):
         """Test getting chat history."""
@@ -169,13 +174,13 @@ class TestChatHistoryRepository:
         chat_repo = ChatHistoryRepository(test_db)
 
         # Add messages
-        chat_repo.add_message(channel, "user", "Question 1")
-        chat_repo.add_message(channel, "assistant", "Answer 1")
-        chat_repo.add_message(channel, "user", "Question 2")
-        chat_repo.add_message(channel, "assistant", "Answer 2")
+        chat_repo.add_message(channel.id, "user", "Question 1")
+        chat_repo.add_message(channel.id, "assistant", "Answer 1")
+        chat_repo.add_message(channel.id, "user", "Question 2")
+        chat_repo.add_message(channel.id, "assistant", "Answer 2")
 
         # Get history
-        messages = chat_repo.get_history(channel)
+        messages = chat_repo.get_history(channel.id)
         assert len(messages) == 4
         assert messages[0].content == "Question 1"
         assert messages[1].content == "Answer 1"
@@ -191,10 +196,10 @@ class TestChatHistoryRepository:
 
         # Add many messages
         for i in range(10):
-            chat_repo.add_message(channel, "user", f"Message {i}")
+            chat_repo.add_message(channel.id, "user", f"Message {i}")
 
         # Get limited history
-        messages = chat_repo.get_history(channel, limit=5)
+        messages = chat_repo.get_history(channel.id, limit=5)
         assert len(messages) == 5
 
     def test_clear_history(self, test_db):
@@ -205,20 +210,20 @@ class TestChatHistoryRepository:
         chat_repo = ChatHistoryRepository(test_db)
 
         # Add messages
-        chat_repo.add_message(channel, "user", "Question 1")
-        chat_repo.add_message(channel, "assistant", "Answer 1")
+        chat_repo.add_message(channel.id, "user", "Question 1")
+        chat_repo.add_message(channel.id, "assistant", "Answer 1")
 
         # Clear history
-        count = chat_repo.clear_history(channel)
+        count = chat_repo.clear_history(channel.id)
         assert count == 2
 
         # Verify cleared
-        messages = chat_repo.get_history(channel)
+        messages = chat_repo.get_history(channel.id)
         assert len(messages) == 0
 
     def test_get_session_history_returns_most_recent(self, test_db):
         """Test that session history returns the most recent N messages, not the oldest."""
-        from src.infrastructure.persistence.db_models import ChatSessionDB, ChatMessageDB
+        from src.modules.conversation.infrastructure.persistence.models import ChatSessionDB, ChatMessageDB
         import time
 
         channel_repo = ChannelRepository(test_db)
@@ -247,7 +252,7 @@ class TestChatHistoryRepository:
             test_db.commit()
 
         # Get session history (context_window=3 → should return last 3)
-        messages = chat_repo.get_session_history(session)
+        messages = chat_repo.get_session_history(session.session_id, context_window=3)
         assert len(messages) == 3
         # Should be the 3 most recent messages in chronological order
         assert messages[0].content == "Message 4"
@@ -256,7 +261,7 @@ class TestChatHistoryRepository:
 
     def test_get_session_history_explicit_limit(self, test_db):
         """Test session history with explicit limit override."""
-        from src.infrastructure.persistence.db_models import ChatSessionDB, ChatMessageDB
+        from src.modules.conversation.infrastructure.persistence.models import ChatSessionDB, ChatMessageDB
 
         channel_repo = ChannelRepository(test_db)
         channel = channel_repo.create(gemini_store_id="store/ctx-limit", name="Limit Override")
@@ -282,14 +287,14 @@ class TestChatHistoryRepository:
             test_db.commit()
 
         # Explicit limit=2 should return last 2
-        messages = chat_repo.get_session_history(session, limit=2)
+        messages = chat_repo.get_session_history(session.session_id, limit=2)
         assert len(messages) == 2
         assert messages[0].content == "Msg 4"
         assert messages[1].content == "Msg 5"
 
     def test_get_session_history_no_limit_returns_all(self, test_db):
         """Test session history without limit returns all messages in order."""
-        from src.infrastructure.persistence.db_models import ChatSessionDB, ChatMessageDB
+        from src.modules.conversation.infrastructure.persistence.models import ChatSessionDB, ChatMessageDB
 
         channel_repo = ChannelRepository(test_db)
         channel = channel_repo.create(gemini_store_id="store/ctx-all", name="No Limit")
@@ -314,7 +319,7 @@ class TestChatHistoryRepository:
             test_db.add(msg)
             test_db.commit()
 
-        messages = chat_repo.get_session_history(session)
+        messages = chat_repo.get_session_history(session.session_id)
         assert len(messages) == 4
         assert messages[0].content == "All 1"
         assert messages[3].content == "All 4"
@@ -325,14 +330,14 @@ class TestChatHistoryRepository:
         channel = channel_repo.create(gemini_store_id="store/cascade", name="Cascade Test")
 
         chat_repo = ChatHistoryRepository(test_db)
-        chat_repo.add_message(channel, "user", "Question")
-        chat_repo.add_message(channel, "assistant", "Answer")
+        chat_repo.add_message(channel.id, "user", "Question")
+        chat_repo.add_message(channel.id, "assistant", "Answer")
 
         # Delete channel
         channel_repo.delete("store/cascade")
 
         # Verify messages are also deleted (need new query)
-        from src.infrastructure.persistence.db_models import ChatMessageDB
+        from src.modules.conversation.infrastructure.persistence.models import ChatMessageDB
         messages = test_db.query(ChatMessageDB).filter(
             ChatMessageDB.channel_id == channel.id
         ).all()

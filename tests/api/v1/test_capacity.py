@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.modules.workspace.presentation.api.capacity import get_channel_port
 from src.application.ports.channel import ChannelDTO
-from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.modules.workspace.infrastructure.persistence.repositories import ChannelRepositoryAdapter as ChannelRepository
 
 
 class TestGetCapacityUsage:

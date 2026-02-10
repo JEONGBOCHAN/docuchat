@@ -11,7 +11,18 @@ from src.application.services.lifecycle_policy import (
     LifecycleConfig,
     LifecyclePolicy,
 )
-from src.infrastructure.persistence.channel_repository import ChannelRepository
+from src.modules.workspace.infrastructure.persistence.repositories import ChannelRepositoryAdapter as ChannelRepository
+from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata
+
+
+def _set_channel_attr(test_db, store_id, **kwargs):
+    """Update raw channel model attributes in DB."""
+    model = test_db.query(ChannelMetadata).filter(
+        ChannelMetadata.gemini_store_id == store_id,
+    ).one()
+    for k, v in kwargs.items():
+        setattr(model, k, v)
+    test_db.commit()
 
 
 class TestLifecyclePolicy:
@@ -39,27 +50,26 @@ class TestLifecyclePolicy:
         """Create an idle channel (70 days since access)."""
         repo = ChannelRepository(test_db)
         channel = repo.create(gemini_store_id="store/idle", name="Idle Channel")
-        channel.last_accessed_at = datetime.now(UTC) - timedelta(days=70)
-        test_db.commit()
-        return channel
+        _set_channel_attr(test_db, "store/idle",
+                          last_accessed_at=datetime.now(UTC) - timedelta(days=70))
+        return repo.get_by_gemini_id("store/idle")
 
     @pytest.fixture
     def inactive_channel(self, test_db):
         """Create an inactive channel (100 days since access)."""
         repo = ChannelRepository(test_db)
         channel = repo.create(gemini_store_id="store/inactive", name="Inactive Channel")
-        channel.last_accessed_at = datetime.now(UTC) - timedelta(days=100)
-        test_db.commit()
-        return channel
+        _set_channel_attr(test_db, "store/inactive",
+                          last_accessed_at=datetime.now(UTC) - timedelta(days=100))
+        return repo.get_by_gemini_id("store/inactive")
 
     @pytest.fixture
     def over_limit_channel(self, test_db):
         """Create a channel over capacity limits."""
         repo = ChannelRepository(test_db)
-        channel = repo.create(gemini_store_id="store/overlimit", name="Over Limit")
-        channel.file_count = 120  # Over 100 limit
-        test_db.commit()
-        return channel
+        repo.create(gemini_store_id="store/overlimit", name="Over Limit")
+        repo.update_stats("store/overlimit", file_count=120)
+        return repo.get_by_gemini_id("store/overlimit")
 
     def test_active_channel_status(self, policy, active_channel):
         """Test status for active channel."""
@@ -103,9 +113,9 @@ class TestLifecyclePolicy:
     def test_approaching_limit_warning(self, policy, test_db):
         """Test warning when approaching capacity limits."""
         repo = ChannelRepository(test_db)
-        channel = repo.create(gemini_store_id="store/approaching", name="Approaching")
-        channel.file_count = 85  # 85% of 100 limit
-        test_db.commit()
+        repo.create(gemini_store_id="store/approaching", name="Approaching")
+        repo.update_stats("store/approaching", file_count=85)
+        channel = repo.get_by_gemini_id("store/approaching")
 
         status = policy.get_status(channel)
 
@@ -118,18 +128,19 @@ class TestLifecyclePolicy:
         repo = ChannelRepository(test_db)
 
         # Create mix of channels
-        active = repo.create(gemini_store_id="store/1", name="Active")
+        repo.create(gemini_store_id="store/1", name="Active")
 
-        idle = repo.create(gemini_store_id="store/2", name="Idle")
-        idle.last_accessed_at = datetime.now(UTC) - timedelta(days=70)
+        repo.create(gemini_store_id="store/2", name="Idle")
+        _set_channel_attr(test_db, "store/2",
+                          last_accessed_at=datetime.now(UTC) - timedelta(days=70))
 
-        inactive1 = repo.create(gemini_store_id="store/3", name="Inactive 1")
-        inactive1.last_accessed_at = datetime.now(UTC) - timedelta(days=100)
+        repo.create(gemini_store_id="store/3", name="Inactive 1")
+        _set_channel_attr(test_db, "store/3",
+                          last_accessed_at=datetime.now(UTC) - timedelta(days=100))
 
-        inactive2 = repo.create(gemini_store_id="store/4", name="Inactive 2")
-        inactive2.last_accessed_at = datetime.now(UTC) - timedelta(days=120)
-
-        test_db.commit()
+        repo.create(gemini_store_id="store/4", name="Inactive 2")
+        _set_channel_attr(test_db, "store/4",
+                          last_accessed_at=datetime.now(UTC) - timedelta(days=120))
 
         channels = repo.get_all()
         inactive_list = policy.get_inactive_channels(channels)
@@ -146,9 +157,9 @@ class TestLifecyclePolicy:
         repo.create(gemini_store_id="store/a1", name="Active 1")
         repo.create(gemini_store_id="store/a2", name="Active 2")
 
-        idle = repo.create(gemini_store_id="store/i1", name="Idle 1")
-        idle.last_accessed_at = datetime.now(UTC) - timedelta(days=70)
-        test_db.commit()
+        repo.create(gemini_store_id="store/i1", name="Idle 1")
+        _set_channel_attr(test_db, "store/i1",
+                          last_accessed_at=datetime.now(UTC) - timedelta(days=70))
 
         channels = repo.get_all()
 
@@ -164,10 +175,9 @@ class TestLifecyclePolicy:
     def test_size_based_limit(self, policy, test_db):
         """Test that size-based limits work."""
         repo = ChannelRepository(test_db)
-        channel = repo.create(gemini_store_id="store/size", name="Size Test")
-        # 600 MB = 120% of 500 MB limit
-        channel.total_size_bytes = 600 * 1024 * 1024
-        test_db.commit()
+        repo.create(gemini_store_id="store/size", name="Size Test")
+        repo.update_stats("store/size", total_size_bytes=600 * 1024 * 1024)
+        channel = repo.get_by_gemini_id("store/size")
 
         status = policy.get_status(channel)
 
@@ -185,9 +195,10 @@ class TestLifecyclePolicy:
         policy = LifecyclePolicy(config)
 
         repo = ChannelRepository(test_db)
-        channel = repo.create(gemini_store_id="store/custom", name="Custom")
-        channel.last_accessed_at = datetime.now(UTC) - timedelta(days=25)
-        test_db.commit()
+        repo.create(gemini_store_id="store/custom", name="Custom")
+        _set_channel_attr(test_db, "store/custom",
+                          last_accessed_at=datetime.now(UTC) - timedelta(days=25))
+        channel = repo.get_by_gemini_id("store/custom")
 
         status = policy.get_status(channel)
 
