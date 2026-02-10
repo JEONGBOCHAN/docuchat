@@ -2,8 +2,8 @@
 """Architecture gate: module presentation API must not import src.models directly.
 
 Ensures that src/modules/**/presentation/api/*.py never imports from src.models.
-Schema types should be accessed via module-local presentation/schemas/ facades.
-Files under presentation/schemas/ are exempt (they are the re-export layer).
+Schema types must be defined as module-owned classes under presentation/schemas/.
+The legacy src.models package has been removed; this guard prevents regression.
 """
 
 import ast
@@ -50,5 +50,5 @@ def test_presentation_api_no_direct_src_models_imports():
         pytest.fail(
             "Module presentation API files import from src.models directly!\n\n"
             + "\n".join(f"  - {v}" for v in violations)
-            + "\n\nFix: use module-local presentation/schemas/ facades instead."
+            + "\n\nFix: use module-owned presentation/schemas/ classes instead."
         )
