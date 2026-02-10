@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Tests for CompactionRunner — independent DB session per job."""
+"""Tests for CompactionRunner — independent DB sessions + bounded thread pool + coalescing."""
 
 import threading
+import time
 from unittest.mock import MagicMock, patch, call
 
 import pytest
@@ -32,10 +33,13 @@ def service_factory(mock_service):
 
 @pytest.fixture
 def runner(session_factory, service_factory):
-    return CompactionRunner(
+    r = CompactionRunner(
         session_factory=session_factory,
         service_factory=service_factory,
+        max_workers=2,
     )
+    yield r
+    r.shutdown(wait=True)
 
 
 class TestCompactionRunner:
@@ -70,10 +74,10 @@ class TestCompactionRunner:
 
         mock_db.close.assert_called_once()
 
-    def test_submit_runs_in_background_thread(
+    def test_submit_runs_in_thread_pool(
         self, runner, session_factory, service_factory, mock_db, mock_service,
     ):
-        """submit() should spawn a daemon thread that eventually calls _run."""
+        """submit() should execute via the thread pool and eventually complete."""
         done_event = threading.Event()
         original_run = runner._run
 
@@ -98,9 +102,7 @@ class TestCompactionRunner:
         runner._run("sess_err")
         mock_db.close.assert_called_once()
 
-    def test_service_factory_receives_fresh_session(
-        self, service_factory,
-    ):
+    def test_service_factory_receives_fresh_session(self):
         """Each _run call should create a fresh DB session via session_factory."""
         db1 = MagicMock()
         db2 = MagicMock()
@@ -117,3 +119,153 @@ class TestCompactionRunner:
         svc_factory.assert_any_call(db2)
         db1.close.assert_called_once()
         db2.close.assert_called_once()
+        runner.shutdown(wait=True)
+
+
+class TestCoalescing:
+    """Tests for session-level duplicate prevention."""
+
+    def test_duplicate_session_id_is_skipped(self):
+        """Second submit for the same session_id while first is running should be skipped."""
+        block_event = threading.Event()
+        run_count = 0
+        run_lock = threading.Lock()
+
+        def slow_compact(session_id):
+            nonlocal run_count
+            block_event.wait(timeout=5)
+            with run_lock:
+                run_count += 1
+
+        svc = MagicMock()
+        svc.maybe_compact.side_effect = slow_compact
+        svc_factory = MagicMock(return_value=svc)
+        db = MagicMock()
+        session_factory = MagicMock(return_value=db)
+
+        runner = CompactionRunner(
+            session_factory=session_factory,
+            service_factory=svc_factory,
+            max_workers=4,
+        )
+
+        # First submit — will block in slow_compact
+        runner.submit("sess_dup")
+        time.sleep(0.1)  # Let thread start
+
+        # Second submit — same session_id, should be skipped
+        runner.submit("sess_dup")
+
+        # Release the blocker
+        block_event.set()
+        runner.shutdown(wait=True)
+
+        # Only one compaction should have run
+        assert run_count == 1
+
+    def test_different_session_ids_run_concurrently(self):
+        """Different session_ids should both be executed."""
+        completed = set()
+        lock = threading.Lock()
+
+        def track_compact(session_id):
+            with lock:
+                completed.add(session_id)
+
+        svc = MagicMock()
+        svc.maybe_compact.side_effect = track_compact
+        svc_factory = MagicMock(return_value=svc)
+        db = MagicMock()
+        session_factory = MagicMock(return_value=db)
+
+        runner = CompactionRunner(
+            session_factory=session_factory,
+            service_factory=svc_factory,
+            max_workers=4,
+        )
+
+        runner.submit("sess_a")
+        runner.submit("sess_b")
+        runner.shutdown(wait=True)
+
+        assert completed == {"sess_a", "sess_b"}
+
+    def test_pending_set_cleared_after_completion(self):
+        """After a job completes, its session_id should be removed from pending."""
+        svc = MagicMock()
+        svc_factory = MagicMock(return_value=svc)
+        db = MagicMock()
+        session_factory = MagicMock(return_value=db)
+
+        runner = CompactionRunner(
+            session_factory=session_factory,
+            service_factory=svc_factory,
+            max_workers=2,
+        )
+
+        runner.submit("sess_x")
+        runner.shutdown(wait=True)
+
+        # pending should be empty
+        assert "sess_x" not in runner._pending
+
+    def test_pending_cleared_on_failure(self):
+        """Even if compaction fails, session_id should be removed from pending."""
+        svc = MagicMock()
+        svc.maybe_compact.side_effect = RuntimeError("fail")
+        svc_factory = MagicMock(return_value=svc)
+        db = MagicMock()
+        session_factory = MagicMock(return_value=db)
+
+        runner = CompactionRunner(
+            session_factory=session_factory,
+            service_factory=svc_factory,
+            max_workers=2,
+        )
+
+        runner.submit("sess_fail")
+        runner.shutdown(wait=True)
+
+        assert "sess_fail" not in runner._pending
+
+
+class TestBoundedWorkers:
+    """Tests for ThreadPoolExecutor worker limit."""
+
+    def test_max_workers_respected(self):
+        """No more than max_workers threads should run concurrently."""
+        concurrent_count = 0
+        max_concurrent = 0
+        lock = threading.Lock()
+        barrier = threading.Event()
+
+        def counting_compact(session_id):
+            nonlocal concurrent_count, max_concurrent
+            with lock:
+                concurrent_count += 1
+                max_concurrent = max(max_concurrent, concurrent_count)
+            barrier.wait(timeout=5)
+            with lock:
+                concurrent_count -= 1
+
+        svc = MagicMock()
+        svc.maybe_compact.side_effect = counting_compact
+        svc_factory = MagicMock(return_value=svc)
+        db = MagicMock()
+        session_factory = MagicMock(return_value=db)
+
+        runner = CompactionRunner(
+            session_factory=session_factory,
+            service_factory=svc_factory,
+            max_workers=2,
+        )
+
+        # Submit 4 jobs with different session_ids
+        for i in range(4):
+            runner.submit(f"sess_{i}")
+
+        time.sleep(0.3)  # Let threads start
+        barrier.set()  # Release all
+        runner.shutdown(wait=True)
+
+        assert max_concurrent <= 2
