@@ -7,6 +7,7 @@ SSE streaming, and error code translation.
 """
 
 import json
+from collections.abc import Callable
 from typing import Annotated, Generator
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
@@ -34,12 +35,12 @@ from src.core.rate_limiter import limiter, RateLimits
 router = APIRouter(prefix="/channels", tags=["chat"])
 
 
-def get_chat_use_case(
+def get_chat_use_case_factory(
     db: Session = Depends(get_db),
-) -> ChatUseCase:
-    """Get chat use case instance."""
+) -> Callable[[], ChatUseCase]:
+    """Get chat use case factory for lazy creation."""
     from src.modules.conversation.public import create_chat_use_case
-    return create_chat_use_case(db)
+    return lambda: create_chat_use_case(db)
 
 
 def _format_sse_event(data: dict | str) -> str:
@@ -85,7 +86,7 @@ def send_message(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
-    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
+    use_case_factory: Annotated[Callable[[], ChatUseCase], Depends(get_chat_use_case_factory)],
 ) -> ChatResponse:
     """Send a question and get an AI-generated answer.
 
@@ -93,6 +94,7 @@ def send_message(
     Supports multi-turn conversations when session_id is provided in the request body.
     Responses are cached for 1 hour when no session is used.
     """
+    use_case = use_case_factory()
     try:
         result = use_case.send_message(channel_id, body.query, body.session_id)
         return ChatResponse(
@@ -125,7 +127,7 @@ def send_message_stream(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID to query")],
     body: ChatRequest,
-    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
+    use_case_factory: Annotated[Callable[[], ChatUseCase], Depends(get_chat_use_case_factory)],
 ) -> StreamingResponse:
     """Send a question and get a streaming AI-generated answer.
 
@@ -136,6 +138,7 @@ def send_message_stream(
     - done: Signals completion
     - error: Error information if something went wrong
     """
+    use_case = use_case_factory()
     try:
         session_id_response, session_renewed, old_session_id, stream_gen = use_case.prepare_stream(
             channel_id, body.query, body.session_id
@@ -192,10 +195,11 @@ def send_message_stream(
 def get_chat_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
-    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
+    use_case_factory: Annotated[Callable[[], ChatUseCase], Depends(get_chat_use_case_factory)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
 ) -> ChatHistory:
     """Get the chat history for a channel."""
+    use_case = use_case_factory()
     try:
         result = use_case.get_history(channel_id, limit=limit)
         return ChatHistory(
@@ -219,9 +223,10 @@ def get_chat_history(
 def clear_chat_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
-    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
+    use_case_factory: Annotated[Callable[[], ChatUseCase], Depends(get_chat_use_case_factory)],
 ):
     """Clear the chat history for a channel."""
+    use_case = use_case_factory()
     try:
         use_case.clear_history(channel_id)
     except ChannelNotFoundError:
@@ -246,13 +251,14 @@ def create_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     body: CreateSessionRequest,
-    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
+    use_case_factory: Annotated[Callable[[], ChatUseCase], Depends(get_chat_use_case_factory)],
 ) -> ChatSession:
     """Create a new chat session for multi-turn conversation.
 
     Returns a session_id that can be used in subsequent chat requests
     to maintain conversation context.
     """
+    use_case = use_case_factory()
     try:
         result = use_case.create_session(channel_id, body.context_window)
         return ChatSession(
@@ -279,9 +285,10 @@ def get_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
+    use_case_factory: Annotated[Callable[[], ChatUseCase], Depends(get_chat_use_case_factory)],
 ) -> ChatSession:
     """Get information about a chat session."""
+    use_case = use_case_factory()
     try:
         result = use_case.get_session(channel_id, session_id)
         return ChatSession(
@@ -313,10 +320,11 @@ def get_session_history(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
+    use_case_factory: Annotated[Callable[[], ChatUseCase], Depends(get_chat_use_case_factory)],
     limit: Annotated[int, Query(description="Maximum number of messages", ge=1, le=500)] = 100,
 ) -> ChatHistory:
     """Get the chat history for a specific session."""
+    use_case = use_case_factory()
     try:
         result = use_case.get_session_history(channel_id, session_id, limit=limit)
         return ChatHistory(
@@ -341,9 +349,10 @@ def delete_session(
     request: Request,
     channel_id: Annotated[str, Path(description="Channel ID")],
     session_id: str,
-    use_case: Annotated[ChatUseCase, Depends(get_chat_use_case)],
+    use_case_factory: Annotated[Callable[[], ChatUseCase], Depends(get_chat_use_case_factory)],
 ):
     """Delete a chat session and its associated messages."""
+    use_case = use_case_factory()
     try:
         use_case.delete_session(channel_id, session_id)
     except SessionNotFoundError:

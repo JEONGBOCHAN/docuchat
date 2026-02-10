@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.chat import get_chat_use_case
+from src.api.v1.chat import get_chat_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.application.use_cases.process_query import QueryResult
 
@@ -20,9 +20,9 @@ def _override_chat_use_case():
     their own override never trigger external service initialization.
     Individual tests may still override via app.dependency_overrides.
     """
-    app.dependency_overrides[get_chat_use_case] = lambda: _make_chat_use_case()
+    app.dependency_overrides[get_chat_use_case_factory] = lambda: _make_chat_use_case
     yield
-    app.dependency_overrides.pop(get_chat_use_case, None)
+    app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
 def _make_chat_use_case(
@@ -100,7 +100,7 @@ class TestSendMessage:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat",
@@ -114,7 +114,7 @@ class TestSendMessage:
         assert len(data["sources"]) == 1
         assert data["sources"][0]["source"] == "document.pdf"
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_send_message_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test sending message to non-existent channel."""
@@ -122,7 +122,7 @@ class TestSendMessage:
         mock_channel_port.get_channel.return_value = None
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/chat",
@@ -131,7 +131,7 @@ class TestSendMessage:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_send_message_empty_query(self, client_with_db: TestClient, test_db):
         """Test sending empty query fails."""
@@ -163,7 +163,7 @@ class TestSendMessage:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat",
@@ -172,7 +172,7 @@ class TestSendMessage:
 
         assert response.status_code == 500
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
 class TestGetChatHistory:
@@ -187,7 +187,7 @@ class TestGetChatHistory:
         )
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/channels/fileSearchStores/test-store/chat/history",
@@ -199,7 +199,7 @@ class TestGetChatHistory:
         assert data["messages"] == []
         assert data["total"] == 0
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_get_history_with_messages(self, client_with_db: TestClient, test_db):
         """Test getting history after sending messages."""
@@ -221,7 +221,7 @@ class TestGetChatHistory:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Send a message first
         client_with_db.post(
@@ -242,7 +242,7 @@ class TestGetChatHistory:
         assert data["messages"][1]["role"] == "assistant"
         assert data["messages"][1]["content"] == "Answer here"
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_get_history_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test getting history for non-existent channel returns empty (local-first)."""
@@ -250,7 +250,7 @@ class TestGetChatHistory:
         mock_channel_port.get_channel.return_value = None
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/channels/fileSearchStores/not-exists/chat/history",
@@ -262,7 +262,7 @@ class TestGetChatHistory:
         assert data["total"] == 0
         assert data["messages"] == []
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
 class TestClearChatHistory:
@@ -288,7 +288,7 @@ class TestClearChatHistory:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Send a message first
         client_with_db.post(
@@ -309,7 +309,7 @@ class TestClearChatHistory:
         )
         assert response.json()["total"] == 0
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_clear_history_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test clearing history for non-existent channel."""
@@ -317,7 +317,7 @@ class TestClearChatHistory:
         mock_channel_port.get_channel.return_value = None
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.delete(
             "/api/v1/channels/fileSearchStores/not-exists/chat/history",
@@ -325,7 +325,7 @@ class TestClearChatHistory:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_clear_history_also_clears_session_memory(self, client_with_db: TestClient, test_db):
         """Test that clearing history also clears session memory (rolling summaries)."""
@@ -343,7 +343,7 @@ class TestClearChatHistory:
             db=test_db,
             session_memory_repo=mock_session_memory_repo,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Ensure channel metadata exists
         client_with_db.post(
@@ -358,7 +358,7 @@ class TestClearChatHistory:
         assert response.status_code == 204
         mock_session_memory_repo.clear_by_channel.assert_called_once()
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_clear_history_deletes_checkpoints(self, client_with_db: TestClient, test_db):
         """Test that clearing history also deletes LangGraph checkpoints for all sessions."""
@@ -383,7 +383,7 @@ class TestClearChatHistory:
             db=test_db,
             checkpoint_store=mock_checkpoint_store,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Send messages to create sessions
         client_with_db.post(
@@ -404,7 +404,7 @@ class TestClearChatHistory:
         # Checkpoint delete_thread should have been called for each session
         assert mock_checkpoint_store.delete_thread.call_count > 0
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_clear_history_checkpoint_failure_non_blocking(self, client_with_db: TestClient, test_db):
         """Test that checkpoint deletion failure doesn't block history clearing."""
@@ -430,7 +430,7 @@ class TestClearChatHistory:
             db=test_db,
             checkpoint_store=mock_checkpoint_store,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Send a message to create session
         client_with_db.post(
@@ -451,7 +451,7 @@ class TestClearChatHistory:
         )
         assert response.json()["total"] == 0
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
 class TestStreamMessage:
@@ -496,7 +496,7 @@ class TestStreamMessage:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat/stream",
@@ -526,7 +526,7 @@ class TestStreamMessage:
         # Should end with [DONE]
         assert "[DONE]" in events
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_stream_message_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test streaming to non-existent channel."""
@@ -534,7 +534,7 @@ class TestStreamMessage:
         mock_channel_port.get_channel.return_value = None
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/chat/stream",
@@ -543,7 +543,7 @@ class TestStreamMessage:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_stream_message_error_event(self, client_with_db: TestClient, test_db):
         """Test streaming with error event."""
@@ -572,7 +572,7 @@ class TestStreamMessage:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat/stream",
@@ -593,7 +593,7 @@ class TestStreamMessage:
         assert error_event is not None
         assert error_event["error"] == "API Error"
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_stream_saves_to_history(self, client_with_db: TestClient, test_db):
         """Test that streaming saves messages to history."""
@@ -624,7 +624,7 @@ class TestStreamMessage:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Stream a message
         response = client_with_db.post(
@@ -647,7 +647,7 @@ class TestStreamMessage:
         assert data["messages"][1]["role"] == "assistant"
         assert data["messages"][1]["content"] == "Streamed response"
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_stream_empty_query_fails(self, client_with_db: TestClient, test_db):
         """Test streaming with empty query fails validation."""
@@ -671,7 +671,7 @@ class TestChatSession:
         )
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat/sessions",
@@ -684,7 +684,7 @@ class TestChatSession:
         assert data["channel_id"] == "fileSearchStores/test-store"
         assert data["context_window"] == 10
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_create_session_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test creating session for non-existent channel."""
@@ -692,7 +692,7 @@ class TestChatSession:
         mock_channel_port.get_channel.return_value = None
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/not-exists/chat/sessions",
@@ -701,7 +701,7 @@ class TestChatSession:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_get_session_success(self, client_with_db: TestClient, test_db):
         """Test getting session information."""
@@ -712,7 +712,7 @@ class TestChatSession:
         )
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Create session first
         create_response = client_with_db.post(
@@ -731,7 +731,7 @@ class TestChatSession:
         assert data["session_id"] == session_id
         assert data["context_window"] == 5
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_get_session_not_found(self, client_with_db: TestClient, test_db):
         """Test getting non-existent session."""
@@ -742,7 +742,7 @@ class TestChatSession:
         )
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/channels/fileSearchStores/test-store/chat/sessions/sess_nonexistent"
@@ -750,7 +750,7 @@ class TestChatSession:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_delete_session_success(self, client_with_db: TestClient, test_db):
         """Test deleting a session."""
@@ -761,7 +761,7 @@ class TestChatSession:
         )
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Create session first
         create_response = client_with_db.post(
@@ -783,7 +783,7 @@ class TestChatSession:
         )
         assert get_response.status_code == 404
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_delete_session_not_found(self, client_with_db: TestClient, test_db):
         """Test deleting non-existent session."""
@@ -794,7 +794,7 @@ class TestChatSession:
         )
 
         use_case = _make_chat_use_case(channel_port=mock_channel_port, db=test_db)
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.delete(
             "/api/v1/channels/fileSearchStores/test-store/chat/sessions/sess_nonexistent"
@@ -802,7 +802,7 @@ class TestChatSession:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
 class TestMultiTurnConversation:
@@ -836,7 +836,7 @@ class TestMultiTurnConversation:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Create session
         session_response = client_with_db.post(
@@ -864,7 +864,7 @@ class TestMultiTurnConversation:
         assert received_thread_ids[0] == session_id
         assert received_thread_ids[1] == session_id
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_chat_without_session_auto_bootstraps(self, client_with_db: TestClient, test_db):
         """Test that chat without explicit session_id auto-creates a session.
@@ -899,7 +899,7 @@ class TestMultiTurnConversation:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # First message without session — should auto-create session
         resp1 = client_with_db.post(
@@ -917,7 +917,7 @@ class TestMultiTurnConversation:
         # thread_id should be set (same as session_id)
         assert received_thread_ids[0] is not None
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_get_session_history(self, client_with_db: TestClient, test_db):
         """Test getting chat history for a specific session."""
@@ -939,7 +939,7 @@ class TestMultiTurnConversation:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Create session
         session_response = client_with_db.post(
@@ -968,7 +968,7 @@ class TestMultiTurnConversation:
         assert data["messages"][1]["role"] == "assistant"
         assert data["messages"][1]["content"] == "Test response"
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_stream_with_session(self, client_with_db: TestClient, test_db):
         """Test streaming chat with session passes thread_id for checkpointer-based context."""
@@ -1002,7 +1002,7 @@ class TestMultiTurnConversation:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Create session
         session_response = client_with_db.post(
@@ -1029,7 +1029,7 @@ class TestMultiTurnConversation:
         assert received_thread_ids[0] == session_id
         assert received_thread_ids[1] == session_id
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_stream_returns_session_id(self, client_with_db: TestClient, test_db):
         """Test that streaming response includes session_id event."""
@@ -1060,7 +1060,7 @@ class TestMultiTurnConversation:
             process_query_factory=lambda: mock_pq,
             db=test_db,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         # Create session
         session_response = client_with_db.post(
@@ -1088,7 +1088,7 @@ class TestMultiTurnConversation:
         assert session_event is not None
         assert session_event["session_id"] == session_id
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
 class TestSessionRenewalOldSessionId:
@@ -1133,7 +1133,7 @@ class TestSessionRenewalOldSessionId:
         use_case._session_repo = MagicMock()
         use_case._session_repo.get_or_create.return_value = (new_session_dto, True)
 
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat",
@@ -1146,7 +1146,7 @@ class TestSessionRenewalOldSessionId:
         assert data["old_session_id"] == "sess_old_expired"
         assert data["session_id"] == "sess_new_123"
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_sse_session_event_includes_old_session_id_on_renewal(
         self, client_with_db: TestClient, test_db
@@ -1194,7 +1194,7 @@ class TestSessionRenewalOldSessionId:
         use_case._session_repo = MagicMock()
         use_case._session_repo.get_or_create.return_value = (new_session_dto, True)
 
-        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/chat/stream",
@@ -1216,7 +1216,7 @@ class TestSessionRenewalOldSessionId:
         assert session_event["session_renewed"] is True
         assert session_event["old_session_id"] == "sess_old_expired"
 
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
 def _mock_document_search():

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.core.rate_limiter import RateLimits
-from src.api.v1.chat import get_chat_use_case
+from src.api.v1.chat import get_chat_use_case_factory
 from src.application.ports.channel import ChannelDTO
 
 
@@ -57,9 +57,9 @@ def mock_channel_port():
         summaries_use_case=mock_summaries,
         process_query_factory=lambda: mock_pq,
     )
-    app.dependency_overrides[get_chat_use_case] = lambda: use_case
+    app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: use_case
     yield mock_port
-    app.dependency_overrides.pop(get_chat_use_case, None)
+    app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
 @pytest.fixture

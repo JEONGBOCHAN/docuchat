@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.api.v1.search import get_search_history_use_case_factory
-from src.api.v1.chat import get_chat_use_case
+from src.api.v1.chat import get_chat_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.infrastructure.persistence.search_repository import SearchHistoryRepository
@@ -432,7 +432,7 @@ class TestSearchHistoryIntegration:
             summaries_use_case=mock_summaries,
             process_query_factory=lambda: mock_pq,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: chat_use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: chat_use_case
 
         # Send a chat message
         client_with_db.post(
@@ -452,7 +452,7 @@ class TestSearchHistoryIntegration:
         assert data["history"][0]["search_count"] == 1
 
         app.dependency_overrides.pop(get_search_history_use_case_factory, None)
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
     def test_repeated_query_increments_count(self, client_with_db: TestClient, test_db):
         """Test that repeated queries increment search count."""
@@ -498,7 +498,7 @@ class TestSearchHistoryIntegration:
             summaries_use_case=mock_summaries,
             process_query_factory=lambda: mock_pq,
         )
-        app.dependency_overrides[get_chat_use_case] = lambda: chat_use_case
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: lambda: chat_use_case
 
         # Send the same query multiple times
         for _ in range(3):
@@ -519,4 +519,4 @@ class TestSearchHistoryIntegration:
         assert data["history"][0]["search_count"] == 3
 
         app.dependency_overrides.pop(get_search_history_use_case_factory, None)
-        app.dependency_overrides.pop(get_chat_use_case, None)
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
