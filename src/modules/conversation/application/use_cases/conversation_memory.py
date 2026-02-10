@@ -23,10 +23,12 @@ if TYPE_CHECKING:
     from src.shared.kernel.contracts.ports.conversation_summary import ConversationSummaryPort
     from src.shared.kernel.contracts.ports.token_counter import TokenCounterPort
 
-logger = logging.getLogger(__name__)
+from src.modules.conversation.domain.memory_policy import (
+    should_compact,
+    estimate_tokens as _domain_estimate_tokens,
+)
 
-# Rough token-per-character ratio for estimation when no counter is available
-_CHARS_PER_TOKEN = 4
+logger = logging.getLogger(__name__)
 
 
 class ConversationMemoryService:
@@ -134,8 +136,8 @@ class ConversationMemoryService:
         else:
             new_messages = list(all_messages)
 
-        # Check trigger threshold
-        if len(new_messages) < self._compaction_trigger_turns:
+        # Check trigger threshold via domain policy
+        if not should_compact(len(new_messages), self._compaction_trigger_turns):
             return
 
         logger.info(
@@ -185,9 +187,8 @@ class ConversationMemoryService:
 
     def _estimate_tokens(self, text: str) -> int:
         """Estimate token count for text."""
-        if self._token_counter:
-            return self._token_counter.count_tokens(text)
-        return max(1, len(text) // _CHARS_PER_TOKEN)
+        exact = self._token_counter.count_tokens(text) if self._token_counter else None
+        return _domain_estimate_tokens(text, exact_count=exact)
 
     def _messages_token_count(self, messages: list[tuple[str, str]]) -> int:
         """Count total tokens across all messages."""

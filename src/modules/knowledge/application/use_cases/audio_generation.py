@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from src.shared.kernel.contracts.ports.persistence import AudioRepositoryPort
 from src.shared.kernel.contracts.ports.external_services import TTSPort
+from src.modules.knowledge.domain.voice_assignment import assign_voice_for_speaker
 from src.modules.knowledge.application.use_cases.podcast import (
     GeneratePodcastScriptUseCase,
     GeneratePodcastScriptRequest,
@@ -81,11 +82,9 @@ class GenerateAudioUseCase:
             # Step 2: Build script JSON with voice assignments
             dialogue_lines = []
             for line in script_dto.dialogue:
-                if "Host A" in line.speaker or "진행자" in line.speaker:
-                    voice = request.host_a_voice
-                else:
-                    voice = request.host_b_voice
-
+                voice = assign_voice_for_speaker(
+                    line.speaker, request.host_a_voice, request.host_b_voice,
+                )
                 dialogue_lines.append({
                     "speaker": line.speaker,
                     "text": line.text,

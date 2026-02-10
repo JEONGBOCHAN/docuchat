@@ -10,26 +10,11 @@ from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass
 
 from src.shared.kernel.contracts.ports.persistence import ChannelMetadataDTO
-
-
-class ChannelState(str, Enum):
-    """Channel lifecycle states.
-
-    States represent the lifecycle stage of a channel based on activity and usage.
-    """
-    ACTIVE = "active"           # Recently accessed, fully operational
-    IDLE = "idle"               # No recent activity, but under threshold
-    INACTIVE = "inactive"       # Exceeded inactivity threshold, candidate for cleanup
-    OVER_LIMIT = "over_limit"   # Exceeded capacity limits
-
-
-class ChannelAction(str, Enum):
-    """Recommended actions for channel lifecycle management."""
-    NONE = "none"                       # No action needed
-    WARN_IDLE = "warn_idle"             # Warn user about approaching inactivity
-    WARN_OVER_LIMIT = "warn_over_limit" # Warn user about capacity limits
-    ARCHIVE = "archive"                 # Archive and cleanup inactive channel
-    FORCE_CLEANUP = "force_cleanup"     # Force cleanup due to limits exceeded
+from src.modules.ops.domain.lifecycle_rules import (
+    ChannelState,
+    ChannelAction,
+    evaluate_channel_state,
+)
 
 
 @dataclass
@@ -144,49 +129,16 @@ class LifecyclePolicy:
     ) -> tuple[ChannelState, ChannelAction, str]:
         """Evaluate channel state based on metrics.
 
+        Delegates to the domain-layer pure function.
+
         Returns:
             Tuple of (state, action, message)
         """
-        # Check capacity limits first (takes priority)
-        if usage_percent >= 100:
-            return (
-                ChannelState.OVER_LIMIT,
-                ChannelAction.WARN_OVER_LIMIT,
-                f"Channel has exceeded capacity limits ({usage_percent:.0f}% used). "
-                "Please remove some documents to continue using this channel.",
-            )
-
-        # Check inactivity
-        if days_until_inactive <= 0:
-            return (
-                ChannelState.INACTIVE,
-                ChannelAction.ARCHIVE,
-                f"Channel has been inactive for {days_since_access} days. "
-                "It is scheduled for cleanup. Access the channel to prevent deletion.",
-            )
-
-        # Check idle warning threshold
-        if days_since_access >= self.config.idle_warning_days:
-            return (
-                ChannelState.IDLE,
-                ChannelAction.WARN_IDLE,
-                f"Channel has been idle for {days_since_access} days. "
-                f"It will be marked inactive in {days_until_inactive} days.",
-            )
-
-        # Capacity warning (80% threshold)
-        if usage_percent >= 80:
-            return (
-                ChannelState.ACTIVE,
-                ChannelAction.WARN_OVER_LIMIT,
-                f"Channel is approaching capacity limits ({usage_percent:.0f}% used).",
-            )
-
-        # All good
-        return (
-            ChannelState.ACTIVE,
-            ChannelAction.NONE,
-            "Channel is active and within limits.",
+        return evaluate_channel_state(
+            days_since_access=days_since_access,
+            days_until_inactive=days_until_inactive,
+            usage_percent=usage_percent,
+            idle_warning_days=self.config.idle_warning_days,
         )
 
     def get_inactive_channels(

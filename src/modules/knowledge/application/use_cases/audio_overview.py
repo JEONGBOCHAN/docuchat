@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, UTC
 
 from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.modules.knowledge.domain.voice_assignment import assign_voice_for_speaker
 from src.shared.kernel.contracts.ports.persistence import (
     AudioRepositoryPort,
     ChannelRepositoryPort,
@@ -303,14 +304,11 @@ class AudioOverviewUseCase:
         # Assign voices to dialogue lines
         dialogue = []
         for line in script_dto.dialogue:
-            speaker = line.speaker
-            if "Host A" in speaker or "진행자" in speaker:
-                voice = host_a_voice
-            else:
-                voice = host_b_voice
-
+            voice = assign_voice_for_speaker(
+                line.speaker, host_a_voice, host_b_voice,
+            )
             dialogue.append({
-                "speaker": speaker,
+                "speaker": line.speaker,
                 "text": line.text,
                 "voice": voice,
             })
