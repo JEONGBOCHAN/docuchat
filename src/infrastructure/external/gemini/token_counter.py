@@ -48,8 +48,7 @@ class GeminiTokenCounterAdapter(TokenCounterPort):
         # Gemini models typically have ~4 characters per token for English text
         self._chars_per_token = 4
 
-        if use_api:
-            self._init_client()
+        # Client initialization is deferred to first API call (lazy init)
 
     def _init_client(self) -> None:
         """Initialize the Gemini client for API-based token counting."""
@@ -84,7 +83,7 @@ class GeminiTokenCounterAdapter(TokenCounterPort):
         if not text:
             return 0
 
-        if self._use_api and self._client:
+        if self._use_api:
             return self._count_tokens_api(text)
         return self._estimate_tokens(text)
 
@@ -97,6 +96,10 @@ class GeminiTokenCounterAdapter(TokenCounterPort):
         Returns:
             The number of tokens according to the API.
         """
+        if self._client is None:
+            self._init_client()
+        if not self._use_api or self._client is None:
+            return self._estimate_tokens(text)
         try:
             result = self._client.models.count_tokens(
                 model=self._model_name,
