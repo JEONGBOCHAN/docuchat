@@ -57,32 +57,32 @@ def create_document_summary_generation_port() -> DocumentSummaryGenerationPort:
 # ============================================================
 
 def create_channel_repository_port(db) -> ChannelRepositoryPort:
-    from src.infrastructure.persistence.adapters import ChannelRepositoryAdapter
+    from src.modules.workspace.infrastructure.persistence.repositories import ChannelRepositoryAdapter
     return ChannelRepositoryAdapter(db)
 
 
 def create_note_repository_port(db) -> NoteRepositoryPort:
-    from src.infrastructure.persistence.adapters import NoteRepositoryAdapter
+    from src.modules.workspace.infrastructure.persistence.repositories import NoteRepositoryAdapter
     return NoteRepositoryAdapter(db)
 
 
 def create_favorite_repository_port(db) -> FavoriteRepositoryPort:
-    from src.infrastructure.persistence.adapters import FavoriteRepositoryAdapter
+    from src.modules.workspace.infrastructure.persistence.repositories import FavoriteRepositoryAdapter
     return FavoriteRepositoryAdapter(db)
 
 
 def create_search_history_repository_port(db) -> SearchHistoryRepositoryPort:
-    from src.infrastructure.persistence.adapters import SearchHistoryRepositoryAdapter
+    from src.modules.workspace.infrastructure.persistence.repositories import SearchHistoryRepositoryAdapter
     return SearchHistoryRepositoryAdapter(db)
 
 
 def create_trash_repository_port(db) -> TrashRepositoryPort:
-    from src.infrastructure.persistence.adapters import TrashRepositoryAdapter
+    from src.modules.workspace.infrastructure.persistence.repositories import TrashRepositoryAdapter
     return TrashRepositoryAdapter(db)
 
 
 def create_document_preview_cache_repository_port(db) -> DocumentPreviewCacheRepositoryPort:
-    from src.infrastructure.persistence.adapters import DocumentPreviewCacheRepositoryAdapter
+    from src.modules.workspace.infrastructure.persistence.repositories import DocumentPreviewCacheRepositoryAdapter
     return DocumentPreviewCacheRepositoryAdapter(db)
 
 
@@ -190,7 +190,7 @@ def create_export_service(db):
 
 def create_preview_service(db):
     from src.modules.workspace.application.services.preview_service import PreviewService
-    from src.infrastructure.persistence.adapters import DocumentPreviewCacheRepositoryAdapter
+    from src.modules.workspace.infrastructure.persistence.repositories import DocumentPreviewCacheRepositoryAdapter
     from src.infrastructure.external.gemini.document_search import GeminiDocumentSearchAdapter
     return PreviewService(
         preview_cache_repo=DocumentPreviewCacheRepositoryAdapter(db),
