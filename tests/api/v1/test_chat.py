@@ -1273,7 +1273,7 @@ class TestCheckpointMissFallback:
     def test_checkpoint_miss_invokes_history_loader(self):
         """When checkpointer has no state, the lazy history loader is called."""
         from langgraph.checkpoint.memory import MemorySaver
-        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
         from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
@@ -1319,7 +1319,7 @@ class TestCheckpointMissFallback:
     def test_checkpoint_hit_skips_history_loader(self):
         """When checkpoint exists, the lazy history loader is NOT called."""
         from langgraph.checkpoint.memory import MemorySaver
-        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
         from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
@@ -1380,7 +1380,7 @@ class TestCheckpointMissFallbackStream:
     def test_stream_checkpoint_miss_invokes_history_loader(self):
         """run_stream(): when checkpointer has no state, the lazy history loader is called."""
         from langgraph.checkpoint.memory import MemorySaver
-        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
         from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
@@ -1431,7 +1431,7 @@ class TestCheckpointMissFallbackStream:
     def test_stream_checkpoint_hit_skips_history_loader(self):
         """run_stream(): when checkpoint exists, the lazy history loader is NOT called."""
         from langgraph.checkpoint.memory import MemorySaver
-        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
         from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
@@ -1577,7 +1577,7 @@ class TestSqliteSaverIntegration:
         """LangGraphAgentRunner correctly detects miss/hit with real SqliteSaver."""
         import sqlite3
         from langgraph.checkpoint.sqlite import SqliteSaver
-        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
         from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         db_path = str(tmp_path / "runner_checkpoints.db")

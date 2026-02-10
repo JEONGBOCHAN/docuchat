@@ -8,7 +8,7 @@ from src.infrastructure.scheduler.scheduler import (
     SchedulerService,
     get_scheduler,
 )
-from src.infrastructure.scheduler.scheduler_jobs import (
+from src.modules.ops.infrastructure.scheduler.scheduler_jobs import (
     scan_inactive_channels,
     cleanup_inactive_channels,
     update_channel_statistics,

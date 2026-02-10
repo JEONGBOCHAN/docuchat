@@ -14,7 +14,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
-from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
 from src.agents.middlewares.dashboard import (
     DashboardMiddleware,
     AgentStatus,

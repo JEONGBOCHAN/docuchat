@@ -65,7 +65,7 @@ class TestLangGraphAPICompatibility:
 
     def test_langgraph_runner_creates_without_error(self):
         """Test that LangGraphAgentRunner doesn't raise state_modifier error."""
-        from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+        from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
         from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         runner = LangGraphAgentRunner(
@@ -74,8 +74,8 @@ class TestLangGraphAPICompatibility:
         )
 
         # Patch only the LLM to avoid API calls
-        with patch("src.infrastructure.agent.langgraph_runner.ChatGoogleGenerativeAI") as mock_llm_class, \
-             patch("src.infrastructure.agent.langgraph_runner.get_settings") as mock_settings:
+        with patch("src.modules.conversation.infrastructure.agent.langgraph_runner.ChatGoogleGenerativeAI") as mock_llm_class, \
+             patch("src.modules.conversation.infrastructure.agent.langgraph_runner.get_settings") as mock_settings:
 
             mock_settings.return_value = Mock(google_api_key="fake-key")
             mock_llm = Mock()

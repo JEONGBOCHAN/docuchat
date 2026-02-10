@@ -8,7 +8,7 @@ for conversation context assembly in the runner.
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
+from src.modules.conversation.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
 from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
 

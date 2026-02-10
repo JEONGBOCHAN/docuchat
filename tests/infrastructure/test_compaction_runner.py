@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from src.infrastructure.compaction.runner import CompactionRunner
+from src.modules.conversation.infrastructure.compaction.runner import CompactionRunner
 
 
 @pytest.fixture
