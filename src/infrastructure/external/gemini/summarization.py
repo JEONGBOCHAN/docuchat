@@ -30,11 +30,13 @@ class GeminiSummarizationAdapter(SummarizationPort):
             client: Optional Gemini client instance.
                    Creates one if not provided.
         """
-        if client:
-            self._client = client
-        else:
+        self._client = client
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
             settings = get_settings()
             self._client = genai.Client(api_key=settings.google_api_key)
+        return self._client
 
     def summarize_channel(
         self,
@@ -70,7 +72,7 @@ Be thorough but concise. Use the document content to provide accurate informatio
 Focus on the main topic and the most important points. Be clear and informative."""
 
         try:
-            response = self._client.models.generate_content(
+            response = self._get_client().models.generate_content(
                 model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
@@ -125,7 +127,7 @@ Focus only on the content from this specific document."""
 Focus on the main topic and the most important points from this specific document."""
 
         try:
-            response = self._client.models.generate_content(
+            response = self._get_client().models.generate_content(
                 model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(

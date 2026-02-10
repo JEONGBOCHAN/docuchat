@@ -37,11 +37,13 @@ class GeminiCitationAdapter(CitationSearchPort):
             client: Optional Gemini client instance.
                    Creates one if not provided.
         """
-        if client:
-            self._client = client
-        else:
+        self._client = client
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
             settings = get_settings()
             self._client = genai.Client(api_key=settings.google_api_key)
+        return self._client
 
     def _extract_detailed_sources(
         self,
@@ -190,7 +192,7 @@ class GeminiCitationAdapter(CitationSearchPort):
             CitationResultDTO with response and citations
         """
         try:
-            response = self._client.models.generate_content(
+            response = self._get_client().models.generate_content(
                 model=model,
                 contents=query,
                 config=types.GenerateContentConfig(
@@ -253,7 +255,7 @@ class GeminiCitationAdapter(CitationSearchPort):
             Event dicts with 'type' (content, citations, done, error)
         """
         try:
-            response_stream = self._client.models.generate_content_stream(
+            response_stream = self._get_client().models.generate_content_stream(
                 model=model,
                 contents=query,
                 config=types.GenerateContentConfig(

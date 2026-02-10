@@ -31,11 +31,13 @@ class GeminiDocumentSearchAdapter(DocumentSearchPort):
         Args:
             client: Optional Gemini client. Creates one if not provided.
         """
-        if client:
-            self._client = client
-        else:
+        self._client = client
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
             settings = get_settings()
             self._client = genai.Client(api_key=settings.google_api_key)
+        return self._client
 
     def search(
         self,
@@ -61,7 +63,7 @@ class GeminiDocumentSearchAdapter(DocumentSearchPort):
             # Use Gemini's grounded generation with file_search
             search_prompt = f"Find information about: {query}\n\nReturn the relevant content from the documents."
 
-            response = self._client.models.generate_content(
+            response = self._get_client().models.generate_content(
                 model=model,
                 contents=search_prompt,
                 config=types.GenerateContentConfig(
@@ -170,7 +172,7 @@ class GeminiDocumentSearchAdapter(DocumentSearchPort):
             contents = self._build_conversation_contents(query, conversation_history)
 
             # Use Gemini client for grounded generation
-            response = self._client.models.generate_content(
+            response = self._get_client().models.generate_content(
                 model=model,
                 contents=contents,
                 config=types.GenerateContentConfig(

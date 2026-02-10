@@ -37,10 +37,12 @@ class GeminiDocumentAdapter(DocumentPort):
         """
         settings = get_settings()
         self._api_key = settings.google_api_key
-        if client:
-            self._client = client
-        else:
+        self._client = client
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
             self._client = genai.Client(api_key=self._api_key)
+        return self._client
 
     def upload_document(
         self,
@@ -65,7 +67,7 @@ class GeminiDocumentAdapter(DocumentPort):
         if display_name:
             config["display_name"] = display_name
 
-        operation = self._client.file_search_stores.upload_to_file_search_store(
+        operation = self._get_client().file_search_stores.upload_to_file_search_store(
             file=file_path,
             file_search_store_name=channel_id,
             config=config if config else None,
@@ -138,7 +140,7 @@ class GeminiDocumentAdapter(DocumentPort):
         documents = []
         try:
             doc_list = list(
-                self._client.file_search_stores.documents.list(parent=channel_id)
+                self._get_client().file_search_stores.documents.list(parent=channel_id)
             )
             for doc in doc_list:
                 # Get state as string

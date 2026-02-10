@@ -39,10 +39,12 @@ class GeminiChannelAdapter(ChannelPort):
         """
         settings = get_settings()
         self._api_key = settings.google_api_key
-        if client:
-            self._client = client
-        else:
+        self._client = client
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
             self._client = genai.Client(api_key=self._api_key)
+        return self._client
 
     def create_channel(self, display_name: str) -> ChannelDTO:
         """Create a new channel (File Search Store).
@@ -56,7 +58,7 @@ class GeminiChannelAdapter(ChannelPort):
         Raises:
             Exception: If channel creation fails.
         """
-        store = self._client.file_search_stores.create(
+        store = self._get_client().file_search_stores.create(
             config={"display_name": display_name}
         )
         return ChannelDTO(
@@ -77,7 +79,7 @@ class GeminiChannelAdapter(ChannelPort):
             UpstreamError: If the external API fails for reasons other than 404.
         """
         try:
-            store = self._client.file_search_stores.get(name=channel_id)
+            store = self._get_client().file_search_stores.get(name=channel_id)
             return ChannelDTO(
                 name=store.name,
                 display_name=getattr(store, "display_name", ""),
@@ -108,7 +110,7 @@ class GeminiChannelAdapter(ChannelPort):
             List of ChannelDTO objects.
         """
         channels = []
-        for store in self._client.file_search_stores.list():
+        for store in self._get_client().file_search_stores.list():
             channels.append(
                 ChannelDTO(
                     name=store.name,

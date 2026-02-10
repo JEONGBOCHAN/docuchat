@@ -32,11 +32,13 @@ class GeminiTimelineAdapter(TimelinePort):
             client: Optional Gemini client instance.
                    Creates one if not provided.
         """
-        if client:
-            self._client = client
-        else:
+        self._client = client
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
             settings = get_settings()
             self._client = genai.Client(api_key=settings.google_api_key)
+        return self._client
 
     def generate_timeline(
         self,
@@ -77,7 +79,7 @@ Example format:
 Return ONLY the JSON array, no other text. If no timeline events can be extracted, return an empty array []."""
 
         try:
-            response = self._client.models.generate_content(
+            response = self._get_client().models.generate_content(
                 model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(

@@ -49,11 +49,13 @@ class GeminiConversationSummaryAdapter(ConversationSummaryPort):
     """ConversationSummaryPort implementation using Google Gemini."""
 
     def __init__(self, client: genai.Client | None = None):
-        if client:
-            self._client = client
-        else:
+        self._client = client
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
             settings = get_settings()
             self._client = genai.Client(api_key=settings.google_api_key)
+        return self._client
 
     def summarize_incremental(
         self,
@@ -87,7 +89,7 @@ class GeminiConversationSummaryAdapter(ConversationSummaryPort):
             )
 
         try:
-            response = self._client.models.generate_content(
+            response = self._get_client().models.generate_content(
                 model=GeminiModels.FAST,
                 contents=[user_prompt],
                 config=types.GenerateContentConfig(
