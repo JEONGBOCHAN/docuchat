@@ -17,7 +17,7 @@ from src.infrastructure.persistence.db_models import ChannelMetadata
 
 def _make_use_case(test_db, channel_port=None, document_port=None, cache=None):
     """Create a ChannelCrudUseCase with mocked external ports and real DB repos."""
-    from src.infrastructure.di.container import (
+    from src.modules.workspace.public import (
         create_channel_repository_port,
         create_favorite_repository_port,
     )

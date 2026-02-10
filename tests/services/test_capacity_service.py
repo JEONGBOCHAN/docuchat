@@ -9,7 +9,7 @@ from src.application.services.capacity_service import (
     CapacityUsage,
 )
 from src.infrastructure.persistence.channel_repository import ChannelRepository
-from src.infrastructure.di.container import create_capacity_service
+from src.modules.workspace.public import create_capacity_service
 
 
 class TestCapacityService:

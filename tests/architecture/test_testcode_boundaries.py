@@ -47,15 +47,7 @@ FORBIDDEN_PREFIXES = [
     "src.infrastructure.di.container",
 ]
 
-# Legacy exceptions: these files still use container imports and will be
-# migrated in a later phase (Phase C). New files must NOT be added here.
-LEGACY_EXCEPTIONS: set[str] = {
-    "tests/api/v1/test_channels.py",
-    "tests/api/v1/test_export.py",
-    "tests/api/v1/test_favorites.py",
-    "tests/api/v1/test_notes.py",
-    "tests/api/v1/test_trash.py",
-}
+LEGACY_EXCEPTIONS: set[str] = set()
 
 
 class TestApiTestImportBoundaries:

@@ -18,7 +18,7 @@ from src.infrastructure.persistence.db_models import ChannelMetadata, NoteDB, Ch
 def _make_note_use_case(test_db, channel_port=None):
     """Create NoteCrudUseCase with real DB repos and optional mock channel port."""
     from src.application.use_cases.note_crud import NoteCrudUseCase
-    from src.infrastructure.di.container import (
+    from src.modules.workspace.public import (
         create_channel_repository_port,
         create_note_repository_port,
         create_trash_repository_port,
@@ -409,7 +409,7 @@ class TestExportService:
 
     def test_sources_from_list_empty(self, test_db):
         """Test converting empty sources list."""
-        from src.infrastructure.di.container import create_export_service
+        from src.modules.workspace.public import create_export_service
 
         service = create_export_service(test_db)
         sources = service._sources_from_list([])
@@ -417,7 +417,7 @@ class TestExportService:
 
     def test_sources_from_list_valid(self, test_db):
         """Test converting valid sources list."""
-        from src.infrastructure.di.container import create_export_service
+        from src.modules.workspace.public import create_export_service
 
         service = create_export_service(test_db)
         sources_list = [{"source": "test.pdf", "content": "Test content", "page": 1}]
@@ -429,7 +429,7 @@ class TestExportService:
 
     def test_sources_from_list_invalid(self, test_db):
         """Test converting invalid sources list returns empty list."""
-        from src.infrastructure.di.container import create_export_service
+        from src.modules.workspace.public import create_export_service
 
         service = create_export_service(test_db)
         # Invalid source with missing required field - should gracefully handle

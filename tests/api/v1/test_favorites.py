@@ -14,7 +14,7 @@ from src.infrastructure.persistence.db_models import NoteDB
 def _make_use_case(test_db, channel_port=None):
     """Create a FavoriteCrudUseCase with real DB repos and mocked external port."""
     from src.application.use_cases.favorite_crud import FavoriteCrudUseCase
-    from src.infrastructure.di.container import (
+    from src.modules.workspace.public import (
         create_favorite_repository_port,
         create_note_repository_port,
     )
@@ -534,7 +534,7 @@ class TestChannelListWithFavorites:
         """Test that channel list includes is_favorited field."""
         from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
         from src.application.use_cases.channel_crud import ChannelCrudUseCase
-        from src.infrastructure.di.container import (
+        from src.modules.workspace.public import (
             create_channel_repository_port,
             create_favorite_repository_port,
         )
@@ -589,7 +589,7 @@ class TestChannelListWithFavorites:
         """Test that get channel includes is_favorited field."""
         from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
         from src.application.use_cases.channel_crud import ChannelCrudUseCase
-        from src.infrastructure.di.container import (
+        from src.modules.workspace.public import (
             create_channel_repository_port,
             create_favorite_repository_port,
         )

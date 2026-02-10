@@ -13,7 +13,7 @@ from src.application.ports.channel import ChannelDTO
 def _make_use_case(test_db, channel_port=None):
     """Create a NoteCrudUseCase with real DB repos and mocked external port."""
     from src.application.use_cases.note_crud import NoteCrudUseCase
-    from src.infrastructure.di.container import (
+    from src.modules.workspace.public import (
         create_channel_repository_port,
         create_note_repository_port,
         create_trash_repository_port,

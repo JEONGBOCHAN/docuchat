@@ -122,7 +122,7 @@ async def validate_channel(channel_id: str) -> dict[str, Any]:
     Returns:
         Dictionary with validation result.
     """
-    from src.infrastructure.di import create_channel_port
+    from src.modules.workspace.public import create_channel_port
 
     try:
         channel_port = create_channel_port()
@@ -154,7 +154,7 @@ async def list_channels() -> dict[str, Any]:
     Returns:
         Dictionary with list of channels.
     """
-    from src.infrastructure.di import create_channel_port
+    from src.modules.workspace.public import create_channel_port
 
     try:
         channel_port = create_channel_port()

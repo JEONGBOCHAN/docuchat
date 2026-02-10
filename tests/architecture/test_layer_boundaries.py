@@ -162,7 +162,7 @@ class TestApplicationLayerBoundaries:
 
 # API must not reach directly into infrastructure, except via DI container.
 API_FORBIDDEN = ["src.infrastructure"]
-API_ALLOWED = ["src.infrastructure.di.container"]
+API_ALLOWED: list[str] = []
 API_EXCEPTIONS: set[str] = set()
 
 

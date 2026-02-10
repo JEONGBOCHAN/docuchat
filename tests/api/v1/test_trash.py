@@ -435,7 +435,7 @@ class TestSoftDeleteIntegration:
         mock_document_port = MagicMock()
         mock_document_port.list_documents.return_value = []
 
-        from src.infrastructure.di.container import (
+        from src.modules.workspace.public import (
             create_channel_repository_port,
             create_favorite_repository_port,
         )
@@ -473,7 +473,7 @@ class TestSoftDeleteIntegration:
     def test_deleted_note_not_in_list(self, client_with_db: TestClient, test_db):
         """Test that soft-deleted notes are not shown in note list."""
         from src.application.use_cases.note_crud import NoteCrudUseCase
-        from src.infrastructure.di.container import (
+        from src.modules.workspace.public import (
             create_channel_repository_port,
             create_note_repository_port,
             create_trash_repository_port,
