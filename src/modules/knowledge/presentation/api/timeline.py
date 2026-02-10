@@ -14,7 +14,7 @@ from src.models.timeline import (
     GenerateTimelineRequest,
     GenerateBriefingRequest,
 )
-from src.api.v1.deps import ValidatedChannel, validate_channel_with_touch
+from src.shared.kernel.presentation.dependencies.channel_validation import ValidatedChannel, validate_channel_with_touch
 from src.modules.knowledge.public import (
     create_generate_timeline_use_case,
     create_generate_briefing_use_case,

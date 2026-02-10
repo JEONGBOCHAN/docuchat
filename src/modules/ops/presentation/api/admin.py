@@ -18,7 +18,7 @@ from src.modules.ops.public import (
     create_admin_stats_service,
     create_api_metrics_port,
 )
-from src.api.deps import require_admin_key
+from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

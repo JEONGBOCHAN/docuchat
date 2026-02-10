@@ -15,7 +15,7 @@ from src.modules.workspace.public import (
     create_trash_repository_port,
 )
 from src.core.rate_limiter import limiter, RateLimits
-from src.api.deps import require_admin_key
+from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
 
 router = APIRouter(prefix="/trash", tags=["trash"])
 

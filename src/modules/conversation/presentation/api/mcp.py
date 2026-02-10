@@ -19,7 +19,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from src.core.rate_limiter import limiter, RateLimits
 from src.mcp_server.server import mcp_server
 from src.mcp_server.state import get_global_state_store
-from src.api.deps import require_admin_key
+from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
 
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])

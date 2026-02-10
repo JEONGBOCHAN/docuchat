@@ -16,7 +16,7 @@ import json
 from src.mcp_server.state import get_global_state_store
 from src.core.config import GeminiModels
 from src.core.rate_limiter import limiter, RateLimits
-from src.api.deps import require_admin_key
+from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
