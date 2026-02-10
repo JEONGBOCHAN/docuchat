@@ -111,6 +111,51 @@ class TestChatSessionMemoryRepository:
         repo = ChatSessionMemoryRepository(test_db)
         assert repo.get_by_session_id("sess_doesnt_exist") is None
 
+    def test_clear_by_channel_uses_subquery(self, test_db, channel, session):
+        """clear_by_channel should delete memories for all sessions in a channel."""
+        repo = ChatSessionMemoryRepository(test_db)
+
+        # Create a second session in the same channel
+        sess2 = ChatSessionDB(
+            session_id="sess_other456",
+            channel_id=channel.id,
+            context_window=100,
+        )
+        test_db.add(sess2)
+        test_db.commit()
+        test_db.refresh(sess2)
+
+        # Create memories for both sessions
+        repo.upsert(session_id="sess_test123", rolling_summary="summary 1")
+        repo.upsert(session_id="sess_other456", rolling_summary="summary 2")
+
+        # Create a session in a DIFFERENT channel (should not be deleted)
+        ch2 = ChannelMetadata(gemini_store_id="other-store", name="Other")
+        test_db.add(ch2)
+        test_db.commit()
+        test_db.refresh(ch2)
+        sess3 = ChatSessionDB(
+            session_id="sess_different789",
+            channel_id=ch2.id,
+            context_window=100,
+        )
+        test_db.add(sess3)
+        test_db.commit()
+        test_db.refresh(sess3)
+        repo.upsert(session_id="sess_different789", rolling_summary="keep this")
+
+        # Delete memories for the original channel
+        deleted = repo.clear_by_channel(channel.id)
+        assert deleted == 2
+
+        # Verify the other channel's memory is untouched
+        assert repo.get_by_session_id("sess_different789") is not None
+
+    def test_clear_by_channel_empty_returns_zero(self, test_db, channel):
+        """clear_by_channel should return 0 when no memories exist."""
+        repo = ChatSessionMemoryRepository(test_db)
+        assert repo.clear_by_channel(channel.id) == 0
+
 
 class TestChatSessionMemoryAdapter:
     """Tests for the adapter (DTO conversion)."""
