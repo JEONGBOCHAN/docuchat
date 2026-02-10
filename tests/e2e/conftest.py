@@ -54,6 +54,8 @@ def e2e_db():
     )
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+    from src.core.database import register_orm_models
+    register_orm_models()
     Base.metadata.create_all(bind=engine)
 
     db = TestingSessionLocal()

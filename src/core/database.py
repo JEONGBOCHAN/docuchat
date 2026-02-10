@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Database configuration and session management."""
 
+import importlib
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -67,6 +68,22 @@ def get_db():
         db.close()
 
 
+_ORM_MODEL_MODULES: tuple[str, ...] = (
+    "src.modules.workspace.infrastructure.persistence.models",
+    "src.infrastructure.persistence.db_models",
+)
+
+
+def register_orm_models() -> None:
+    """Register all SQLAlchemy model modules before metadata operations.
+
+    Safe to call multiple times (import is idempotent).
+    """
+    for module_path in _ORM_MODEL_MODULES:
+        importlib.import_module(module_path)
+
+
 def init_db():
     """Initialize database tables."""
+    register_orm_models()
     Base.metadata.create_all(bind=engine)
