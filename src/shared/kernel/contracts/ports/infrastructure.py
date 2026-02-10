@@ -246,3 +246,30 @@ class SchedulerPort(ABC):
             ValueError: If job not found
         """
         ...
+
+
+class AudioJobDispatcherPort(ABC):
+    """Port for dispatching audio generation jobs to a background executor.
+
+    Abstracts the threading/executor mechanism so that presentation
+    code does not depend on runtime infrastructure directly.
+    """
+
+    @abstractmethod
+    def submit(self, fn: Callable, *args) -> None:
+        """Submit a job for background execution.
+
+        Args:
+            fn: The callable to execute.
+            *args: Positional arguments passed to *fn*.
+        """
+        ...
+
+    @abstractmethod
+    def shutdown(self, wait: bool = False) -> None:
+        """Shut down the background executor.
+
+        Args:
+            wait: Whether to wait for running jobs to complete.
+        """
+        ...

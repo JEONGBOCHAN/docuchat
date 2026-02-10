@@ -32,20 +32,17 @@ from src.modules.knowledge.application.use_cases.audio_generation import (
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.modules.knowledge.application.use_cases.podcast import GeneratePodcastScriptRequest
+from src.shared.kernel.contracts.ports.infrastructure import AudioJobDispatcherPort
 from src.modules.knowledge.public import (
     create_generate_podcast_script_use_case,
     create_generate_audio_use_case,
     create_audio_repository_port,
     create_tts_port,
+    create_audio_job_dispatcher,
 )
 from src.modules.workspace.public import (
     create_channel_port,
     create_channel_repository_port,
-)
-
-from src.modules.knowledge.infrastructure.runtime.audio_executor import (
-    get_audio_executor as _get_audio_executor,
-    shutdown_audio_executor,
 )
 
 router = APIRouter(prefix="/channels", tags=["audio"])
@@ -69,6 +66,11 @@ def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPor
 def get_tts_port() -> TTSPort:
     """Get TTS port instance."""
     return create_tts_port()
+
+
+def get_audio_job_dispatcher() -> AudioJobDispatcherPort:
+    """Get audio job dispatcher port instance."""
+    return create_audio_job_dispatcher()
 
 
 def _audio_dto_to_response(audio_dto, channel_id: str) -> AudioOverviewResponse:
@@ -153,6 +155,7 @@ def generate_audio_overview(
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     audio_repo: Annotated[AudioRepositoryPort, Depends(get_audio_repo_port)],
     channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
+    dispatcher: Annotated[AudioJobDispatcherPort, Depends(get_audio_job_dispatcher)],
 ) -> AudioOverviewResponse:
     """Start audio overview generation for a channel.
 
@@ -198,7 +201,7 @@ def generate_audio_overview(
         host_a_voice=body.host_a_voice.value,
         host_b_voice=body.host_b_voice.value,
     )
-    _get_audio_executor().submit(_run_audio_generation_in_background, gen_request)
+    dispatcher.submit(_run_audio_generation_in_background, gen_request)
 
     return _audio_dto_to_response(audio_dto, channel_id)
 

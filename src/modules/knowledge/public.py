@@ -17,6 +17,7 @@ from src.modules.knowledge.infrastructure.di import (  # noqa: F401
     create_podcast_script,
     create_tts_port,
     create_audio_repository_port,
+    create_audio_job_dispatcher,
     # Use case factories
     create_search_with_citations_use_case,
     create_generate_faq_use_case,
@@ -45,6 +46,7 @@ __all__ = [
     "create_podcast_script",
     "create_tts_port",
     "create_audio_repository_port",
+    "create_audio_job_dispatcher",
     "create_search_with_citations_use_case",
     "create_generate_faq_use_case",
     "create_summarize_channel_use_case",

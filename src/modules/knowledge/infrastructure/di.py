@@ -13,6 +13,7 @@ from src.shared.kernel.contracts.ports import (
     TTSPort,
 )
 from src.shared.kernel.contracts.ports.citation_search import CitationSearchPort
+from src.shared.kernel.contracts.ports.infrastructure import AudioJobDispatcherPort
 from src.modules.knowledge.application.use_cases.search_with_citations import SearchWithCitationsUseCase
 from src.modules.knowledge.application.use_cases.generate_faq import GenerateFAQUseCase
 from src.modules.knowledge.application.use_cases.summarize import (
@@ -77,6 +78,11 @@ def create_podcast_script() -> PodcastScriptPort:
 def create_tts_port() -> TTSPort:
     from src.infrastructure.external.adapters import TTSAdapter
     return TTSAdapter()
+
+
+def create_audio_job_dispatcher() -> AudioJobDispatcherPort:
+    from src.modules.knowledge.infrastructure.runtime.audio_job_dispatcher import ThreadPoolAudioJobDispatcher
+    return ThreadPoolAudioJobDispatcher()
 
 
 def create_audio_repository_port(db) -> AudioRepositoryPort:

@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.modules.knowledge.presentation.api.audio import get_channel_port
+from src.modules.knowledge.presentation.api.audio import get_channel_port, get_audio_job_dispatcher
 from src.shared.kernel.contracts.ports.channel import ChannelDTO
 from src.modules.knowledge.presentation.schemas.audio import AudioStatus, VoiceType
 from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata, AudioOverviewDB
@@ -32,38 +32,37 @@ class TestGenerateAudioOverview:
             display_name="Test Channel",
         )
 
+        mock_dispatcher = MagicMock()
         app.dependency_overrides[get_channel_port] = lambda: mock_port
+        app.dependency_overrides[get_audio_job_dispatcher] = lambda: mock_dispatcher
 
-        with patch("src.modules.knowledge.presentation.api.audio._get_audio_executor") as mock_get_exec:
-            mock_executor = MagicMock()
-            mock_get_exec.return_value = mock_executor
+        response = client_with_db.post(
+            "/api/v1/channels/fileSearchStores/test-store/audio",
+            json={
+                "duration_minutes": 5,
+                "style": "conversational",
+                "language": "ko",
+            },
+        )
 
-            response = client_with_db.post(
-                "/api/v1/channels/fileSearchStores/test-store/audio",
-                json={
-                    "duration_minutes": 5,
-                    "style": "conversational",
-                    "language": "ko",
-                },
-            )
+        assert response.status_code == 202
+        data = response.json()
+        assert data["channel_id"] == "fileSearchStores/test-store"
+        assert data["status"] == "pending"
+        assert "id" in data
+        assert data["title"] is None
+        assert data["audio_url"] is None
 
-            assert response.status_code == 202
-            data = response.json()
-            assert data["channel_id"] == "fileSearchStores/test-store"
-            assert data["status"] == "pending"
-            assert "id" in data
-            assert data["title"] is None
-            assert data["audio_url"] is None
-
-            # Verify executor.submit was called with the background function
-            mock_executor.submit.assert_called_once()
-            fn, req = mock_executor.submit.call_args[0]
-            assert fn.__name__ == "_run_audio_generation_in_background"
-            assert req.duration_minutes == 5
-            assert req.style == "conversational"
-            assert req.language == "ko"
+        # Verify dispatcher.submit was called with the background function
+        mock_dispatcher.submit.assert_called_once()
+        fn, req = mock_dispatcher.submit.call_args[0]
+        assert fn.__name__ == "_run_audio_generation_in_background"
+        assert req.duration_minutes == 5
+        assert req.style == "conversational"
+        assert req.language == "ko"
 
         app.dependency_overrides.pop(get_channel_port, None)
+        app.dependency_overrides.pop(get_audio_job_dispatcher, None)
 
     def test_generate_audio_overview_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test audio generation for non-existent channel."""
