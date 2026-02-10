@@ -34,7 +34,7 @@ class TestGenerateAudioOverview:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_port
 
-        with patch("src.api.v1.audio._get_audio_executor") as mock_get_exec:
+        with patch("src.modules.knowledge.presentation.api.audio._get_audio_executor") as mock_get_exec:
             mock_executor = MagicMock()
             mock_get_exec.return_value = mock_executor
 
@@ -263,7 +263,7 @@ class TestDeleteAudioOverview:
         test_db.add(audio)
         test_db.commit()
 
-        with patch("src.api.v1.audio.create_tts_port") as mock_tts:
+        with patch("src.modules.knowledge.presentation.api.audio.create_tts_port") as mock_tts:
             mock_tts.return_value.delete_audio.return_value = True
 
             response = client_with_db.delete(
@@ -329,7 +329,7 @@ class TestPreviewScript:
         )
 
         with patch(
-            "src.api.v1.audio.create_generate_podcast_script_use_case",
+            "src.modules.knowledge.presentation.api.audio.create_generate_podcast_script_use_case",
             return_value=mock_use_case,
         ):
             response = client_with_db.post(
@@ -383,7 +383,7 @@ class TestPreviewScript:
         mock_use_case.execute.side_effect = Exception("API Error")
 
         with patch(
-            "src.api.v1.audio.create_generate_podcast_script_use_case",
+            "src.modules.knowledge.presentation.api.audio.create_generate_podcast_script_use_case",
             return_value=mock_use_case,
         ):
             response = client_with_db.post(
@@ -445,7 +445,7 @@ class TestAudioExecutorShutdown:
 
     def test_shutdown_calls_executor_shutdown(self):
         """shutdown_audio_executor should invoke the executor's shutdown method."""
-        from src.api.v1 import audio as audio_module
+        from src.modules.knowledge.presentation.api import audio as audio_module
 
         # Force an executor to exist
         original = audio_module._audio_executor
@@ -462,7 +462,7 @@ class TestAudioExecutorShutdown:
 
     def test_shutdown_exception_does_not_propagate(self):
         """Even if executor.shutdown raises, the function should not propagate."""
-        from src.api.v1 import audio as audio_module
+        from src.modules.knowledge.presentation.api import audio as audio_module
 
         original = audio_module._audio_executor
         mock_executor = MagicMock()
@@ -479,7 +479,7 @@ class TestAudioExecutorShutdown:
 
     def test_shutdown_noop_when_none(self):
         """shutdown_audio_executor is safe to call when no executor exists."""
-        from src.api.v1 import audio as audio_module
+        from src.modules.knowledge.presentation.api import audio as audio_module
 
         original = audio_module._audio_executor
         audio_module._audio_executor = None
@@ -492,7 +492,7 @@ class TestAudioExecutorShutdown:
 
     def test_get_recreates_after_shutdown(self):
         """_get_audio_executor creates a fresh executor after shutdown."""
-        from src.api.v1 import audio as audio_module
+        from src.modules.knowledge.presentation.api import audio as audio_module
 
         original = audio_module._audio_executor
 

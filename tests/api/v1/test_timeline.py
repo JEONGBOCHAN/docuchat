@@ -44,7 +44,7 @@ class TestGenerateTimeline:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
                 json={"max_events": 10},
@@ -78,7 +78,7 @@ class TestGenerateTimeline:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
                 json={},
@@ -124,7 +124,7 @@ class TestGenerateTimeline:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
                 json={},
@@ -151,7 +151,7 @@ class TestGenerateTimeline:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        with patch("src.api.v1.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.timeline.create_generate_timeline_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-timeline",
                 json={"max_events": 50},
@@ -195,7 +195,7 @@ class TestGenerateBriefing:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
                 json={"style": "executive", "max_sections": 5},
@@ -232,7 +232,7 @@ class TestGenerateBriefing:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
                 json={"style": "detailed"},
@@ -303,7 +303,7 @@ class TestGenerateBriefing:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
                 json={},
@@ -333,7 +333,7 @@ class TestGenerateBriefing:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
 
-        with patch("src.api.v1.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.timeline.create_generate_briefing_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-briefing",
                 json={},

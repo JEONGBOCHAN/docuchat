@@ -38,7 +38,7 @@ class TestSummarizeChannel:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/summarize",
                 json={"summary_type": "short"},
@@ -78,7 +78,7 @@ class TestSummarizeChannel:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/summarize",
                 json={"summary_type": "detailed"},
@@ -119,7 +119,7 @@ class TestSummarizeChannel:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/summarize",
                 json={},
@@ -201,7 +201,7 @@ class TestSummarizeChannel:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/summarize",
                 json={},
@@ -268,7 +268,7 @@ class TestSummarizeDocument:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
-        with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.summarize.create_summarize_document_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
                 json={"summary_type": "short"},
@@ -309,7 +309,7 @@ class TestSummarizeDocument:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
-        with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.summarize.create_summarize_document_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
                 json={"summary_type": "detailed"},
@@ -397,7 +397,7 @@ class TestSummarizeDocument:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port] = lambda: mock_document_port
 
-        with patch("src.api.v1.summarize.create_summarize_document_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.summarize.create_summarize_document_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/documents/files/test-file-123/summarize",
                 json={},

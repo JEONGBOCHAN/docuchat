@@ -65,7 +65,7 @@ class TestGenerateStudyGuide:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-study-guide"
             )
@@ -147,7 +147,7 @@ class TestGenerateStudyGuide:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-study-guide",
                 json={
@@ -197,7 +197,7 @@ class TestGenerateStudyGuide:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-study-guide"
             )
@@ -306,7 +306,7 @@ class TestGenerateQuiz:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-quiz"
             )
@@ -385,7 +385,7 @@ class TestGenerateQuiz:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-quiz",
                 json={
@@ -433,7 +433,7 @@ class TestGenerateQuiz:
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
         app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
-        with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
+        with patch("src.modules.knowledge.presentation.api.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/generate-quiz"
             )
