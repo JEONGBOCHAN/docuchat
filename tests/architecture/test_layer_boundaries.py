@@ -190,20 +190,8 @@ class TestApiLayerBoundaries:
 # ──────────────────────────────────────────────────────────
 
 # Infrastructure must not import from API layer, web frameworks, or presentation models.
-# Allowed exceptions (with rationale):
-#   - src.models.db_models: infrastructure owns persistence layer
-#   - src.models.audio/trash/youtube: Pydantic models (DialogueLine, PodcastScript,
-#     TrashItem, YouTubeTranscript, etc.) used by infrastructure adapters to fulfill
-#     application port contracts. Shared enums (AudioStatus, VoiceType, TrashItemType)
-#     have been extracted to src.application.dto.enums — remaining Pydantic model
-#     dependencies are candidates for future DTO migration.
 INFRA_FORBIDDEN = ["src.api", "fastapi", "src.models"]
-INFRA_ALLOWED = [
-    "src.models.db_models",
-    "src.models.audio",
-    "src.models.trash",
-    "src.models.youtube",
-]
+INFRA_ALLOWED: list[str] = []
 INFRA_EXCEPTIONS: set[str] = set()
 
 

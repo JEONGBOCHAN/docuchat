@@ -10,8 +10,27 @@ from pathlib import Path
 
 import edge_tts
 
+from pydantic import BaseModel, Field
+
 from src.shared.kernel.contracts.dto.enums import VoiceType
-from src.models.audio import DialogueLine, PodcastScript
+
+
+class DialogueLine(BaseModel):
+    """A single line of dialogue in the podcast script."""
+
+    speaker: str = Field(description="Speaker name (Host A or Host B)")
+    text: str = Field(description="The dialogue text")
+    voice: VoiceType = Field(description="Voice type to use")
+
+
+class PodcastScript(BaseModel):
+    """Generated podcast script."""
+
+    title: str = Field(description="Podcast episode title")
+    introduction: str = Field(description="Brief introduction text")
+    dialogue: list[DialogueLine] = Field(description="List of dialogue lines")
+    conclusion: str = Field(description="Closing remarks")
+    estimated_duration_seconds: int = Field(description="Estimated audio duration")
 
 
 # Voice mapping for Edge TTS

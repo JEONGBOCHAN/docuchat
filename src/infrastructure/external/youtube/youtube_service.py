@@ -8,11 +8,52 @@ from functools import lru_cache
 
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 
-from src.models.youtube import (
-    YouTubeTranscript,
-    YouTubeTranscriptSegment,
-    YouTubeMetadata,
-)
+from pydantic import BaseModel, Field
+
+
+class YouTubeTranscriptSegment(BaseModel):
+    """A segment of YouTube transcript."""
+
+    text: str = Field(..., description="Transcript text")
+    start: float = Field(..., description="Start time in seconds")
+    duration: float = Field(..., description="Duration in seconds")
+
+
+class YouTubeTranscript(BaseModel):
+    """Complete YouTube transcript."""
+
+    video_id: str = Field(..., description="YouTube video ID")
+    language: str = Field(..., description="Transcript language code")
+    segments: list[YouTubeTranscriptSegment] = Field(
+        default_factory=list,
+        description="Transcript segments with timing",
+    )
+
+    @property
+    def full_text(self) -> str:
+        """Get full transcript text without timing."""
+        return " ".join(segment.text for segment in self.segments)
+
+    @property
+    def formatted_text(self) -> str:
+        """Get formatted transcript with timestamps."""
+        lines = []
+        for segment in self.segments:
+            minutes = int(segment.start // 60)
+            seconds = int(segment.start % 60)
+            timestamp = f"[{minutes:02d}:{seconds:02d}]"
+            lines.append(f"{timestamp} {segment.text}")
+        return "\n".join(lines)
+
+
+class YouTubeMetadata(BaseModel):
+    """YouTube video metadata."""
+
+    video_id: str = Field(..., description="YouTube video ID")
+    title: str = Field(default="", description="Video title")
+    channel_name: str = Field(default="", description="Channel name")
+    duration_seconds: int | None = Field(default=None, description="Video duration in seconds")
+    language: str = Field(default="", description="Transcript language")
 
 
 class YouTubeServiceError(Exception):

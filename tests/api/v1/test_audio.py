@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.modules.knowledge.presentation.api.audio import get_channel_port
 from src.application.ports.channel import ChannelDTO
-from src.models.audio import AudioStatus, VoiceType
+from src.modules.knowledge.presentation.schemas.audio import AudioStatus, VoiceType
 from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata, AudioOverviewDB
 
 

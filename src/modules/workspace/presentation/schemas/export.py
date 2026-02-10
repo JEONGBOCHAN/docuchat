@@ -1,3 +1,56 @@
 # -*- coding: utf-8 -*-
-"""Schema facade — re-exports from global src.models for module-local use."""
-from src.models.export import *  # noqa: F401,F403
+"""Export schemas."""
+
+from datetime import datetime
+from pydantic import BaseModel, Field
+
+from src.modules.workspace.presentation.schemas.chat import ChatMessage, GroundingSource
+from src.modules.workspace.presentation.schemas.note import NoteResponse
+from src.shared.kernel.contracts.ports.export import ExportFormat
+
+
+class NoteExportData(BaseModel):
+    """Export data for a single note."""
+
+    id: int
+    title: str
+    content: str
+    sources: list[GroundingSource] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatExportData(BaseModel):
+    """Export data for chat history."""
+
+    channel_id: str
+    messages: list[ChatMessage] = Field(default_factory=list)
+    exported_at: datetime
+
+
+class ChannelExportMetadata(BaseModel):
+    """Channel metadata for export."""
+
+    id: str
+    name: str
+    description: str | None = None
+    created_at: datetime
+    file_count: int
+    total_size_bytes: int
+
+
+class ChannelFullExport(BaseModel):
+    """Full channel export including notes and chat history."""
+
+    metadata: ChannelExportMetadata
+    notes: list[NoteExportData] = Field(default_factory=list)
+    chat_history: list[ChatMessage] = Field(default_factory=list)
+    exported_at: datetime
+
+
+class ExportResponse(BaseModel):
+    """Response for export request with file content."""
+
+    filename: str
+    content_type: str
+    data: str = Field(..., description="Base64 encoded content for binary, raw content for text")

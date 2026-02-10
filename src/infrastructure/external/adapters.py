@@ -101,7 +101,7 @@ class YouTubeAdapter(YouTubePort):
         include_timestamps: bool = True,
     ) -> str:
         """Save transcript to a temporary file."""
-        from src.models.youtube import YouTubeTranscript, YouTubeTranscriptSegment
+        from src.infrastructure.external.youtube.youtube_service import YouTubeTranscript, YouTubeTranscriptSegment
 
         # Convert DTO back to model for the service
         model_transcript = YouTubeTranscript(
@@ -194,7 +194,7 @@ class TTSAdapter(TTSPort):
         """Generate complete podcast audio from script."""
         import json
         from src.shared.kernel.contracts.dto.enums import VoiceType
-        from src.models.audio import PodcastScript, DialogueLine
+        from src.infrastructure.external.tts.tts_service import PodcastScript, DialogueLine
 
         # Parse script JSON
         script_data = json.loads(script_json)
