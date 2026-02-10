@@ -327,7 +327,7 @@ class TestShutdownHelper:
 
     def test_shutdown_noop_when_no_instance(self):
         """shutdown_compaction_runner should be safe to call without a runner instance."""
-        from src.infrastructure.di.container import (
+        from src.modules.conversation.infrastructure.di import (
             _get_compaction_runner,
             shutdown_compaction_runner,
         )
@@ -345,7 +345,7 @@ class TestShutdownHelper:
 
     def test_shutdown_calls_runner_shutdown(self):
         """shutdown_compaction_runner should call shutdown on the runner instance."""
-        from src.infrastructure.di.container import (
+        from src.modules.conversation.infrastructure.di import (
             _get_compaction_runner,
             shutdown_compaction_runner,
         )
@@ -364,7 +364,7 @@ class TestShutdownHelper:
 
     def test_shutdown_exception_does_not_propagate(self):
         """Even if runner.shutdown raises, shutdown_compaction_runner should not propagate."""
-        from src.infrastructure.di.container import (
+        from src.modules.conversation.infrastructure.di import (
             _get_compaction_runner,
             shutdown_compaction_runner,
         )
@@ -383,7 +383,7 @@ class TestShutdownHelper:
 
     def test_shutdown_removes_singleton_instance(self):
         """After shutdown, the singleton _instance must be removed."""
-        from src.infrastructure.di.container import (
+        from src.modules.conversation.infrastructure.di import (
             _get_compaction_runner,
             shutdown_compaction_runner,
         )
@@ -401,7 +401,7 @@ class TestShutdownHelper:
 
     def test_shutdown_allows_fresh_recreation(self):
         """After shutdown, _get_compaction_runner must return a new instance."""
-        from src.infrastructure.di.container import (
+        from src.modules.conversation.infrastructure.di import (
             _get_compaction_runner,
             shutdown_compaction_runner,
         )
@@ -426,7 +426,7 @@ class TestSingletonThreadSafety:
 
     def test_concurrent_access_returns_same_instance(self):
         """100 concurrent calls must all return the same CompactionRunner instance."""
-        from src.infrastructure.di.container import (
+        from src.modules.conversation.infrastructure.di import (
             _get_compaction_runner,
             shutdown_compaction_runner,
         )
@@ -457,7 +457,7 @@ class TestSingletonThreadSafety:
 
     def test_shutdown_during_creation_does_not_leak(self):
         """Shutdown under lock must not leave a stale instance."""
-        from src.infrastructure.di.container import (
+        from src.modules.conversation.infrastructure.di import (
             _get_compaction_runner,
             shutdown_compaction_runner,
         )

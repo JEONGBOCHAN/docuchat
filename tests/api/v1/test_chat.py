@@ -1576,10 +1576,10 @@ class TestSqliteSaverIntegration:
 
     def test_get_checkpointer_returns_sqlite_saver(self, tmp_path, monkeypatch):
         """get_checkpointer() returns SqliteSaver when properly configured."""
-        import src.infrastructure.di.container as container_module
+        import src.modules.conversation.infrastructure.di as conv_di
 
         # Reset singleton
-        container_module._checkpointer = None
+        conv_di._checkpointer = None
 
         # Patch settings to use tmp path
         monkeypatch.setenv("CHECKPOINT_DB_PATH", str(tmp_path / "cp.db"))
@@ -1590,36 +1590,31 @@ class TestSqliteSaverIntegration:
         get_settings.cache_clear()
 
         try:
-            cp = container_module.get_checkpointer()
+            cp = conv_di.get_checkpointer()
             assert type(cp).__name__ == "SqliteSaver"
         finally:
             # Cleanup
-            container_module._checkpointer = None
+            conv_di._checkpointer = None
             get_settings.cache_clear()
 
     def test_strict_checkpointer_raises_on_failure(self, tmp_path, monkeypatch):
         """When strict_checkpointer=True and SqliteSaver fails, RuntimeError is raised."""
-        import src.infrastructure.di.container as container_module
+        import src.modules.conversation.infrastructure.di as conv_di
 
         # Reset singleton
-        container_module._checkpointer = None
+        conv_di._checkpointer = None
 
         # Set strict mode and invalid path to force failure
         monkeypatch.setenv("STRICT_CHECKPOINTER", "true")
-        # Use an invalid db path that will cause SqliteSaver import to fail
-        monkeypatch.setattr(
-            "src.infrastructure.di.container.get_checkpointer.__module__",
-            "src.infrastructure.di.container",
-        )
 
         from src.core.config import get_settings
         get_settings.cache_clear()
 
         # Patch SqliteSaver import to simulate failure
-        original_get_checkpointer = container_module.get_checkpointer
+        original_get_checkpointer = conv_di.get_checkpointer
 
         def patched_get_checkpointer():
-            container_module._checkpointer = None
+            conv_di._checkpointer = None
             # Temporarily make SqliteSaver import fail
             import unittest.mock
             with unittest.mock.patch.dict("sys.modules", {"langgraph.checkpoint.sqlite": None}):
@@ -1629,5 +1624,5 @@ class TestSqliteSaverIntegration:
             with pytest.raises(RuntimeError, match="strict_checkpointer=True"):
                 patched_get_checkpointer()
         finally:
-            container_module._checkpointer = None
+            conv_di._checkpointer = None
             get_settings.cache_clear()
