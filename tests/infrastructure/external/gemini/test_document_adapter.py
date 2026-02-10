@@ -311,11 +311,12 @@ class TestGeminiDocumentAdapter:
         assert "force=true" not in call_url
 
     def test_adapter_creates_client_if_not_provided(self):
-        """Test that adapter creates Gemini client if not provided."""
+        """Test that adapter creates Gemini client via lazy-init."""
         with patch('src.infrastructure.external.gemini.document.get_settings') as mock_settings:
             mock_settings.return_value.google_api_key = "test-api-key"
             with patch('src.infrastructure.external.gemini.document.genai.Client') as mock_client_class:
                 adapter = GeminiDocumentAdapter()
+                adapter._get_client()
                 mock_client_class.assert_called_once_with(api_key="test-api-key")
 
 

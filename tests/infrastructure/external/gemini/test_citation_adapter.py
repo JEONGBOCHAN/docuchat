@@ -260,9 +260,10 @@ class TestGeminiCitationAdapterDTOConversion:
         assert dto.end_index is None
 
     def test_adapter_creates_client_if_not_provided(self):
-        """Test that adapter creates Gemini client if not provided."""
+        """Test that adapter creates Gemini client via lazy-init."""
         with patch('src.infrastructure.external.gemini.citation.get_settings') as mock_settings:
             mock_settings.return_value.google_api_key = "test-api-key"
             with patch('src.infrastructure.external.gemini.citation.genai.Client') as mock_client_class:
                 adapter = GeminiCitationAdapter()
+                adapter._get_client()
                 mock_client_class.assert_called_once_with(api_key="test-api-key")
