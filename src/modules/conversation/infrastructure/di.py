@@ -171,19 +171,19 @@ def create_conversation_summary_port():
 # ============================================================
 
 def create_chat_history_repository_port(db) -> ChatHistoryRepositoryPort:
-    from src.infrastructure.persistence.adapters import ChatHistoryRepositoryAdapter
+    from src.modules.conversation.infrastructure.persistence.repositories import ChatHistoryRepositoryAdapter
     return ChatHistoryRepositoryAdapter(db)
 
 
 def create_chat_session_repository_port(db) -> ChatSessionRepositoryPort:
     from src.core.config import get_settings
-    from src.infrastructure.persistence.adapters import ChatSessionRepositoryAdapter
+    from src.modules.conversation.infrastructure.persistence.repositories import ChatSessionRepositoryAdapter
     settings = get_settings()
     return ChatSessionRepositoryAdapter(db, session_timeout_hours=settings.session_timeout_hours)
 
 
 def create_session_memory_repository_port(db):
-    from src.infrastructure.persistence.adapters import ChatSessionMemoryRepositoryAdapter
+    from src.modules.conversation.infrastructure.persistence.repositories import ChatSessionMemoryRepositoryAdapter
     return ChatSessionMemoryRepositoryAdapter(db)
 
 
