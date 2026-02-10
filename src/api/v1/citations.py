@@ -2,6 +2,7 @@
 """Citation API endpoints for inline citations and source navigation."""
 
 import json
+from collections.abc import Callable
 from datetime import datetime, UTC
 from typing import Annotated, Generator
 
@@ -74,9 +75,9 @@ def _convert_to_citation(source: dict, idx: int) -> Citation:
     )
 
 
-def get_citations_use_case() -> SearchWithCitationsUseCase:
-    """Dependency provider for SearchWithCitationsUseCase."""
-    return create_search_with_citations_use_case()
+def get_citations_use_case_factory() -> Callable[[], SearchWithCitationsUseCase]:
+    """Dependency provider for SearchWithCitationsUseCase factory."""
+    return create_search_with_citations_use_case
 
 
 @router.post(
@@ -91,7 +92,10 @@ def query_with_citations(
     body: CitationRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    use_case: Annotated[SearchWithCitationsUseCase, Depends(get_citations_use_case)],
+    use_case_factory: Annotated[
+        Callable[[], SearchWithCitationsUseCase],
+        Depends(get_citations_use_case_factory),
+    ],
 ) -> CitedResponse:
     """Send a question and get an AI-generated answer with inline citations.
 
@@ -111,7 +115,8 @@ def query_with_citations(
     # Update last accessed time
     channel_repo.touch(channel_id)
 
-    # Execute use case for citation search
+    # Create use case after validation, execute
+    use_case = use_case_factory()
     result = use_case.execute(channel_id, body.query)
 
     if result.error:
@@ -146,7 +151,10 @@ def query_with_citations_stream(
     body: CitationRequest,
     channel_port: Annotated[ChannelPort, Depends(get_channel_port)],
     channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)],
-    use_case: Annotated[SearchWithCitationsUseCase, Depends(get_citations_use_case)],
+    use_case_factory: Annotated[
+        Callable[[], SearchWithCitationsUseCase],
+        Depends(get_citations_use_case_factory),
+    ],
 ) -> StreamingResponse:
     """Send a question and get a streaming response with inline citations.
 
@@ -166,6 +174,9 @@ def query_with_citations_stream(
 
     # Update last accessed time
     channel_repo.touch(channel_id)
+
+    # Create use case after validation
+    use_case = use_case_factory()
 
     def generate_stream() -> Generator[str, None, None]:
         """Generate SSE events from UseCase streaming response."""

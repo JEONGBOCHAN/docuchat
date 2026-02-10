@@ -12,7 +12,7 @@ from src.models.study import (
     StudyGuideGenerateRequest,
     QuizGenerateRequest,
 )
-from src.api.v1.deps import get_channel_port, get_document_port
+from src.api.v1.deps import get_channel_port, get_document_port_factory
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 from src.application.use_cases.learning import StudyGuideResult, QuizResult
@@ -63,7 +63,7 @@ class TestGenerateStudyGuide:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -79,7 +79,7 @@ class TestGenerateStudyGuide:
         assert len(data["study_tips"]) == 2
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_study_guide_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test study guide generation with non-existent channel."""
@@ -109,7 +109,7 @@ class TestGenerateStudyGuide:
         mock_document_port.list_documents.return_value = []
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/generate-study-guide"
@@ -119,7 +119,7 @@ class TestGenerateStudyGuide:
         assert "no documents" in response.json()["detail"].lower()
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_study_guide_with_options(self, client_with_db: TestClient, test_db):
         """Test study guide generation with custom options."""
@@ -145,7 +145,7 @@ class TestGenerateStudyGuide:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -168,7 +168,7 @@ class TestGenerateStudyGuide:
         )
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_study_guide_api_error(self, client_with_db: TestClient, test_db):
         """Test study guide generation handles API errors."""
@@ -195,7 +195,7 @@ class TestGenerateStudyGuide:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_study_guide_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -206,7 +206,7 @@ class TestGenerateStudyGuide:
         assert "Failed to generate study guide" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
 
 class TestGenerateQuiz:
@@ -256,7 +256,7 @@ class TestGenerateQuiz:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -271,7 +271,7 @@ class TestGenerateQuiz:
         assert len(data["questions"]) == 2
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_quiz_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test quiz generation with non-existent channel."""
@@ -301,7 +301,7 @@ class TestGenerateQuiz:
         mock_document_port.list_documents.return_value = []
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/generate-quiz"
@@ -311,7 +311,7 @@ class TestGenerateQuiz:
         assert "no documents" in response.json()["detail"].lower()
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_quiz_with_options(self, client_with_db: TestClient, test_db):
         """Test quiz generation with custom options."""
@@ -335,7 +335,7 @@ class TestGenerateQuiz:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -358,7 +358,7 @@ class TestGenerateQuiz:
         )
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_quiz_api_error(self, client_with_db: TestClient, test_db):
         """Test quiz generation handles API errors."""
@@ -383,7 +383,7 @@ class TestGenerateQuiz:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.study.create_generate_quiz_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -394,7 +394,7 @@ class TestGenerateQuiz:
         assert "Failed to generate quiz" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
 
 class TestStudyModels:

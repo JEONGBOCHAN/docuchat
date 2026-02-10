@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.citations import get_channel_port, get_citations_use_case
+from src.api.v1.citations import get_channel_port, get_citations_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.core.database import get_db
 from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase, CitationSearchResult
@@ -65,7 +65,7 @@ class TestQueryWithCitations:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
+        app.dependency_overrides[get_citations_use_case_factory] = lambda: lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -85,7 +85,7 @@ class TestQueryWithCitations:
         assert data["citations"][0]["location"]["page"] == 5
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_citations_use_case, None)
+        app.dependency_overrides.pop(get_citations_use_case_factory, None)
 
     def test_query_with_citations_channel_not_found(
         self, client_with_db: TestClient, test_db
@@ -134,7 +134,7 @@ class TestQueryWithCitations:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
+        app.dependency_overrides[get_citations_use_case_factory] = lambda: lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -145,7 +145,7 @@ class TestQueryWithCitations:
         assert response.status_code == 500
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_citations_use_case, None)
+        app.dependency_overrides.pop(get_citations_use_case_factory, None)
 
     def test_query_with_no_citations(self, client_with_db: TestClient, test_db):
         """Test query that returns no citations."""
@@ -165,7 +165,7 @@ class TestQueryWithCitations:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
+        app.dependency_overrides[get_citations_use_case_factory] = lambda: lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -178,7 +178,7 @@ class TestQueryWithCitations:
         assert data["citations"] == []
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_citations_use_case, None)
+        app.dependency_overrides.pop(get_citations_use_case_factory, None)
 
 
 class TestQueryWithCitationsStream:
@@ -213,7 +213,7 @@ class TestQueryWithCitationsStream:
         mock_use_case = _create_mock_use_case(stream_events=stream_events)
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
+        app.dependency_overrides[get_citations_use_case_factory] = lambda: lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations/stream",
@@ -239,7 +239,7 @@ class TestQueryWithCitationsStream:
         assert events[3] == {"type": "done"}
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_citations_use_case, None)
+        app.dependency_overrides.pop(get_citations_use_case_factory, None)
 
     def test_stream_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test streaming with non-existent channel."""
@@ -270,7 +270,7 @@ class TestQueryWithCitationsStream:
         mock_use_case = _create_mock_use_case(stream_events=stream_events)
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
+        app.dependency_overrides[get_citations_use_case_factory] = lambda: lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations/stream",
@@ -289,7 +289,7 @@ class TestQueryWithCitationsStream:
         assert events[0]["type"] == "error"
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_citations_use_case, None)
+        app.dependency_overrides.pop(get_citations_use_case_factory, None)
 
 
 class TestGetCitationDetail:
@@ -367,7 +367,7 @@ class TestInlineCitationInsertion:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_citations_use_case] = lambda: mock_use_case
+        app.dependency_overrides[get_citations_use_case_factory] = lambda: lambda: mock_use_case
 
         response = client_with_db.post(
             "/api/v1/citations",
@@ -385,4 +385,4 @@ class TestInlineCitationInsertion:
         assert "[2]" not in data["response_plain"]
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_citations_use_case, None)
+        app.dependency_overrides.pop(get_citations_use_case_factory, None)

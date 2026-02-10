@@ -4,6 +4,7 @@
 Reduces boilerplate for common patterns like channel validation.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, status
@@ -33,6 +34,11 @@ def get_channel_repo(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
 def get_document_port() -> DocumentPort:
     """Get document port singleton."""
     return create_document_port()
+
+
+def get_document_port_factory() -> Callable[[], DocumentPort]:
+    """Get document port factory for lazy creation."""
+    return create_document_port
 
 
 @dataclass
@@ -75,7 +81,7 @@ def require_channel_with_documents(
     channel_id: str,
     channel_port: ChannelPort = Depends(get_channel_port),
     channel_repo: ChannelRepositoryPort = Depends(get_channel_repo),
-    document_port: DocumentPort = Depends(get_document_port),
+    document_port_factory: Callable[[], DocumentPort] = Depends(get_document_port_factory),
 ) -> ValidatedChannel:
     """Validate channel exists, has documents, and update last accessed time.
 
@@ -93,6 +99,7 @@ def require_channel_with_documents(
             detail=f"Channel not found: {channel_id}",
         )
 
+    document_port = document_port_factory()
     files = document_port.list_documents(channel_id)
     if not files:
         raise HTTPException(

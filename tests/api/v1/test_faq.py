@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch, Mock
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.deps import get_channel_port, get_document_port
+from src.api.v1.deps import get_channel_port, get_document_port_factory
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 from src.application.use_cases.generate_faq import GenerateFAQUseCase, FAQResult
@@ -41,7 +41,7 @@ class TestGenerateFAQ:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -58,7 +58,7 @@ class TestGenerateFAQ:
         assert "generated_at" in data
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_faq_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test FAQ generation for non-existent channel."""
@@ -89,7 +89,7 @@ class TestGenerateFAQ:
         mock_document_port.list_documents.return_value = []
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/empty-store/generate-faq",
@@ -100,7 +100,7 @@ class TestGenerateFAQ:
         assert "no documents" in response.json()["detail"].lower()
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_faq_default_count(self, client_with_db: TestClient, test_db):
         """Test FAQ generation with default count."""
@@ -124,7 +124,7 @@ class TestGenerateFAQ:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -139,7 +139,7 @@ class TestGenerateFAQ:
         )
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_faq_invalid_count(self, client_with_db: TestClient, test_db):
         """Test FAQ generation with invalid count."""
@@ -155,7 +155,7 @@ class TestGenerateFAQ:
         ]
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/test-store/generate-faq",
@@ -170,7 +170,7 @@ class TestGenerateFAQ:
         assert response.status_code == 422
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_generate_faq_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors during FAQ generation."""
@@ -194,7 +194,7 @@ class TestGenerateFAQ:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.faq.create_generate_faq_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -206,4 +206,4 @@ class TestGenerateFAQ:
         assert "Failed to generate FAQ" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)

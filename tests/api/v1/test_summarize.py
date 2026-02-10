@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.deps import get_channel_port, get_document_port
+from src.api.v1.deps import get_channel_port, get_document_port, get_document_port_factory
 from src.application.ports.channel import ChannelDTO
 from src.application.ports.document import DocumentDTO
 from src.application.use_cases.summarize import SummarizeResult
@@ -36,7 +36,7 @@ class TestSummarizeChannel:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -53,7 +53,7 @@ class TestSummarizeChannel:
         assert "generated_at" in data
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_summarize_channel_detailed_success(self, client_with_db: TestClient, test_db):
         """Test successful detailed channel summary."""
@@ -76,7 +76,7 @@ class TestSummarizeChannel:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -94,7 +94,7 @@ class TestSummarizeChannel:
         )
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_summarize_channel_default_type(self, client_with_db: TestClient, test_db):
         """Test channel summary with default type (short)."""
@@ -117,7 +117,7 @@ class TestSummarizeChannel:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -134,7 +134,7 @@ class TestSummarizeChannel:
         )
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_summarize_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test channel summary for non-existent channel."""
@@ -165,7 +165,7 @@ class TestSummarizeChannel:
         mock_document_port.list_documents.return_value = []
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         response = client_with_db.post(
             "/api/v1/channels/fileSearchStores/empty-store/summarize",
@@ -176,7 +176,7 @@ class TestSummarizeChannel:
         assert "no documents" in response.json()["detail"].lower()
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
     def test_summarize_channel_api_error(self, client_with_db: TestClient, test_db):
         """Test handling API errors during channel summarization."""
@@ -199,7 +199,7 @@ class TestSummarizeChannel:
         )
 
         app.dependency_overrides[get_channel_port] = lambda: mock_channel_port
-        app.dependency_overrides[get_document_port] = lambda: mock_document_port
+        app.dependency_overrides[get_document_port_factory] = lambda: lambda: mock_document_port
 
         with patch("src.api.v1.summarize.create_summarize_channel_use_case", return_value=mock_use_case):
             response = client_with_db.post(
@@ -211,7 +211,7 @@ class TestSummarizeChannel:
         assert "Failed to generate summary" in response.json()["detail"]
 
         app.dependency_overrides.pop(get_channel_port, None)
-        app.dependency_overrides.pop(get_document_port, None)
+        app.dependency_overrides.pop(get_document_port_factory, None)
 
 
 class TestSummarizeDocument:
