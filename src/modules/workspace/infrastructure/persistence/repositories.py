@@ -499,6 +499,16 @@ class TrashRepositoryAdapter(TrashRepositoryPort):
         ).all()
         return [_channel_to_dto(c) for c in channels]
 
+    def get_expired_trashed_channels(self, retention_days: int) -> list[ChannelMetadataDTO]:
+        """Get trashed channels that have exceeded the retention period."""
+        from datetime import timedelta
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        channels = self._db.query(ChannelMetadata).filter(
+            ChannelMetadata.deleted_at.isnot(None),
+            ChannelMetadata.deleted_at < cutoff,
+        ).all()
+        return [_channel_to_dto(c) for c in channels]
+
 
 # =============================================================================
 # Audio Repository Adapter

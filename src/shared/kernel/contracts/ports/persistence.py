@@ -564,6 +564,18 @@ class TrashRepositoryPort(ABC):
         """Get all trashed channels."""
         ...
 
+    @abstractmethod
+    def get_expired_trashed_channels(self, retention_days: int) -> list[ChannelMetadataDTO]:
+        """Get trashed channels that have exceeded the retention period.
+
+        Args:
+            retention_days: Number of days after which trashed items expire.
+
+        Returns:
+            List of ChannelMetadataDTO for channels deleted more than retention_days ago.
+        """
+        ...
+
 
 class AudioRepositoryPort(ABC):
     """Port for audio overview repository operations."""

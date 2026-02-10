@@ -11,7 +11,7 @@ from datetime import datetime, UTC
 from src.core.database import SessionLocal
 from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.modules.ops.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
-from src.modules.workspace.public import create_channel_port, create_document_port
+from src.modules.workspace.public import create_channel_port, create_document_port, create_trash_repository_port
 from src.infrastructure.persistence.trash_repository import TrashRepository
 
 logger = logging.getLogger(__name__)
@@ -191,17 +191,11 @@ def cleanup_expired_trash(retention_days: int = 30):
     db = SessionLocal()
     try:
         trash_repo = TrashRepository(db)
+        trash_port = create_trash_repository_port(db)
         channel_port = create_channel_port()
 
-        # Get trashed channels that will be deleted for Gemini cleanup
-        from src.infrastructure.persistence.db_models import ChannelMetadata
-        from datetime import timedelta
-
-        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
-        expired_channels = db.query(ChannelMetadata).filter(
-            ChannelMetadata.deleted_at.isnot(None),
-            ChannelMetadata.deleted_at < cutoff,
-        ).all()
+        # Get trashed channels that have exceeded the retention period
+        expired_channels = trash_port.get_expired_trashed_channels(retention_days)
 
         # Track which channels were successfully deleted from Gemini
         successfully_deleted_channel_ids: list[int] = []
