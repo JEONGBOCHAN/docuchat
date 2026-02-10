@@ -10,7 +10,7 @@ from src.models.trash import TrashList, TrashItemType, RestoreResponse, EmptyTra
 from src.application.ports.channel import ChannelPort
 from src.application.ports.persistence import TrashRepositoryPort
 from src.core.database import get_db
-from src.infrastructure.di.container import (
+from src.modules.workspace.public import (
     create_channel_port,
     create_trash_repository_port,
 )

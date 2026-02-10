@@ -18,7 +18,7 @@ from src.application.ports.channel import ChannelPort
 from src.application.ports.document import DocumentPort
 from src.application.ports.preview import DocumentPreviewDTO, SourceLocationResultDTO
 from src.application.services.preview_service import PreviewService, DEFAULT_PAGE_SIZE
-from src.infrastructure.di.container import (
+from src.modules.workspace.public import (
     create_channel_port,
     create_document_port,
     create_preview_service,

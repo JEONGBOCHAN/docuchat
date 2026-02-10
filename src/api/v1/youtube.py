@@ -22,7 +22,7 @@ from src.application.use_cases.exceptions import (
     TranscriptNotAvailableError,
     InvalidVideoError,
 )
-from src.infrastructure.di.container import (
+from src.modules.workspace.public import (
     create_channel_port,
     create_document_port,
     create_youtube_port,

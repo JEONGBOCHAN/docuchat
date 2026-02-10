@@ -30,7 +30,7 @@ router = APIRouter(prefix="/favorites", tags=["favorites"])
 
 def get_favorite_crud_use_case(db: Session = Depends(get_db)) -> FavoriteCrudUseCase:
     """Get favorite CRUD use case instance with all dependencies wired."""
-    from src.infrastructure.di.container import create_favorite_crud_use_case
+    from src.modules.workspace.public import create_favorite_crud_use_case
     return create_favorite_crud_use_case(db)
 
 

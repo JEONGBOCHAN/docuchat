@@ -11,7 +11,7 @@ from src.models.export import ExportFormat
 from src.application.ports.channel import ChannelPort
 from src.application.ports.persistence import ChannelRepositoryPort
 from src.application.services.export_service import ExportService
-from src.infrastructure.di.container import (
+from src.modules.workspace.public import (
     create_channel_port,
     create_channel_repository_port,
     create_export_service,

@@ -37,7 +37,7 @@ def get_document_crud_use_case(
     db: Session = Depends(get_db),
 ) -> DocumentCrudUseCase:
     """Get document CRUD use case instance."""
-    from src.infrastructure.di.container import create_document_crud_use_case
+    from src.modules.workspace.public import create_document_crud_use_case
     return create_document_crud_use_case(db)
 
 

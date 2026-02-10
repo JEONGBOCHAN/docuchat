@@ -28,7 +28,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 
 def get_search_history_use_case(db: Session = Depends(get_db)) -> SearchHistoryUseCase:
     """Get search history use case instance with all dependencies wired."""
-    from src.infrastructure.di.container import create_search_history_use_case
+    from src.modules.workspace.public import create_search_history_use_case
     return create_search_history_use_case(db)
 
 

@@ -98,7 +98,7 @@ def create_document_summary_cache_port(db) -> DocumentSummaryCachePort:
 # ============================================================
 
 def create_channel_crud_use_case(db):
-    from src.application.use_cases.channel_crud import ChannelCrudUseCase
+    from src.modules.workspace.application.use_cases.channel_crud import ChannelCrudUseCase
     return ChannelCrudUseCase(
         channel_port=create_channel_port(),
         document_port=create_document_port(),
@@ -109,7 +109,7 @@ def create_channel_crud_use_case(db):
 
 
 def create_document_crud_use_case(db):
-    from src.application.use_cases.document_crud import DocumentCrudUseCase
+    from src.modules.workspace.application.use_cases.document_crud import DocumentCrudUseCase
     from src.core.config import get_settings
     settings = get_settings()
     return DocumentCrudUseCase(
@@ -125,7 +125,7 @@ def create_document_crud_use_case(db):
 
 
 def create_note_crud_use_case(db):
-    from src.application.use_cases.note_crud import NoteCrudUseCase
+    from src.modules.workspace.application.use_cases.note_crud import NoteCrudUseCase
     return NoteCrudUseCase(
         channel_port=create_channel_port(),
         channel_repo=create_channel_repository_port(db),
@@ -135,7 +135,7 @@ def create_note_crud_use_case(db):
 
 
 def create_favorite_crud_use_case(db):
-    from src.application.use_cases.favorite_crud import FavoriteCrudUseCase
+    from src.modules.workspace.application.use_cases.favorite_crud import FavoriteCrudUseCase
     return FavoriteCrudUseCase(
         channel_port=create_channel_port(),
         fav_repo=create_favorite_repository_port(db),
@@ -144,7 +144,7 @@ def create_favorite_crud_use_case(db):
 
 
 def create_search_history_use_case(db):
-    from src.application.use_cases.search_history import SearchHistoryUseCase
+    from src.modules.workspace.application.use_cases.search_history import SearchHistoryUseCase
     return SearchHistoryUseCase(
         channel_port=create_channel_port(),
         channel_repo=create_channel_repository_port(db),
@@ -153,7 +153,7 @@ def create_search_history_use_case(db):
 
 
 def create_generate_document_summary_use_case(db):
-    from src.application.use_cases.document_summary import GenerateDocumentSummaryUseCase
+    from src.modules.workspace.application.use_cases.document_summary import GenerateDocumentSummaryUseCase
     return GenerateDocumentSummaryUseCase(
         generation_port=create_document_summary_generation_port(),
         cache_port=create_document_summary_cache_port(db),
@@ -161,7 +161,7 @@ def create_generate_document_summary_use_case(db):
 
 
 def create_get_channel_summaries_use_case(db):
-    from src.application.use_cases.document_summary import GetChannelDocumentSummariesUseCase
+    from src.modules.workspace.application.use_cases.document_summary import GetChannelDocumentSummariesUseCase
     return GetChannelDocumentSummariesUseCase(
         cache_port=create_document_summary_cache_port(db),
     )
@@ -172,14 +172,14 @@ def create_get_channel_summaries_use_case(db):
 # ============================================================
 
 def create_capacity_service(db):
-    from src.application.services.capacity_service import CapacityService
+    from src.modules.workspace.application.services.capacity_service import CapacityService
     return CapacityService(
         channel_repo=create_channel_repository_port(db),
     )
 
 
 def create_export_service(db):
-    from src.application.services.export_service import ExportService
+    from src.modules.workspace.application.services.export_service import ExportService
     from src.modules.conversation.public import create_chat_history_repository_port
     return ExportService(
         channel_repo=create_channel_repository_port(db),
@@ -189,7 +189,7 @@ def create_export_service(db):
 
 
 def create_preview_service(db):
-    from src.application.services.preview_service import PreviewService
+    from src.modules.workspace.application.services.preview_service import PreviewService
     from src.infrastructure.persistence.adapters import DocumentPreviewCacheRepositoryAdapter
     from src.infrastructure.external.gemini.document_search import GeminiDocumentSearchAdapter
     return PreviewService(
