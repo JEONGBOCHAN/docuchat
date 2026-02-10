@@ -795,6 +795,23 @@ def create_conversation_memory_service(db):
     )
 
 
+def _get_compaction_runner():
+    """Get or create the singleton CompactionRunner.
+
+    The runner uses independent DB sessions (via SessionLocal) so that
+    background compaction never shares the request-scoped session.
+    """
+    from src.infrastructure.compaction.runner import CompactionRunner
+    from src.core.database import SessionLocal
+
+    if not hasattr(_get_compaction_runner, "_instance"):
+        _get_compaction_runner._instance = CompactionRunner(
+            session_factory=SessionLocal,
+            service_factory=create_conversation_memory_service,
+        )
+    return _get_compaction_runner._instance
+
+
 def create_chat_use_case(db):
     """Create ChatUseCase with all dependencies wired.
 
@@ -825,6 +842,7 @@ def create_chat_use_case(db):
         memory_mode=settings.memory_mode,
         memory_token_budget=settings.memory_token_budget,
         memory_recent_turns=settings.memory_recent_turns,
+        compaction_runner=_get_compaction_runner(),
     )
 
 

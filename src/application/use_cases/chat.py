@@ -9,7 +9,6 @@ caching, and persistence.
 from __future__ import annotations
 
 import logging
-import threading
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from typing import Callable, Generator
@@ -123,6 +122,7 @@ class ChatUseCase:
         memory_mode: str | None = None,
         memory_token_budget: int = 12000,
         memory_recent_turns: int = 80,
+        compaction_runner=None,
     ):
         self._channel_port = channel_port
         self._channel_repo = channel_repo
@@ -137,19 +137,19 @@ class ChatUseCase:
         self._memory_mode = memory_mode
         self._memory_token_budget = memory_token_budget
         self._memory_recent_turns = memory_recent_turns
+        self._compaction_runner = compaction_runner
 
     # ---- Private helpers ----
 
     def _run_compaction_background(self, session_id: str) -> None:
-        """Run compaction in a background thread (fire-and-forget)."""
-        def _compact():
-            try:
-                self._conversation_memory.maybe_compact(session_id)
-            except Exception:
-                logger.warning("Background compaction failed for session %s", session_id, exc_info=True)
+        """Run compaction in a background thread (fire-and-forget).
 
-        thread = threading.Thread(target=_compact, daemon=True)
-        thread.start()
+        Delegates to CompactionRunner which creates an independent DB session,
+        avoiding the request-scoped session that may close before compaction
+        completes.
+        """
+        if self._compaction_runner:
+            self._compaction_runner.submit(session_id)
 
     def _validate_channel(self, channel_id: str):
         """Validate channel exists via external API."""
