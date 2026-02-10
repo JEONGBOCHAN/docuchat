@@ -32,16 +32,21 @@ router = APIRouter(prefix="/mcp", tags=["mcp"])
 # In-memory session store with TTL and capacity limit
 _sessions: dict[str, dict[str, Any]] = {}
 
-SESSION_TTL_SECONDS = 3600  # 1 hour
-MAX_SESSIONS = 1000
+
+def _get_mcp_settings() -> tuple[int, int]:
+    """Return (ttl_seconds, max_sessions) from centralised Settings."""
+    from src.core.config import get_settings
+    s = get_settings()
+    return s.mcp_session_ttl_seconds, s.mcp_max_sessions
 
 
 def _cleanup_expired_sessions() -> None:
     """Remove sessions that have exceeded the TTL."""
     now = time.monotonic()
+    ttl, _ = _get_mcp_settings()
     expired = [
         sid for sid, data in _sessions.items()
-        if now - data.get("_last_seen", 0) > SESSION_TTL_SECONDS
+        if now - data.get("_last_seen", 0) > ttl
     ]
     for sid in expired:
         del _sessions[sid]
@@ -63,7 +68,8 @@ def get_or_create_session(session_id: str | None) -> tuple[str, dict[str, Any]]:
     # Cleanup before creating a new session
     _cleanup_expired_sessions()
 
-    if len(_sessions) >= MAX_SESSIONS:
+    _, max_sessions = _get_mcp_settings()
+    if len(_sessions) >= max_sessions:
         raise HTTPException(
             status_code=503,
             detail="Maximum number of MCP sessions reached. Try again later.",

@@ -4,6 +4,10 @@ MCP Tools Implementation.
 
 Clean Architecture based implementation of MCP tools.
 All tools use ProcessQueryUseCase and other application layer components.
+
+Session-level conversation history has been removed; MCP queries are
+stateless.  Conversation context (if needed) should be managed through
+the conversation module's public API.
 """
 
 import time
@@ -19,12 +23,16 @@ from src.mcp_server.state import AgentStateStore, get_global_state_store
 # ============================================================
 
 _sessions: dict[str, dict[str, Any]] = {}
-_chat_histories: dict[str, list[dict[str, Any]]] = {}
 
-SESSION_TTL_SECONDS = 3600  # 1 hour
-MAX_SESSIONS = 500
 _CLEANUP_INTERVAL_SECONDS = 60  # Throttle cleanup to at most once per minute
 _last_cleanup_time: float = 0.0
+
+
+def _get_mcp_settings() -> tuple[int, int]:
+    """Return (ttl_seconds, max_sessions) from centralised Settings."""
+    from src.core.config import get_settings
+    s = get_settings()
+    return s.mcp_session_ttl_seconds, s.mcp_max_sessions
 
 
 def _cleanup_stale_sessions(force: bool = False) -> None:
@@ -38,13 +46,13 @@ def _cleanup_stale_sessions(force: bool = False) -> None:
     if not force and (now - _last_cleanup_time) < _CLEANUP_INTERVAL_SECONDS:
         return
     _last_cleanup_time = now
+    ttl, _ = _get_mcp_settings()
     expired = [
         sid for sid, data in _sessions.items()
-        if now - data.get("_last_seen", 0) > SESSION_TTL_SECONDS
+        if now - data.get("_last_seen", 0) > ttl
     ]
     for sid in expired:
         _sessions.pop(sid, None)
-        _chat_histories.pop(sid, None)
 
 
 def _generate_session_id() -> str:
@@ -194,7 +202,8 @@ async def create_session(channel_id: str) -> dict[str, Any]:
 
     # Cleanup expired sessions and enforce capacity limit
     _cleanup_stale_sessions(force=True)
-    if len(_sessions) >= MAX_SESSIONS:
+    _, max_sessions = _get_mcp_settings()
+    if len(_sessions) >= max_sessions:
         return {
             "success": False,
             "error": "Maximum number of MCP tool sessions reached. Try again later.",
@@ -207,7 +216,6 @@ async def create_session(channel_id: str) -> dict[str, Any]:
         "created_at": datetime.now(UTC).isoformat(),
         "_last_seen": time.monotonic(),
     }
-    _chat_histories[session_id] = []
 
     return {
         "success": True,
@@ -237,7 +245,6 @@ async def get_session(session_id: str) -> dict[str, Any]:
     return {
         "success": True,
         **session,
-        "message_count": len(_chat_histories.get(session_id, [])),
     }
 
 
@@ -257,8 +264,6 @@ async def delete_session(session_id: str) -> dict[str, Any]:
         }
 
     del _sessions[session_id]
-    if session_id in _chat_histories:
-        del _chat_histories[session_id]
 
     return {
         "success": True,
@@ -275,67 +280,11 @@ async def list_sessions() -> dict[str, Any]:
     _cleanup_stale_sessions()
     sessions = []
     for session_id, session in _sessions.items():
-        sessions.append({
-            **session,
-            "message_count": len(_chat_histories.get(session_id, [])),
-        })
+        sessions.append({**session})
 
     return {
         "sessions": sessions,
         "total": len(sessions),
-    }
-
-
-# ============================================================
-# Chat History Tools
-# ============================================================
-
-async def get_chat_history(session_id: str, limit: int = 100) -> dict[str, Any]:
-    """Get chat history for a session.
-
-    Args:
-        session_id: The session ID.
-        limit: Maximum number of messages to return.
-
-    Returns:
-        Dictionary with chat history.
-    """
-    if session_id not in _sessions:
-        return {
-            "success": False,
-            "error": f"Session not found: {session_id}",
-        }
-
-    _sessions[session_id]["_last_seen"] = time.monotonic()
-    history = _chat_histories.get(session_id, [])[-limit:]
-    return {
-        "success": True,
-        "session_id": session_id,
-        "messages": history,
-        "total": len(history),
-    }
-
-
-async def clear_chat_history(session_id: str) -> dict[str, Any]:
-    """Clear chat history for a session.
-
-    Args:
-        session_id: The session ID.
-
-    Returns:
-        Dictionary confirming deletion.
-    """
-    if session_id not in _sessions:
-        return {
-            "success": False,
-            "error": f"Session not found: {session_id}",
-        }
-
-    _sessions[session_id]["_last_seen"] = time.monotonic()
-    _chat_histories[session_id] = []
-    return {
-        "success": True,
-        "message": f"Chat history cleared for session {session_id}",
     }
 
 
@@ -356,7 +305,7 @@ async def run_rag_query(
     Args:
         channel_id: The channel (FileSearchStore) ID to search in.
         query: The user's question to answer.
-        session_id: Optional session ID for conversation context.
+        session_id: Optional session ID (used for _last_seen tracking only).
         state_store: Optional state store to use.
 
     Returns:
@@ -365,19 +314,13 @@ async def run_rag_query(
     store = state_store or get_global_state_store()
     store.reset(channel_id)
 
-    # Get conversation history if session exists
-    conversation_history = []
+    # Touch session _last_seen if session exists
     if session_id and session_id in _sessions:
         _sessions[session_id]["_last_seen"] = time.monotonic()
-    if session_id and session_id in _chat_histories:
-        conversation_history = [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in _chat_histories[session_id]
-        ]
 
     try:
         # Use Clean Architecture: ProcessQueryUseCase
-        from src.infrastructure.di import create_process_query_use_case
+        from src.modules.conversation.public import create_process_query_use_case
 
         use_case = create_process_query_use_case(
             use_legacy_dashboard=True,
@@ -388,30 +331,15 @@ async def run_rag_query(
         result = use_case.execute(
             query=query,
             channel_id=channel_id,
-            conversation_history=conversation_history,
         )
 
-        response_data = {
+        return {
             "response": result.response,
             "sources": result.sources,
             "iterations": result.iterations,
             "error": result.error,
             "state": store.get_state(channel_id),
         }
-
-        # Save to chat history if session exists
-        if session_id and session_id in _chat_histories:
-            _chat_histories[session_id].append({
-                "role": "user",
-                "content": query,
-            })
-            _chat_histories[session_id].append({
-                "role": "assistant",
-                "content": result.response,
-                "sources": result.sources,
-            })
-
-        return response_data
 
     except Exception as e:
         store.update({
@@ -487,7 +415,7 @@ async def run_rag_with_web_search(
     Args:
         channel_id: The channel ID to search in.
         query: The user's question.
-        session_id: Optional session ID for conversation context.
+        session_id: Optional session ID (used for _last_seen tracking only).
         state_store: Optional state store to use.
 
     Returns:
@@ -496,17 +424,12 @@ async def run_rag_with_web_search(
     store = state_store or get_global_state_store()
     store.reset(channel_id)
 
-    conversation_history = []
+    # Touch session _last_seen if session exists
     if session_id and session_id in _sessions:
         _sessions[session_id]["_last_seen"] = time.monotonic()
-    if session_id and session_id in _chat_histories:
-        conversation_history = [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in _chat_histories[session_id]
-        ]
 
     try:
-        from src.infrastructure.di import create_process_query_use_case
+        from src.modules.conversation.public import create_process_query_use_case
 
         use_case = create_process_query_use_case(
             use_legacy_dashboard=True,
@@ -517,10 +440,9 @@ async def run_rag_with_web_search(
         result = use_case.execute(
             query=query,
             channel_id=channel_id,
-            conversation_history=conversation_history,
         )
 
-        response_data = {
+        return {
             "response": result.response,
             "sources": result.sources,
             "iterations": result.iterations,
@@ -528,19 +450,6 @@ async def run_rag_with_web_search(
             "error": result.error,
             "state": store.get_state(channel_id),
         }
-
-        if session_id and session_id in _chat_histories:
-            _chat_histories[session_id].append({
-                "role": "user",
-                "content": query,
-            })
-            _chat_histories[session_id].append({
-                "role": "assistant",
-                "content": result.response,
-                "sources": result.sources,
-            })
-
-        return response_data
 
     except Exception as e:
         store.update({

@@ -15,12 +15,9 @@ from src.mcp_server.tools import (
     get_session,
     delete_session,
     list_sessions,
-    get_chat_history,
-    clear_chat_history,
     run_web_search,
     run_rag_with_web_search,
     _sessions,
-    _chat_histories,
 )
 from src.mcp_server.state import (
     AgentStateStore,
@@ -196,7 +193,6 @@ class TestRunRagQuery:
     def setup_method(self):
         """Clear sessions before each test."""
         _sessions.clear()
-        _chat_histories.clear()
 
     @pytest.mark.asyncio
     async def test_successful_query(self):
@@ -220,7 +216,7 @@ class TestRunRagQuery:
         mock_use_case = Mock()
         mock_use_case.execute.return_value = MockResult()
 
-        with patch("src.infrastructure.di.create_process_query_use_case", return_value=mock_use_case):
+        with patch("src.modules.conversation.public.create_process_query_use_case", return_value=mock_use_case):
             result = await run_rag_query(
                 channel_id="test-channel",
                 query="What is the answer?",
@@ -239,7 +235,7 @@ class TestRunRagQuery:
         store = AgentStateStore()
 
         with patch(
-            "src.infrastructure.di.create_process_query_use_case",
+            "src.modules.conversation.public.create_process_query_use_case",
             side_effect=RuntimeError("Connection failed"),
         ):
             result = await run_rag_query(
@@ -275,7 +271,7 @@ class TestRunRagQuery:
         mock_use_case = Mock()
         mock_use_case.execute.return_value = MockResult()
 
-        with patch("src.infrastructure.di.create_process_query_use_case", return_value=mock_use_case):
+        with patch("src.modules.conversation.public.create_process_query_use_case", return_value=mock_use_case):
             result = await run_rag_query(
                 channel_id="channel",
                 query="query",
@@ -342,7 +338,6 @@ class TestSessionTools:
     def setup_method(self):
         """Clear sessions before each test."""
         _sessions.clear()
-        _chat_histories.clear()
 
     @pytest.mark.asyncio
     async def test_create_session_success(self):
@@ -398,13 +393,11 @@ class TestSessionTools:
     async def test_delete_session_success(self):
         """Test deleting a session."""
         _sessions["test-session"] = {"session_id": "test-session"}
-        _chat_histories["test-session"] = []
 
         result = await delete_session("test-session")
 
         assert result["success"] is True
         assert "test-session" not in _sessions
-        assert "test-session" not in _chat_histories
 
     @pytest.mark.asyncio
     async def test_list_sessions(self):
@@ -416,53 +409,6 @@ class TestSessionTools:
 
         assert result["total"] == 2
         assert len(result["sessions"]) == 2
-
-
-class TestChatHistoryTools:
-    """Tests for chat history tools."""
-
-    def setup_method(self):
-        """Clear sessions before each test."""
-        _sessions.clear()
-        _chat_histories.clear()
-
-    @pytest.mark.asyncio
-    async def test_get_chat_history_success(self):
-        """Test getting chat history."""
-        _sessions["test-session"] = {"session_id": "test-session"}
-        _chat_histories["test-session"] = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ]
-
-        result = await get_chat_history("test-session")
-
-        assert result["success"] is True
-        assert len(result["messages"]) == 2
-
-    @pytest.mark.asyncio
-    async def test_get_chat_history_with_limit(self):
-        """Test getting chat history with limit."""
-        _sessions["test-session"] = {"session_id": "test-session"}
-        _chat_histories["test-session"] = [
-            {"role": "user", "content": f"Message {i}"} for i in range(10)
-        ]
-
-        result = await get_chat_history("test-session", limit=5)
-
-        assert result["success"] is True
-        assert len(result["messages"]) == 5
-
-    @pytest.mark.asyncio
-    async def test_clear_chat_history(self):
-        """Test clearing chat history."""
-        _sessions["test-session"] = {"session_id": "test-session"}
-        _chat_histories["test-session"] = [{"role": "user", "content": "test"}]
-
-        result = await clear_chat_history("test-session")
-
-        assert result["success"] is True
-        assert len(_chat_histories["test-session"]) == 0
 
 
 class TestWebSearchTools:
@@ -522,8 +468,6 @@ class TestToolsModuleImports:
         assert hasattr(tools, "get_session")
         assert hasattr(tools, "delete_session")
         assert hasattr(tools, "list_sessions")
-        assert hasattr(tools, "get_chat_history")
-        assert hasattr(tools, "clear_chat_history")
         assert hasattr(tools, "run_web_search")
         assert hasattr(tools, "run_rag_with_web_search")
 
@@ -541,8 +485,6 @@ class TestToolsModuleImports:
             get_session,
             delete_session,
             list_sessions,
-            get_chat_history,
-            clear_chat_history,
             run_web_search,
             run_rag_with_web_search,
         )
@@ -556,7 +498,5 @@ class TestToolsModuleImports:
         assert inspect.iscoroutinefunction(get_session)
         assert inspect.iscoroutinefunction(delete_session)
         assert inspect.iscoroutinefunction(list_sessions)
-        assert inspect.iscoroutinefunction(get_chat_history)
-        assert inspect.iscoroutinefunction(clear_chat_history)
         assert inspect.iscoroutinefunction(run_web_search)
         assert inspect.iscoroutinefunction(run_rag_with_web_search)

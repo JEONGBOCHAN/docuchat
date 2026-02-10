@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     # Session Lifecycle
     session_timeout_hours: int = 168  # Sessions expire after 7 days of inactivity
 
+    # MCP Session Lifecycle
+    mcp_session_ttl_seconds: int = 3600  # MCP sessions expire after 1 hour of inactivity
+    mcp_max_sessions: int = 1000  # Maximum concurrent MCP sessions
+
     # Channel Lifecycle
     channel_inactive_days: int = 90  # Days before channel is considered inactive
     max_files_per_channel: int = 100

@@ -44,8 +44,6 @@ mcp_server = FastMCP(
     **Chat:**
     - chat: Send a message and get AI response (uses RAG)
     - chat_with_web_search: Chat with web search enabled (Tavily)
-    - get_chat_history: Get conversation history
-    - clear_chat_history: Clear conversation history
 
     **Web Search:**
     - web_search: Search the web using Tavily
@@ -234,37 +232,6 @@ async def chat_with_web_search_tool(
         session_id=session_id,
     )
 
-
-@mcp_server.tool(
-    name="get_chat_history",
-    title="Get Chat History",
-    description="Get the conversation history for a session.",
-)
-async def get_chat_history_tool(
-    session_id: str,
-    limit: int = 100,
-) -> dict[str, Any]:
-    """Get chat history for a session.
-
-    Args:
-        session_id: The session ID.
-        limit: Maximum number of messages to return (default 100).
-    """
-    return await tools.get_chat_history(session_id, limit)
-
-
-@mcp_server.tool(
-    name="clear_chat_history",
-    title="Clear Chat History",
-    description="Clear the conversation history for a session.",
-)
-async def clear_chat_history_tool(session_id: str) -> dict[str, Any]:
-    """Clear chat history for a session.
-
-    Args:
-        session_id: The session ID.
-    """
-    return await tools.clear_chat_history(session_id)
 
 
 # ============================================================
