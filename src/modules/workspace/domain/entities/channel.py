@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from src.domain.exceptions import ChannelNameError
+from src.modules.workspace.domain.exceptions import ChannelNameError
 
 
 # Validation constants

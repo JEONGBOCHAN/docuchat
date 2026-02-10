@@ -4,14 +4,14 @@
 import pytest
 from datetime import datetime, timedelta
 
-from src.domain.entities.channel import (
+from src.modules.workspace.domain.entities.channel import (
     Channel,
     MAX_NAME_LENGTH,
     MAX_DESCRIPTION_LENGTH,
     MAX_DOCUMENTS_PER_CHANNEL,
     MAX_SIZE_BYTES,
 )
-from src.domain.exceptions import ChannelNameError
+from src.modules.workspace.domain.exceptions import ChannelNameError
 
 
 class TestChannelValidation:

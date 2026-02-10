@@ -4,8 +4,8 @@
 import pytest
 from datetime import datetime
 
-from src.domain.entities.note import Note, NoteSource, MAX_TITLE_LENGTH, MAX_CONTENT_LENGTH
-from src.domain.exceptions import NoteTitleError, NoteContentError
+from src.modules.workspace.domain.entities.note import Note, NoteSource, MAX_TITLE_LENGTH, MAX_CONTENT_LENGTH
+from src.modules.workspace.domain.exceptions import NoteTitleError, NoteContentError
 
 
 class TestNoteSource:

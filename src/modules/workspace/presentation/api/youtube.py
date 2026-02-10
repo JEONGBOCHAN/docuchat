@@ -16,7 +16,7 @@ from src.shared.kernel.contracts.ports.channel import ChannelPort
 from src.shared.kernel.contracts.ports.document import DocumentPort
 from src.shared.kernel.contracts.ports.external_services import YouTubePort
 from src.modules.workspace.application.services.capacity_service import CapacityService
-from src.domain.exceptions import CapacityExceededError
+from src.modules.workspace.domain.exceptions import CapacityExceededError
 from src.shared.kernel.contracts.errors.use_case_errors import (
     YouTubeError,
     TranscriptNotAvailableError,

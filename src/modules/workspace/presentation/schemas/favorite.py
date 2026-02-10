@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from src.domain.value_objects import TargetType
+from src.modules.workspace.domain.value_objects import TargetType
 
 __all__ = ["TargetType", "FavoriteCreate", "FavoriteResponse",
            "FavoriteListResponse", "FavoriteWithDetails",

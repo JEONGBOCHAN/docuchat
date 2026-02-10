@@ -18,8 +18,8 @@ from src.shared.kernel.contracts.ports.persistence import (
     NoteRepositoryPort,
     TrashRepositoryPort,
 )
-from src.domain.entities.note import Note
-from src.domain.exceptions import NoteValidationError as DomainNoteValidationError
+from src.modules.workspace.domain.entities.note import Note
+from src.modules.workspace.domain.exceptions import NoteValidationError as DomainNoteValidationError
 from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError, NoteValidationError
 
 
