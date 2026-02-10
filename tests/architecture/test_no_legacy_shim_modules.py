@@ -72,6 +72,11 @@ def test_no_legacy_shim_imports():
         pytest.fail(
             "Legacy shim module imports found!\n\n"
             + "\n".join(f"  - {v}" for v in violations)
-            + "\n\nThese re-export shims were removed. "
-            "Use the canonical module paths instead."
+            + "\n\nThese re-export shims were removed during the modular monolith migration. "
+            "Re-introducing them violates the architecture boundary: "
+            "src/infrastructure must NOT import from src.modules.*. "
+            "Use the canonical module paths instead:\n"
+            "  - LangGraphAgentRunner: src.modules.conversation.infrastructure.agent.langgraph_runner\n"
+            "  - Scheduler jobs: src.modules.ops.infrastructure.scheduler.scheduler_jobs\n"
+            "  - Checkpoint adapter: src.modules.conversation.infrastructure.agent.checkpoint_adapter"
         )

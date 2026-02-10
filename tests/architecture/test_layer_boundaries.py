@@ -124,8 +124,8 @@ def _find_violations(
 # Infrastructure Layer Tests
 # ──────────────────────────────────────────────────────────
 
-# Infrastructure must not import from module presentation layers or web frameworks.
-INFRA_FORBIDDEN = ["src.api", "fastapi", "src.models"]
+# Infrastructure must not import from module internals, presentation layers, or web frameworks.
+INFRA_FORBIDDEN = ["src.api", "fastapi", "src.models", "src.modules"]
 INFRA_EXCEPTIONS: set[str] = set()
 
 
@@ -152,12 +152,13 @@ class TestInfrastructureLayerBoundaries:
 
         if violations:
             msg = (
-                "Infrastructure layer imports presentation/web framework!\n\n"
+                "Infrastructure layer boundary violation!\n\n"
                 + "\n".join(f"  - {v}" for v in violations)
-                + "\n\nFix: infrastructure should only depend on "
-                "shared kernel contracts and domain. "
-                "Module presentation imports (src.modules.<m>.presentation) "
-                "are also forbidden."
+                + "\n\nFix: src/infrastructure must NOT import from "
+                "src.modules.* (module internals), presentation layers, "
+                "or web frameworks. "
+                "It should only depend on shared kernel contracts and domain. "
+                "Access module functionality via their public.py API or DI container."
             )
             pytest.fail(msg)
 
@@ -231,3 +232,11 @@ class TestHelperPredicates:
         assert not _is_src_outside_domain("src.domain.value_objects")
         assert not _is_src_outside_domain("fastapi")
         assert not _is_src_outside_domain("pydantic")
+
+    def test_matches_prefix_detects_src_modules(self):
+        """src.modules prefix must catch all module-internal imports."""
+        assert _matches_prefix("src.modules.workspace.infrastructure.di", "src.modules")
+        assert _matches_prefix("src.modules.conversation.infrastructure.agent.langgraph_runner", "src.modules")
+        assert _matches_prefix("src.modules.ops.infrastructure.scheduler.scheduler_jobs", "src.modules")
+        assert not _matches_prefix("src.shared.kernel.contracts", "src.modules")
+        assert not _matches_prefix("src.infrastructure.scheduler.scheduler", "src.modules")
