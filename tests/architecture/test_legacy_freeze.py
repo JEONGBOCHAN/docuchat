@@ -77,6 +77,11 @@ LEGACY_API_V1_ALLOWLIST = {
 
 # container.py line count at freeze point.
 # Container is now a pure shim (~195 lines). Allow small tolerance.
+LEGACY_API_DEPS_ALLOWLIST = {
+    "__init__.py",
+    "channel.py",
+}
+
 CONTAINER_MAX_LINES = 250
 
 
@@ -136,3 +141,40 @@ class TestLegacyFreeze:
             f"container.py has {line_count} lines (limit: {CONTAINER_MAX_LINES}).\n"
             f"New DI logic should go into src/modules/<module>/infrastructure/di.py instead."
         )
+
+    def test_no_new_api_dependencies_files(self):
+        """No new .py files should appear in src/api/dependencies/."""
+        deps_dir = SRC_DIR / "api" / "dependencies"
+        if not deps_dir.exists():
+            return
+
+        current_files = {
+            f.name for f in deps_dir.iterdir()
+            if f.is_file() and f.suffix == ".py"
+        }
+        new_files = current_files - LEGACY_API_DEPS_ALLOWLIST
+        if new_files:
+            msg = (
+                "New files detected in legacy path src/api/dependencies/!\n\n"
+                + "\n".join(f"  - {f}" for f in sorted(new_files))
+                + "\n\nFix: add new dependencies to the relevant module under src/modules/."
+            )
+            pytest.fail(msg)
+
+    def test_no_direct_container_imports(self):
+        """No code outside infrastructure/di/ should import from container directly."""
+        violations = []
+        for py in SRC_DIR.rglob("*.py"):
+            rel = py.relative_to(SRC_DIR).as_posix()
+            if rel.startswith("infrastructure/di/"):
+                continue
+            text = py.read_text(encoding="utf-8")
+            if "from src.infrastructure.di.container import" in text:
+                violations.append(rel)
+        if violations:
+            msg = (
+                "Direct container imports found outside infrastructure/di/!\n\n"
+                + "\n".join(f"  - src/{v}" for v in sorted(violations))
+                + "\n\nFix: import from src.modules.<module>.public instead."
+            )
+            pytest.fail(msg)
