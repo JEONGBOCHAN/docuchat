@@ -6,9 +6,10 @@ between SQLAlchemy models and application DTOs.
 """
 
 import json
+import uuid
 from datetime import datetime, timedelta, UTC
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from src.shared.kernel.contracts.ports.persistence import (
     ChannelMetadataDTO,
@@ -30,6 +31,8 @@ from src.modules.workspace.infrastructure.persistence.models import (
     ChannelMetadata,
     NoteDB,
     FavoriteDB,
+    SearchHistoryDB,
+    AudioOverviewDB,
     DocumentPreviewCacheDB,
 )
 
@@ -371,20 +374,13 @@ class FavoriteRepositoryAdapter(FavoriteRepositoryPort):
 # =============================================================================
 
 class SearchHistoryRepositoryAdapter(SearchHistoryRepositoryPort):
-    """Adapter that implements SearchHistoryRepositoryPort."""
+    """Adapter that implements SearchHistoryRepositoryPort with direct SQLAlchemy queries."""
 
     def __init__(self, db):
-        """Initialize adapter with database session.
-
-        Args:
-            db: Database session (required).
-        """
-        from src.infrastructure.persistence.search_repository import SearchHistoryRepository
         self._db = db
-        self._repo = SearchHistoryRepository(self._db)
 
-    def _to_dto(self, entry) -> SearchHistoryDTO:
-        """Convert SearchHistoryDB to DTO."""
+    @staticmethod
+    def _to_dto(entry: SearchHistoryDB) -> SearchHistoryDTO:
         return SearchHistoryDTO(
             id=entry.id,
             channel_id=entry.channel_id,
@@ -394,87 +390,92 @@ class SearchHistoryRepositoryAdapter(SearchHistoryRepositoryPort):
             last_searched_at=entry.last_searched_at,
         )
 
-    def _get_channel(self, channel_id: int):
-        """Get channel by database ID."""
-        return self._db.query(ChannelMetadata).filter(
-            ChannelMetadata.id == channel_id
-        ).first()
-
     def add_or_update(self, channel_id: int, query: str) -> SearchHistoryDTO:
-        channel = self._get_channel(channel_id)
-        entry = self._repo.add_or_update(channel, query)
+        normalized = query.strip()
+        existing = self._db.query(SearchHistoryDB).filter(
+            SearchHistoryDB.channel_id == channel_id,
+            func.lower(SearchHistoryDB.query) == normalized.lower(),
+        ).first()
+        if existing:
+            existing.search_count += 1
+            existing.last_searched_at = datetime.now(UTC)
+            self._db.commit()
+            self._db.refresh(existing)
+            return self._to_dto(existing)
+        entry = SearchHistoryDB(
+            channel_id=channel_id,
+            query=normalized,
+            search_count=1,
+        )
+        self._db.add(entry)
+        self._db.commit()
+        self._db.refresh(entry)
         return self._to_dto(entry)
 
-    def get_recent(
-        self,
-        channel_id: int,
-        limit: int = 10,
-    ) -> list[SearchHistoryDTO]:
-        channel = self._get_channel(channel_id)
-        if not channel:
-            return []
-        entries = self._repo.get_recent(channel, limit)
+    def get_recent(self, channel_id: int, limit: int = 10) -> list[SearchHistoryDTO]:
+        entries = (
+            self._db.query(SearchHistoryDB)
+            .filter(SearchHistoryDB.channel_id == channel_id)
+            .order_by(SearchHistoryDB.last_searched_at.desc())
+            .limit(limit)
+            .all()
+        )
         return [self._to_dto(e) for e in entries]
 
-    def get_history(
-        self,
-        channel_id: int,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[SearchHistoryDTO]:
-        channel = self._get_channel(channel_id)
-        if not channel:
-            return []
-        entries = self._repo.get_history(channel, limit, offset)
+    def get_history(self, channel_id: int, limit: int = 50, offset: int = 0) -> list[SearchHistoryDTO]:
+        entries = (
+            self._db.query(SearchHistoryDB)
+            .filter(SearchHistoryDB.channel_id == channel_id)
+            .order_by(SearchHistoryDB.last_searched_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
         return [self._to_dto(e) for e in entries]
 
     def count_history(self, channel_id: int) -> int:
-        channel = self._get_channel(channel_id)
-        if not channel:
-            return 0
-        return self._repo.count_history(channel)
+        return self._db.query(SearchHistoryDB).filter(
+            SearchHistoryDB.channel_id == channel_id
+        ).count()
 
-    def get_suggestions(
-        self,
-        channel_id: int,
-        prefix: str,
-        limit: int = 10,
-    ) -> list[SearchHistoryDTO]:
-        channel = self._get_channel(channel_id)
-        if not channel:
-            return []
-        entries = self._repo.get_suggestions(channel, prefix, limit)
+    def get_suggestions(self, channel_id: int, prefix: str, limit: int = 10) -> list[SearchHistoryDTO]:
+        p = prefix.strip().lower()
+        query = self._db.query(SearchHistoryDB).filter(SearchHistoryDB.channel_id == channel_id)
+        if p:
+            query = query.filter(func.lower(SearchHistoryDB.query).like(f"{p}%"))
+        entries = query.order_by(SearchHistoryDB.search_count.desc()).limit(limit).all()
         return [self._to_dto(e) for e in entries]
 
-    def get_popular(
-        self,
-        channel_id: int,
-        limit: int = 10,
-    ) -> list[SearchHistoryDTO]:
-        channel = self._get_channel(channel_id)
-        if not channel:
-            return []
-        entries = self._repo.get_popular(channel, limit)
+    def get_popular(self, channel_id: int, limit: int = 10) -> list[SearchHistoryDTO]:
+        entries = (
+            self._db.query(SearchHistoryDB)
+            .filter(SearchHistoryDB.channel_id == channel_id)
+            .order_by(SearchHistoryDB.search_count.desc())
+            .limit(limit)
+            .all()
+        )
         return [self._to_dto(e) for e in entries]
 
     def get_by_id(self, history_id: int) -> SearchHistoryDTO | None:
-        entry = self._repo.get_by_id(history_id)
+        entry = self._db.query(SearchHistoryDB).filter(SearchHistoryDB.id == history_id).first()
         return self._to_dto(entry) if entry else None
 
     def delete(self, history_id: int) -> bool:
-        entry = self._repo.get_by_id(history_id)
-        if entry:
-            return self._repo.delete(entry)
-        return False
+        entry = self._db.query(SearchHistoryDB).filter(SearchHistoryDB.id == history_id).first()
+        if not entry:
+            return False
+        self._db.delete(entry)
+        self._db.commit()
+        return True
 
     def clear_for_channel(self, channel_id: int) -> int:
-        channel = self._get_channel(channel_id)
-        if not channel:
-            return 0
-        return self._repo.clear_channel_history(channel)
+        count = self._db.query(SearchHistoryDB).filter(
+            SearchHistoryDB.channel_id == channel_id
+        ).delete()
+        self._db.commit()
+        return count
 
     def clear_channel_history(self, channel_id: int) -> int:
-        """Alias for clear_for_channel."""
         return self.clear_for_channel(channel_id)
 
 
@@ -483,69 +484,112 @@ class SearchHistoryRepositoryAdapter(SearchHistoryRepositoryPort):
 # =============================================================================
 
 class TrashRepositoryAdapter(TrashRepositoryPort):
-    """Adapter that implements TrashRepositoryPort."""
+    """Adapter that implements TrashRepositoryPort with direct SQLAlchemy queries."""
 
     def __init__(self, db):
-        """Initialize adapter with database session.
-
-        Args:
-            db: Database session (required).
-        """
-        from src.infrastructure.persistence.trash_repository import TrashRepository
         self._db = db
-        self._repo = TrashRepository(self._db)
 
     def soft_delete_channel(self, channel_id: int) -> bool:
-        return self._repo.soft_delete_channel(channel_id) is not None
+        channel = self._db.query(ChannelMetadata).filter(
+            ChannelMetadata.id == channel_id,
+            ChannelMetadata.deleted_at.is_(None),
+        ).first()
+        if not channel:
+            return False
+        channel.deleted_at = datetime.now(UTC)
+        self._db.commit()
+        self._db.refresh(channel)
+        return True
 
     def soft_delete_note(self, note_id: int) -> bool:
-        return self._repo.soft_delete_note(note_id) is not None
+        note = self._db.query(NoteDB).filter(
+            NoteDB.id == note_id,
+            NoteDB.deleted_at.is_(None),
+        ).first()
+        if not note:
+            return False
+        note.deleted_at = datetime.now(UTC)
+        self._db.commit()
+        self._db.refresh(note)
+        return True
 
     def restore_channel(self, channel_id: int) -> ChannelMetadataDTO | None:
-        channel = self._repo.restore_channel(channel_id)
-        return _channel_to_dto(channel) if channel else None
+        channel = self._db.query(ChannelMetadata).filter(
+            ChannelMetadata.id == channel_id,
+            ChannelMetadata.deleted_at.isnot(None),
+        ).first()
+        if not channel:
+            return None
+        channel.deleted_at = None
+        channel.last_accessed_at = datetime.now(UTC)
+        self._db.commit()
+        self._db.refresh(channel)
+        return _channel_to_dto(channel)
 
     def restore_note(self, note_id: int) -> NoteDTO | None:
-        note = self._repo.restore_note(note_id)
-        return _note_to_dto(note) if note else None
+        note = self._db.query(NoteDB).filter(
+            NoteDB.id == note_id,
+            NoteDB.deleted_at.isnot(None),
+        ).first()
+        if not note:
+            return None
+        note.deleted_at = None
+        self._db.commit()
+        self._db.refresh(note)
+        return _note_to_dto(note)
 
     def permanent_delete_channel(self, channel_id: int) -> bool:
-        return self._repo.permanent_delete_channel(channel_id)
+        channel = self._db.query(ChannelMetadata).filter(
+            ChannelMetadata.id == channel_id,
+            ChannelMetadata.deleted_at.isnot(None),
+        ).first()
+        if not channel:
+            return False
+        self._db.delete(channel)
+        self._db.commit()
+        return True
 
     def permanent_delete_note(self, note_id: int) -> bool:
-        return self._repo.permanent_delete_note(note_id)
+        note = self._db.query(NoteDB).filter(
+            NoteDB.id == note_id,
+            NoteDB.deleted_at.isnot(None),
+        ).first()
+        if not note:
+            return False
+        self._db.delete(note)
+        self._db.commit()
+        return True
 
     def get_all_trashed_items(self) -> list[TrashItemDTO]:
-        items = self._repo.get_all_trashed_items()
-        result = []
         now = datetime.now(UTC)
-        for item in items:
-            # Calculate days until permanent deletion (30 day retention)
-            # Handle both timezone-aware and naive datetimes
-            deleted_at = item.deleted_at
+        result: list[TrashItemDTO] = []
+        for ch in self._db.query(ChannelMetadata).filter(ChannelMetadata.deleted_at.isnot(None)).order_by(ChannelMetadata.deleted_at.desc()).all():
+            deleted_at = ch.deleted_at
             if deleted_at.tzinfo is None:
                 deleted_at = deleted_at.replace(tzinfo=UTC)
-            days_in_trash = (now - deleted_at).days
-            days_until_deletion = max(0, 30 - days_in_trash)
-            result.append(
-                TrashItemDTO(
-                    id=item.id,
-                    type=item.type.value if hasattr(item.type, 'value') else item.type,
-                    name=item.name,
-                    deleted_at=item.deleted_at,
-                    days_until_permanent_deletion=days_until_deletion,
-                )
-            )
+            days = max(0, 30 - (now - deleted_at).days)
+            result.append(TrashItemDTO(id=ch.id, type="channel", name=ch.name, deleted_at=ch.deleted_at, days_until_permanent_deletion=days))
+        for note in self._db.query(NoteDB).filter(NoteDB.deleted_at.isnot(None)).order_by(NoteDB.deleted_at.desc()).all():
+            deleted_at = note.deleted_at
+            if deleted_at.tzinfo is None:
+                deleted_at = deleted_at.replace(tzinfo=UTC)
+            days = max(0, 30 - (now - deleted_at).days)
+            result.append(TrashItemDTO(id=note.id, type="note", name=note.title, deleted_at=note.deleted_at, days_until_permanent_deletion=days))
+        result.sort(key=lambda x: x.deleted_at, reverse=True)
         return result
 
     def empty_trash(self) -> tuple[int, int]:
-        return self._repo.empty_trash()
+        ch_count = self._db.query(ChannelMetadata).filter(ChannelMetadata.deleted_at.isnot(None)).delete()
+        note_count = self._db.query(NoteDB).filter(NoteDB.deleted_at.isnot(None)).delete()
+        self._db.commit()
+        return ch_count, note_count
 
     def get_trash_stats(self) -> dict:
-        return self._repo.get_trash_stats()
+        ch = self._db.query(ChannelMetadata).filter(ChannelMetadata.deleted_at.isnot(None)).count()
+        notes = self._db.query(NoteDB).filter(NoteDB.deleted_at.isnot(None)).count()
+        return {"trashed_channels": ch, "trashed_notes": notes, "total": ch + notes}
 
     def get_trashed_channel_by_db_id(self, db_id: int) -> ChannelMetadataDTO | None:
-        """Get a trashed channel by its database ID."""
         channel = self._db.query(ChannelMetadata).filter(
             ChannelMetadata.id == db_id,
             ChannelMetadata.deleted_at.isnot(None),
@@ -553,15 +597,12 @@ class TrashRepositoryAdapter(TrashRepositoryPort):
         return _channel_to_dto(channel) if channel else None
 
     def get_all_trashed_channels(self) -> list[ChannelMetadataDTO]:
-        """Get all trashed channels."""
         channels = self._db.query(ChannelMetadata).filter(
             ChannelMetadata.deleted_at.isnot(None),
         ).all()
         return [_channel_to_dto(c) for c in channels]
 
     def get_expired_trashed_channels(self, retention_days: int) -> list[ChannelMetadataDTO]:
-        """Get trashed channels that have exceeded the retention period."""
-        from datetime import timedelta
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)
         channels = self._db.query(ChannelMetadata).filter(
             ChannelMetadata.deleted_at.isnot(None),
@@ -578,17 +619,13 @@ class AudioRepositoryAdapter(AudioRepositoryPort):
     """Adapter that implements AudioRepositoryPort."""
 
     def __init__(self, db):
-        """Initialize adapter with database session.
-
-        Args:
-            db: Database session (required).
-        """
-        from src.infrastructure.persistence.audio_repository import AudioRepository
         self._db = db
-        self._repo = AudioRepository(self._db)
 
-    def _to_dto(self, audio) -> AudioOverviewDTO:
-        """Convert AudioOverviewDB to DTO."""
+    def _get(self, audio_id: str) -> AudioOverviewDB | None:
+        stmt = select(AudioOverviewDB).where(AudioOverviewDB.audio_id == audio_id)
+        return self._db.execute(stmt).scalar_one_or_none()
+
+    def _to_dto(self, audio: AudioOverviewDB) -> AudioOverviewDTO:
         return AudioOverviewDTO(
             id=audio.id,
             audio_id=audio.audio_id,
@@ -611,11 +648,20 @@ class AudioRepositoryAdapter(AudioRepositoryPort):
         language: str,
         style: str,
     ) -> AudioOverviewDTO:
-        audio = self._repo.create_audio_overview(channel_id, language, style)
+        audio = AudioOverviewDB(
+            audio_id=str(uuid.uuid4()),
+            channel_id=channel_id,
+            status="pending",
+            language=language,
+            style=style,
+        )
+        self._db.add(audio)
+        self._db.commit()
+        self._db.refresh(audio)
         return self._to_dto(audio)
 
     def get_audio_by_id(self, audio_id: str) -> AudioOverviewDTO | None:
-        audio = self._repo.get_audio_by_id(audio_id)
+        audio = self._get(audio_id)
         return self._to_dto(audio) if audio else None
 
     def get_audios_by_channel(
@@ -624,11 +670,18 @@ class AudioRepositoryAdapter(AudioRepositoryPort):
         limit: int = 20,
         offset: int = 0,
     ) -> list[AudioOverviewDTO]:
-        audios = self._repo.get_audios_by_channel(channel_id, limit, offset)
-        return [self._to_dto(a) for a in audios]
+        stmt = (
+            select(AudioOverviewDB)
+            .where(AudioOverviewDB.channel_id == channel_id)
+            .order_by(AudioOverviewDB.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return [self._to_dto(a) for a in self._db.execute(stmt).scalars().all()]
 
     def count_audios_by_channel(self, channel_id: int) -> int:
-        return self._repo.count_audios_by_channel(channel_id)
+        stmt = select(func.count()).select_from(AudioOverviewDB).where(AudioOverviewDB.channel_id == channel_id)
+        return self._db.execute(stmt).scalar_one()
 
     def update_status(
         self,
@@ -636,12 +689,27 @@ class AudioRepositoryAdapter(AudioRepositoryPort):
         status: str,
         error_message: str | None = None,
     ) -> AudioOverviewDTO | None:
-        audio = self._repo.update_status(audio_id, status, error_message)
-        return self._to_dto(audio) if audio else None
+        audio = self._get(audio_id)
+        if not audio:
+            return None
+        audio.status = status
+        if error_message:
+            audio.error_message = error_message
+        if status == "completed":
+            audio.completed_at = datetime.now(UTC)
+        self._db.commit()
+        self._db.refresh(audio)
+        return self._to_dto(audio)
 
     def update_script(self, audio_id: str, script_json: str) -> AudioOverviewDTO | None:
-        audio = self._repo.update_script(audio_id, script_json)
-        return self._to_dto(audio) if audio else None
+        audio = self._get(audio_id)
+        if not audio:
+            return None
+        audio.script_json = script_json
+        audio.status = "generating_audio"
+        self._db.commit()
+        self._db.refresh(audio)
+        return self._to_dto(audio)
 
     def update_audio_complete(
         self,
@@ -649,14 +717,31 @@ class AudioRepositoryAdapter(AudioRepositoryPort):
         audio_path: str,
         duration_seconds: int,
     ) -> AudioOverviewDTO | None:
-        audio = self._repo.update_audio_complete(audio_id, audio_path, duration_seconds)
-        return self._to_dto(audio) if audio else None
+        audio = self._get(audio_id)
+        if not audio:
+            return None
+        audio.audio_path = audio_path
+        audio.duration_seconds = duration_seconds
+        audio.status = "completed"
+        audio.completed_at = datetime.now(UTC)
+        self._db.commit()
+        self._db.refresh(audio)
+        return self._to_dto(audio)
 
     def delete_audio(self, audio_id: str) -> bool:
-        return self._repo.delete_audio(audio_id)
+        audio = self._get(audio_id)
+        if not audio:
+            return False
+        self._db.delete(audio)
+        self._db.commit()
+        return True
 
     def get_channel_by_store_id(self, gemini_store_id: str) -> ChannelMetadataDTO | None:
-        channel = self._repo.get_channel_by_store_id(gemini_store_id)
+        stmt = select(ChannelMetadata).where(
+            ChannelMetadata.gemini_store_id == gemini_store_id,
+            ChannelMetadata.deleted_at.is_(None),
+        )
+        channel = self._db.execute(stmt).scalar_one_or_none()
         return _channel_to_dto(channel) if channel else None
 
 
