@@ -70,6 +70,7 @@ def get_db():
 
 _ORM_MODEL_MODULES: tuple[str, ...] = (
     "src.modules.workspace.infrastructure.persistence.models",
+    "src.modules.conversation.infrastructure.persistence.models",
     "src.infrastructure.persistence.db_models",
 )
 
