@@ -69,6 +69,17 @@ def _matches_prefix(module: str, prefix: str) -> bool:
     return module == prefix or module.startswith(prefix + ".")
 
 
+def _is_module_presentation_import(module: str) -> bool:
+    """Return True if module path points to src.modules.<m>.presentation..."""
+    parts = module.split(".")
+    return (
+        len(parts) >= 4
+        and parts[0] == "src"
+        and parts[1] == "modules"
+        and parts[3] == "presentation"
+    )
+
+
 def _find_violations(
     directory: Path,
     forbidden: list[str],
@@ -121,12 +132,27 @@ class TestInfrastructureLayerBoundaries:
         violations = _find_violations(
             INFRASTRUCTURE_DIR, INFRA_FORBIDDEN, INFRA_EXCEPTIONS,
         )
+
+        # Also detect module presentation imports (src.modules.<m>.presentation)
+        for filepath in _collect_python_files(INFRASTRUCTURE_DIR):
+            rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+            if rel in INFRA_EXCEPTIONS:
+                continue
+            for lineno, module in _extract_imports(filepath):
+                if _is_module_presentation_import(module):
+                    violations.append(
+                        f"{rel}:{lineno} imports '{module}' "
+                        f"(forbidden: module presentation layer)"
+                    )
+
         if violations:
             msg = (
                 "Infrastructure layer imports presentation/web framework!\n\n"
                 + "\n".join(f"  - {v}" for v in violations)
                 + "\n\nFix: infrastructure should only depend on "
-                "shared kernel contracts and domain."
+                "shared kernel contracts and domain. "
+                "Module presentation imports (src.modules.<m>.presentation) "
+                "are also forbidden."
             )
             pytest.fail(msg)
 
