@@ -81,10 +81,14 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown: Stop compaction runner first, then scheduler
+    # Shutdown: Stop compaction runner, audio executor, then scheduler
     from src.infrastructure.di.container import shutdown_compaction_runner
     shutdown_compaction_runner(wait=False)
     logger.info("Compaction runner shutdown complete")
+
+    from src.api.v1.audio import shutdown_audio_executor
+    shutdown_audio_executor(wait=False)
+    logger.info("Audio executor shutdown complete")
 
     scheduler = get_scheduler()
     scheduler.shutdown(wait=False)

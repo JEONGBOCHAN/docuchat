@@ -47,6 +47,20 @@ router = APIRouter(prefix="/channels", tags=["audio"])
 # Bounded thread pool for audio generation to prevent unbounded thread creation
 _audio_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="audio-gen")
 
+_audio_logger = __import__("logging").getLogger(__name__)
+
+
+def shutdown_audio_executor(wait: bool = False) -> None:
+    """Shut down the audio generation thread pool.
+
+    Called during app lifespan shutdown to ensure clean thread cleanup.
+    """
+    try:
+        _audio_executor.shutdown(wait=wait)
+        _audio_logger.info("Audio executor shut down (wait=%s)", wait)
+    except Exception:
+        _audio_logger.warning("Audio executor shutdown failed", exc_info=True)
+
 
 def get_channel_port() -> ChannelPort:
     """Get channel port instance."""

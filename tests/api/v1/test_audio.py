@@ -433,3 +433,36 @@ class TestStreamAudio:
         )
 
         assert response.status_code == 404
+
+
+class TestAudioExecutorShutdown:
+    """Tests for shutdown_audio_executor."""
+
+    def test_shutdown_calls_executor_shutdown(self):
+        """shutdown_audio_executor should invoke the executor's shutdown method."""
+        from src.api.v1 import audio as audio_module
+
+        original = audio_module._audio_executor
+        mock_executor = MagicMock()
+        audio_module._audio_executor = mock_executor
+
+        try:
+            audio_module.shutdown_audio_executor(wait=True)
+            mock_executor.shutdown.assert_called_once_with(wait=True)
+        finally:
+            audio_module._audio_executor = original
+
+    def test_shutdown_exception_does_not_propagate(self):
+        """Even if executor.shutdown raises, the function should not propagate."""
+        from src.api.v1 import audio as audio_module
+
+        original = audio_module._audio_executor
+        mock_executor = MagicMock()
+        mock_executor.shutdown.side_effect = RuntimeError("thread error")
+        audio_module._audio_executor = mock_executor
+
+        try:
+            # Should not raise
+            audio_module.shutdown_audio_executor(wait=False)
+        finally:
+            audio_module._audio_executor = original
