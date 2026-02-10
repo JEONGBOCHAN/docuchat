@@ -1219,6 +1219,14 @@ class TestSessionRenewalOldSessionId:
         app.dependency_overrides.pop(get_chat_use_case, None)
 
 
+def _mock_document_search():
+    """Create a mock DocumentSearchPort for tests that directly construct runners."""
+    mock_ds = MagicMock()
+    mock_ds.search.return_value = []
+    mock_ds.search_with_answer.return_value = {"response": "", "sources": []}
+    return mock_ds
+
+
 class TestCheckpointMissFallback:
     """Tests for checkpoint miss DB history fallback (CHA-167)."""
 
@@ -1229,7 +1237,7 @@ class TestCheckpointMissFallback:
         from src.application.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
-        runner = LangGraphAgentRunner(checkpointer=checkpointer)
+        runner = LangGraphAgentRunner(checkpointer=checkpointer, document_search=_mock_document_search())
 
         # Track whether the lazy loader was called
         loader_called = []
@@ -1275,7 +1283,7 @@ class TestCheckpointMissFallback:
         from src.application.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
-        runner = LangGraphAgentRunner(checkpointer=checkpointer)
+        runner = LangGraphAgentRunner(checkpointer=checkpointer, document_search=_mock_document_search())
 
         # Pre-populate checkpoint state so get_tuple returns non-None
         thread_id = "sess_has_checkpoint"
@@ -1336,7 +1344,7 @@ class TestCheckpointMissFallbackStream:
         from src.application.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
-        runner = LangGraphAgentRunner(checkpointer=checkpointer)
+        runner = LangGraphAgentRunner(checkpointer=checkpointer, document_search=_mock_document_search())
 
         loader_called = []
 
@@ -1387,7 +1395,7 @@ class TestCheckpointMissFallbackStream:
         from src.application.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
-        runner = LangGraphAgentRunner(checkpointer=checkpointer)
+        runner = LangGraphAgentRunner(checkpointer=checkpointer, document_search=_mock_document_search())
 
         # Pre-populate checkpoint state so get_tuple returns non-None
         thread_id = "sess_has_checkpoint_stream"
@@ -1537,7 +1545,7 @@ class TestSqliteSaverIntegration:
         saver = SqliteSaver(conn)
         saver.setup()
 
-        runner = LangGraphAgentRunner(checkpointer=saver)
+        runner = LangGraphAgentRunner(checkpointer=saver, document_search=_mock_document_search())
 
         loader_called = []
 
