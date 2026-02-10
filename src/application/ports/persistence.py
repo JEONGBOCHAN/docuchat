@@ -265,6 +265,14 @@ class ChatHistoryRepositoryPort(ABC):
         ...
 
     @abstractmethod
+    def get_full_session_history(self, session_id: str) -> list[ChatMessageDTO]:
+        """Get complete session history without any limit.
+
+        Used by compaction to read all messages, bypassing context_window defaults.
+        """
+        ...
+
+    @abstractmethod
     def clear_history(self, channel_id: int) -> int:
         """Clear chat history for a channel."""
         ...

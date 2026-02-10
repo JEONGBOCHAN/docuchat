@@ -240,6 +240,18 @@ class ChatHistoryRepositoryAdapter(ChatHistoryRepositoryPort):
         messages = self._repo.get_session_history(session, effective_limit)
         return [_chat_message_to_dto(m) for m in messages]
 
+    def get_full_session_history(self, session_id: str) -> list[ChatMessageDTO]:
+        session = self._db.query(ChatSessionDB).filter(
+            ChatSessionDB.session_id == session_id
+        ).first()
+
+        if not session:
+            return []
+
+        # limit=0 is falsy, so the repo skips the LIMIT clause and returns all messages
+        messages = self._repo.get_session_history(session, 0)
+        return [_chat_message_to_dto(m) for m in messages]
+
     def clear_history(self, channel_id: int) -> int:
         channel = self._db.query(ChannelMetadata).filter(
             ChannelMetadata.id == channel_id

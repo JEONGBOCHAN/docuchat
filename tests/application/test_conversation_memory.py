@@ -206,7 +206,7 @@ class TestMaybeCompact:
     def test_no_messages_does_nothing(self, service, session_memory_repo, chat_history_repo, summary_port):
         """No messages should not trigger compaction."""
         session_memory_repo.get_by_session_id.return_value = None
-        chat_history_repo.get_session_history.return_value = []
+        chat_history_repo.get_full_session_history.return_value = []
 
         service.maybe_compact("sess_1")
 
@@ -216,7 +216,7 @@ class TestMaybeCompact:
     def test_below_threshold_does_nothing(self, service, session_memory_repo, chat_history_repo, summary_port):
         """Messages below threshold should not trigger compaction."""
         session_memory_repo.get_by_session_id.return_value = None
-        chat_history_repo.get_session_history.return_value = [
+        chat_history_repo.get_full_session_history.return_value = [
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(3)  # below threshold of 5
         ]
@@ -228,7 +228,7 @@ class TestMaybeCompact:
     def test_compaction_triggered_at_threshold(self, service, session_memory_repo, chat_history_repo, summary_port):
         """At threshold, compaction should be triggered."""
         session_memory_repo.get_by_session_id.return_value = None
-        chat_history_repo.get_session_history.return_value = [
+        chat_history_repo.get_full_session_history.return_value = [
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(1, 6)  # exactly 5, meets threshold
         ]
@@ -248,7 +248,7 @@ class TestMaybeCompact:
             rolling_summary="Old summary",
             last_compacted_message_id=3,
         )
-        chat_history_repo.get_session_history.return_value = [
+        chat_history_repo.get_full_session_history.return_value = [
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(1, 10)  # messages 1-9
         ]
@@ -270,7 +270,7 @@ class TestMaybeCompact:
             rolling_summary="Previous",
             last_compacted_message_id=8,
         )
-        chat_history_repo.get_session_history.return_value = [
+        chat_history_repo.get_full_session_history.return_value = [
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(1, 12)  # 11 messages total
         ]
@@ -280,10 +280,10 @@ class TestMaybeCompact:
 
         summary_port.summarize_incremental.assert_not_called()
 
-    def test_compaction_reads_full_history_with_limit_zero(self, service, session_memory_repo, chat_history_repo, summary_port):
-        """Compaction should read full session history with limit=0, bypassing context_window default."""
+    def test_compaction_reads_full_history_via_explicit_method(self, service, session_memory_repo, chat_history_repo, summary_port):
+        """Compaction should use get_full_session_history (not get_session_history with limit)."""
         session_memory_repo.get_by_session_id.return_value = None
-        chat_history_repo.get_session_history.return_value = [
+        chat_history_repo.get_full_session_history.return_value = [
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(1, 6)
         ]
@@ -291,13 +291,13 @@ class TestMaybeCompact:
 
         service.maybe_compact("sess_1")
 
-        # Verify limit=0 is passed (bypasses context_window default)
-        chat_history_repo.get_session_history.assert_called_once_with("sess_1", limit=0)
+        # Verify explicit full-history method is used
+        chat_history_repo.get_full_session_history.assert_called_once_with("sess_1")
 
     def test_summary_failure_does_not_advance_cursor(self, service, session_memory_repo, chat_history_repo, summary_port):
         """When summary generation fails, cursor should NOT advance."""
         session_memory_repo.get_by_session_id.return_value = None
-        chat_history_repo.get_session_history.return_value = [
+        chat_history_repo.get_full_session_history.return_value = [
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(1, 6)  # 5 messages, meets threshold
         ]
@@ -316,7 +316,7 @@ class TestMaybeCompact:
         session_memory_repo.get_by_session_id.return_value = FakeMemoryDTO(
             rolling_summary="Old", last_compacted_message_id=3,
         )
-        chat_history_repo.get_session_history.return_value = [
+        chat_history_repo.get_full_session_history.return_value = [
             FakeMessageDTO(id=i, role="user", content=f"msg {i}")
             for i in range(1, 10)  # ids 1-9, new = 4-9 (6 msgs, above threshold)
         ]
