@@ -21,19 +21,19 @@ from src.models.audio import (
     AudioOverviewListResponse,
     ScriptOnlyResponse,
 )
-from src.application.ports.channel import ChannelPort
-from src.application.ports.persistence import (
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.persistence import (
     AudioRepositoryPort,
     ChannelRepositoryPort,
 )
-from src.application.ports.external_services import TTSPort
-from src.application.use_cases.audio_generation import (
+from src.shared.kernel.contracts.ports.external_services import TTSPort
+from src.modules.knowledge.application.use_cases.audio_generation import (
     GenerateAudioUseCase,
     AudioGenerationRequest,
 )
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.application.use_cases.podcast import GeneratePodcastScriptRequest
+from src.modules.knowledge.application.use_cases.podcast import GeneratePodcastScriptRequest
 from src.modules.knowledge.public import (
     create_generate_podcast_script_use_case,
     create_generate_audio_use_case,

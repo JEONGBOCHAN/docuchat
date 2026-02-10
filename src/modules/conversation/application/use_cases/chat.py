@@ -13,19 +13,19 @@ from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from typing import Callable, Generator
 
-from src.application.ports.channel import ChannelPort
-from src.application.ports.persistence import (
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.persistence import (
     ChannelRepositoryPort,
     ChatHistoryRepositoryPort,
     ChatSessionRepositoryPort,
     ChatSessionMemoryRepositoryPort,
     SearchHistoryRepositoryPort,
 )
-from src.application.ports.cache import CachePort
-from src.application.use_cases.document_summary import GetChannelDocumentSummariesUseCase
-from src.application.use_cases.process_query import ProcessQueryUseCase
-from src.application.use_cases.conversation_memory import ConversationMemoryService
-from src.application.use_cases.exceptions import (
+from src.shared.kernel.contracts.ports.cache import CachePort
+from src.modules.workspace.public import GetChannelDocumentSummariesUseCase
+from src.modules.conversation.application.use_cases.process_query import ProcessQueryUseCase
+from src.modules.conversation.application.use_cases.conversation_memory import ConversationMemoryService
+from src.shared.kernel.contracts.errors.use_case_errors import (
     ChannelNotFoundError,
     SessionNotFoundError,
     SessionExpiredError,

@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 
 from src.models.note import NoteCreate, NoteUpdate, NoteResponse, NoteList
 from src.models.chat import GroundingSource
-from src.application.use_cases.note_crud import NoteCrudUseCase, NoteDetailDTO
-from src.application.use_cases.exceptions import ChannelNotFoundError, NoteValidationError
+from src.modules.workspace.application.use_cases.note_crud import NoteCrudUseCase, NoteDetailDTO
+from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError, NoteValidationError
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 

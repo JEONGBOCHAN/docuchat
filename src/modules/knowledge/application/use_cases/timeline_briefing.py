@@ -7,7 +7,7 @@ These use cases handle timeline extraction and briefing generation.
 
 from dataclasses import dataclass, field
 
-from src.application.ports.timeline import (
+from src.shared.kernel.contracts.ports.timeline import (
     TimelinePort,
     BriefingPort,
     TimelineEventDTO,

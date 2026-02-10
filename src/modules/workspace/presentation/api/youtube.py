@@ -12,12 +12,12 @@ from src.models.youtube import (
     YouTubeSourceRequest,
     YouTubeSourceResponse,
 )
-from src.application.ports.channel import ChannelPort
-from src.application.ports.document import DocumentPort
-from src.application.ports.external_services import YouTubePort
-from src.application.services.capacity_service import CapacityService
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.document import DocumentPort
+from src.shared.kernel.contracts.ports.external_services import YouTubePort
+from src.modules.workspace.application.services.capacity_service import CapacityService
 from src.domain.exceptions import CapacityExceededError
-from src.application.use_cases.exceptions import (
+from src.shared.kernel.contracts.errors.use_case_errors import (
     YouTubeError,
     TranscriptNotAvailableError,
     InvalidVideoError,

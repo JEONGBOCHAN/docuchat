@@ -8,7 +8,7 @@ It enforces file count and size limits to prevent resource exhaustion.
 from dataclasses import dataclass
 
 from src.core.config import get_settings
-from src.application.ports.persistence import ChannelRepositoryPort, ChannelMetadataDTO
+from src.shared.kernel.contracts.ports.persistence import ChannelRepositoryPort, ChannelMetadataDTO
 from src.domain.exceptions import CapacityExceededError
 
 

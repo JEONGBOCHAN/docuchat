@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from src.models.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelList
-from src.application.use_cases.channel_crud import ChannelCrudUseCase, ChannelDetailDTO
+from src.modules.workspace.application.use_cases.channel_crud import ChannelCrudUseCase, ChannelDetailDTO
 from src.core.database import get_db
-from src.application.use_cases.exceptions import UpstreamError
+from src.shared.kernel.contracts.errors.use_case_errors import UpstreamError
 from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/channels", tags=["channels"])

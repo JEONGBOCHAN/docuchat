@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Callable, Any
 
 if TYPE_CHECKING:
-    from src.application.use_cases.conversation_memory import ConversationMemoryService
+    from src.modules.conversation.application.use_cases.conversation_memory import ConversationMemoryService
 
 logger = logging.getLogger(__name__)
 

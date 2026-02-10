@@ -5,7 +5,7 @@ import logging
 import threading
 from functools import lru_cache
 
-from src.application.ports import (
+from src.shared.kernel.contracts.ports import (
     AgentRunnerPort,
     AgentEventSinkPort,
     DocumentSearchPort,

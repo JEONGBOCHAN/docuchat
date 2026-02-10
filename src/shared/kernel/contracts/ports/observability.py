@@ -16,7 +16,7 @@ Benefits:
 
 from abc import ABC, abstractmethod
 
-from src.application.dto.agent_event import AgentEvent
+from src.shared.kernel.contracts.dto.agent_event import AgentEvent
 
 
 class AgentEventSinkPort(ABC):

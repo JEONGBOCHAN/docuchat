@@ -16,12 +16,12 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.application.ports.persistence import (
+    from src.shared.kernel.contracts.ports.persistence import (
         ChatHistoryRepositoryPort,
         ChatSessionMemoryRepositoryPort,
     )
-    from src.application.ports.conversation_summary import ConversationSummaryPort
-    from src.application.ports.token_counter import TokenCounterPort
+    from src.shared.kernel.contracts.ports.conversation_summary import ConversationSummaryPort
+    from src.shared.kernel.contracts.ports.token_counter import TokenCounterPort
 
 logger = logging.getLogger(__name__)
 

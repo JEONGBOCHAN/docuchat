@@ -24,7 +24,7 @@ from src.models.chat import (
     GroundingSource,
 )
 from src.modules.conversation.application.use_cases.chat import ChatUseCase, ChatAgentError
-from src.application.use_cases.exceptions import (
+from src.shared.kernel.contracts.errors.use_case_errors import (
     ChannelNotFoundError,
     SessionNotFoundError,
     SessionExpiredError,

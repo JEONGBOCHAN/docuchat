@@ -14,13 +14,13 @@ from dataclasses import dataclass
 from datetime import datetime, UTC
 from pathlib import Path
 
-from src.application.ports.channel import ChannelPort
-from src.application.ports.document import DocumentPort
-from src.application.ports.external_services import CrawlerPort
-from src.application.ports.cache import CachePort
-from src.application.services.capacity_service import CapacityService
-from src.application.use_cases.document_summary import GenerateDocumentSummaryUseCase
-from src.application.use_cases.exceptions import ChannelNotFoundError, FileValidationError
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.document import DocumentPort
+from src.shared.kernel.contracts.ports.external_services import CrawlerPort
+from src.shared.kernel.contracts.ports.cache import CachePort
+from src.modules.workspace.application.services.capacity_service import CapacityService
+from src.modules.workspace.application.use_cases.document_summary import GenerateDocumentSummaryUseCase
+from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError, FileValidationError
 
 logger = logging.getLogger(__name__)
 

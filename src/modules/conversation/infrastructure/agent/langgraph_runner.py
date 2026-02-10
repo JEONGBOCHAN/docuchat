@@ -26,14 +26,14 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 logger = logging.getLogger(__name__)
 
-from src.application.ports.agent_runner import (
+from src.shared.kernel.contracts.ports.agent_runner import (
     AgentRunnerPort,
     AgentConfig,
     AgentResult,
     AgentTool,
 )
-from src.application.ports.observability import AgentEventSinkPort
-from src.application.dto.agent_event import (
+from src.shared.kernel.contracts.ports.observability import AgentEventSinkPort
+from src.shared.kernel.contracts.dto.agent_event import (
     AgentStartedEvent,
     AgentCompletedEvent,
     AgentErrorEvent,
@@ -50,9 +50,9 @@ from src.agents.tools.search_tools import (
     create_google_scholar_search_tool,
 )
 from src.core.config import get_settings, GeminiModels
-from src.application.ports.document_search import DocumentSearchPort
-from src.application.ports.web_search import WebSearchPort
-from src.application.ports.token_counter import TokenCounterPort
+from src.shared.kernel.contracts.ports.document_search import DocumentSearchPort
+from src.shared.kernel.contracts.ports.web_search import WebSearchPort
+from src.shared.kernel.contracts.ports.token_counter import TokenCounterPort
 from src.agents.middlewares.dashboard import DashboardMiddleware
 
 

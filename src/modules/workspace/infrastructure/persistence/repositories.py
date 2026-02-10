@@ -8,7 +8,7 @@ between SQLAlchemy models and application DTOs.
 import json
 from datetime import datetime, UTC
 
-from src.application.ports.persistence import (
+from src.shared.kernel.contracts.ports.persistence import (
     ChannelMetadataDTO,
     NoteDTO,
     FavoriteDTO,

@@ -9,7 +9,7 @@ from datetime import datetime, UTC
 
 from typing import Any
 
-from src.application.ports.export import (
+from src.shared.kernel.contracts.ports.export import (
     ExportFormat,
     GroundingSourceDTO,
     NoteExportDTO,
@@ -18,7 +18,7 @@ from src.application.ports.export import (
     ChannelExportMetadataDTO,
     ChannelFullExportDTO,
 )
-from src.application.ports.persistence import (
+from src.shared.kernel.contracts.ports.persistence import (
     ChannelRepositoryPort,
     ChatHistoryRepositoryPort,
     NoteRepositoryPort,

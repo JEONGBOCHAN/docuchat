@@ -8,7 +8,7 @@ It orchestrates the FAQ generation process through the port interface.
 
 from dataclasses import dataclass, field
 
-from src.application.ports.faq_generation import FAQGenerationPort, FAQItemDTO
+from src.shared.kernel.contracts.ports.faq_generation import FAQGenerationPort, FAQItemDTO
 
 
 @dataclass

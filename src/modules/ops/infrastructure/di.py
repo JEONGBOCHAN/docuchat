@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Ops module DI container."""
 
-from src.application.ports import (
+from src.shared.kernel.contracts.ports import (
     ApiMetricsPort,
     SchedulerPort,
 )

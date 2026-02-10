@@ -14,10 +14,10 @@ from src.models.preview import (
     SourceLocation,
     SourceLocationResponse,
 )
-from src.application.ports.channel import ChannelPort
-from src.application.ports.document import DocumentPort
-from src.application.ports.preview import DocumentPreviewDTO, SourceLocationResultDTO
-from src.application.services.preview_service import PreviewService, DEFAULT_PAGE_SIZE
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.document import DocumentPort
+from src.shared.kernel.contracts.ports.preview import DocumentPreviewDTO, SourceLocationResultDTO
+from src.modules.workspace.application.services.preview_service import PreviewService, DEFAULT_PAGE_SIZE
 from src.modules.workspace.public import (
     create_channel_port,
     create_document_port,

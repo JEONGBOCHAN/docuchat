@@ -14,9 +14,9 @@ import json
 import logging
 from dataclasses import dataclass
 
-from src.application.ports.persistence import AudioRepositoryPort
-from src.application.ports.external_services import TTSPort
-from src.application.use_cases.podcast import (
+from src.shared.kernel.contracts.ports.persistence import AudioRepositoryPort
+from src.shared.kernel.contracts.ports.external_services import TTSPort
+from src.modules.knowledge.application.use_cases.podcast import (
     GeneratePodcastScriptUseCase,
     GeneratePodcastScriptRequest,
 )

@@ -8,7 +8,7 @@ They orchestrate the summarization process through the port interface.
 
 from dataclasses import dataclass
 
-from src.application.ports.summarization import SummarizationPort, SummaryDTO
+from src.shared.kernel.contracts.ports.summarization import SummarizationPort, SummaryDTO
 
 
 @dataclass

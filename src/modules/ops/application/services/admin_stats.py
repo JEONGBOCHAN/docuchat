@@ -8,9 +8,9 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, UTC
 
-from src.application.ports.persistence import ChannelRepositoryPort
-from src.application.ports.infrastructure import ApiMetricsPort, SchedulerPort
-from src.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
+from src.shared.kernel.contracts.ports.persistence import ChannelRepositoryPort
+from src.shared.kernel.contracts.ports.infrastructure import ApiMetricsPort, SchedulerPort
+from src.modules.ops.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
 from src.core.config import get_settings
 
 logger = logging.getLogger(__name__)

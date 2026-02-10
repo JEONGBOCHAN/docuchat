@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.application.ports.channel import ChannelPort, ChannelDTO
-from src.application.ports.document import DocumentPort
-from src.application.ports.persistence import ChannelRepositoryPort
+from src.shared.kernel.contracts.ports.channel import ChannelPort, ChannelDTO
+from src.shared.kernel.contracts.ports.document import DocumentPort
+from src.shared.kernel.contracts.ports.persistence import ChannelRepositoryPort
 from src.core.database import get_db
 from src.modules.workspace.public import (
     create_channel_port,

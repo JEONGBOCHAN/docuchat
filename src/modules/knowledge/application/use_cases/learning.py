@@ -7,7 +7,7 @@ These use cases handle study guide and quiz generation.
 
 from dataclasses import dataclass, field
 
-from src.application.ports.learning import (
+from src.shared.kernel.contracts.ports.learning import (
     StudyGuidePort,
     QuizPort,
     StudySectionDTO,

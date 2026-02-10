@@ -12,15 +12,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from typing import Any
 
-from src.application.ports.channel import ChannelPort
-from src.application.ports.persistence import (
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.persistence import (
     ChannelRepositoryPort,
     NoteRepositoryPort,
     TrashRepositoryPort,
 )
 from src.domain.entities.note import Note
 from src.domain.exceptions import NoteValidationError as DomainNoteValidationError
-from src.application.use_cases.exceptions import ChannelNotFoundError, NoteValidationError
+from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError, NoteValidationError
 
 
 # ---------------------------------------------------------------------------

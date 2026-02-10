@@ -25,8 +25,8 @@ from src.models.document import (
     UploadStatus,
     UrlUploadRequest,
 )
-from src.application.use_cases.document_crud import DocumentCrudUseCase
-from src.application.use_cases.exceptions import ChannelNotFoundError, FileValidationError
+from src.modules.workspace.application.use_cases.document_crud import DocumentCrudUseCase
+from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError, FileValidationError
 from src.domain.exceptions import CapacityExceededError
 
 logger = logging.getLogger(__name__)

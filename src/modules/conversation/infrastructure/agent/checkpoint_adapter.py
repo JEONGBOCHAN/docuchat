@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from src.application.ports.checkpoint import CheckpointStorePort
+from src.shared.kernel.contracts.ports.checkpoint import CheckpointStorePort
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver

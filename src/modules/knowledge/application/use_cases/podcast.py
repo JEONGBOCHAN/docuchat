@@ -7,7 +7,7 @@ Application logic for generating podcast scripts from documents.
 
 from dataclasses import dataclass
 
-from src.application.ports.podcast import (
+from src.shared.kernel.contracts.ports.podcast import (
     PodcastScriptPort,
     PodcastScriptDTO,
 )

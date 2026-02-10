@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.models.summarize import SummarizeRequest, SummarizeResponse, SummaryType
-from src.application.ports.document import DocumentPort
+from src.shared.kernel.contracts.ports.document import DocumentPort
 from src.shared.kernel.presentation.dependencies.channel_validation import (
     ValidatedChannel,
     validate_channel_with_touch,

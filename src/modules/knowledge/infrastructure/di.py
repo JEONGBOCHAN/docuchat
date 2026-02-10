@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Knowledge module DI container."""
 
-from src.application.ports import (
+from src.shared.kernel.contracts.ports import (
     FAQGenerationPort,
     SummarizationPort,
     TimelinePort,
@@ -12,7 +12,7 @@ from src.application.ports import (
     AudioRepositoryPort,
     TTSPort,
 )
-from src.application.ports.citation_search import CitationSearchPort
+from src.shared.kernel.contracts.ports.citation_search import CitationSearchPort
 from src.modules.knowledge.application.use_cases.search_with_citations import SearchWithCitationsUseCase
 from src.modules.knowledge.application.use_cases.generate_faq import GenerateFAQUseCase
 from src.modules.knowledge.application.use_cases.summarize import (

@@ -17,12 +17,12 @@ from src.models.citation import (
     CitationRequest,
     CitationDetail,
 )
-from src.application.ports.channel import ChannelPort
-from src.application.ports.persistence import ChannelRepositoryPort
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.persistence import ChannelRepositoryPort
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
-from src.application.ports.citation_search import CitationDTO
+from src.modules.knowledge.application.use_cases.search_with_citations import SearchWithCitationsUseCase
+from src.shared.kernel.contracts.ports.citation_search import CitationDTO
 from src.modules.knowledge.public import create_search_with_citations_use_case
 from src.modules.workspace.public import (
     create_channel_port,

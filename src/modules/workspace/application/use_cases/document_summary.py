@@ -10,7 +10,7 @@ system prompt, helping it choose the right tool (search_documents vs web_search)
 import logging
 from dataclasses import dataclass, field
 
-from src.application.ports.document_summary import (
+from src.shared.kernel.contracts.ports.document_summary import (
     DocumentSummaryGenerationPort,
     DocumentSummaryCachePort,
     DocumentSummaryDTO,

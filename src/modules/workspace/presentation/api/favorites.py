@@ -19,8 +19,8 @@ from src.models.favorite import (
     FavoriteResponse,
     TargetType,
 )
-from src.application.use_cases.favorite_crud import FavoriteCrudUseCase, FavoriteDetailDTO
-from src.application.use_cases.exceptions import (
+from src.modules.workspace.application.use_cases.favorite_crud import FavoriteCrudUseCase, FavoriteDetailDTO
+from src.shared.kernel.contracts.errors.use_case_errors import (
     ChannelNotFoundError,
     TargetNotFoundError,
     InvalidTargetError,

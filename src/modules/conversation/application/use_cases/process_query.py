@@ -20,14 +20,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Generator
 
-from src.application.ports import (
+from src.shared.kernel.contracts.ports import (
     AgentRunnerPort,
     AgentConfig,
     AgentEventSinkPort,
     DocumentSearchPort,
     WebSearchPort,
 )
-from src.application.dto.agent_event import (
+from src.shared.kernel.contracts.dto.agent_event import (
     AgentErrorEvent,
     generate_session_id,
 )

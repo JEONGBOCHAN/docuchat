@@ -17,11 +17,11 @@ from src.models.search import (
     SearchSuggestion,
     SearchSuggestionList,
 )
-from src.application.use_cases.search_history import (
+from src.modules.workspace.application.use_cases.search_history import (
     SearchHistoryUseCase,
     SearchHistoryItemDTO,
 )
-from src.application.use_cases.exceptions import ChannelNotFoundError
+from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError
 from src.core.database import get_db
 
 router = APIRouter(prefix="/search", tags=["search"])

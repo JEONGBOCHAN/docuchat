@@ -12,13 +12,13 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 
-from src.application.ports.channel import ChannelPort
-from src.application.ports.document import DocumentPort
-from src.application.ports.persistence import (
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.document import DocumentPort
+from src.shared.kernel.contracts.ports.persistence import (
     ChannelRepositoryPort,
     FavoriteRepositoryPort,
 )
-from src.application.ports.cache import CachePort
+from src.shared.kernel.contracts.ports.cache import CachePort
 
 logger = logging.getLogger(__name__)
 

@@ -11,12 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 
-from src.application.ports.channel import ChannelPort
-from src.application.ports.persistence import (
+from src.shared.kernel.contracts.ports.channel import ChannelPort
+from src.shared.kernel.contracts.ports.persistence import (
     FavoriteRepositoryPort,
     NoteRepositoryPort,
 )
-from src.application.use_cases.exceptions import (
+from src.shared.kernel.contracts.errors.use_case_errors import (
     ChannelNotFoundError,
     TargetNotFoundError,
     InvalidTargetError,

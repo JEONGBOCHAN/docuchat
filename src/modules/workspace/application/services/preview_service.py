@@ -4,12 +4,12 @@
 import re
 
 from src.core.config import GeminiModels
-from src.application.ports.document_search import DocumentSearchPort
-from src.application.ports.persistence import (
+from src.shared.kernel.contracts.ports.document_search import DocumentSearchPort
+from src.shared.kernel.contracts.ports.persistence import (
     DocumentPreviewCacheRepositoryPort,
     DocumentPreviewCacheDTO,
 )
-from src.application.ports.preview import (
+from src.shared.kernel.contracts.ports.preview import (
     DocumentPreviewDTO,
     TextHighlightDTO,
     SourceLocationDTO,

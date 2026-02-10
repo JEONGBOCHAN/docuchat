@@ -22,8 +22,8 @@ from sqlalchemy.orm import Session
 from src.core.config import get_settings
 from src.core.database import get_db
 from src.core.logging import get_logger
-from src.application.use_cases.document_crud import DocumentCrudUseCase
-from src.application.use_cases.exceptions import ChannelNotFoundError
+from src.modules.workspace.application.use_cases.document_crud import DocumentCrudUseCase
+from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError
 from src.domain.exceptions import CapacityExceededError
 
 logger = get_logger(__name__)

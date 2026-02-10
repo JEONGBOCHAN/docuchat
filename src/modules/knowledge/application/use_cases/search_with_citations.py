@@ -10,7 +10,7 @@ structured results with citation markers.
 from dataclasses import dataclass, field
 from typing import Generator, Any
 
-from src.application.ports.citation_search import (
+from src.shared.kernel.contracts.ports.citation_search import (
     CitationSearchPort,
     CitationDTO,
     CitationResultDTO,

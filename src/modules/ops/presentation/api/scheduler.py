@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from src.application.ports.infrastructure import SchedulerPort
+from src.shared.kernel.contracts.ports.infrastructure import SchedulerPort
 from src.modules.ops.public import create_scheduler_port
 from src.core.rate_limiter import limiter, RateLimits
 from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
