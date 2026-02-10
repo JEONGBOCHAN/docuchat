@@ -610,6 +610,25 @@ class TrashRepositoryAdapter(TrashRepositoryPort):
         ).all()
         return [_channel_to_dto(c) for c in channels]
 
+    def cleanup_specific_channels(self, channel_ids: list[int]) -> int:
+        if not channel_ids:
+            return 0
+        count = self._db.query(ChannelMetadata).filter(
+            ChannelMetadata.id.in_(channel_ids),
+            ChannelMetadata.deleted_at.isnot(None),
+        ).delete(synchronize_session=False)
+        self._db.commit()
+        return count
+
+    def cleanup_expired_notes(self, retention_days: int) -> int:
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        count = self._db.query(NoteDB).filter(
+            NoteDB.deleted_at.isnot(None),
+            NoteDB.deleted_at < cutoff,
+        ).delete()
+        self._db.commit()
+        return count
+
 
 # =============================================================================
 # Audio Repository Adapter

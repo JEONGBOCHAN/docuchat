@@ -576,6 +576,30 @@ class TrashRepositoryPort(ABC):
         """
         ...
 
+    @abstractmethod
+    def cleanup_specific_channels(self, channel_ids: list[int]) -> int:
+        """Permanently delete specific trashed channels by their IDs.
+
+        Args:
+            channel_ids: List of channel IDs (primary keys) to delete
+
+        Returns:
+            Number of channels deleted
+        """
+        ...
+
+    @abstractmethod
+    def cleanup_expired_notes(self, retention_days: int) -> int:
+        """Permanently delete trashed notes older than retention period.
+
+        Args:
+            retention_days: Number of days to retain trashed items
+
+        Returns:
+            Number of notes deleted
+        """
+        ...
+
 
 class AudioRepositoryPort(ABC):
     """Port for audio overview repository operations."""

@@ -9,10 +9,13 @@ import logging
 from datetime import datetime, UTC
 
 from src.core.database import SessionLocal
-from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.modules.ops.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
-from src.modules.workspace.public import create_channel_port, create_document_port, create_trash_repository_port
-from src.infrastructure.persistence.trash_repository import TrashRepository
+from src.modules.workspace.public import (
+    create_channel_port,
+    create_document_port,
+    create_channel_repository_port,
+    create_trash_repository_port,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,7 @@ def scan_inactive_channels():
 
     db = SessionLocal()
     try:
-        repo = ChannelRepository(db)
+        repo = create_channel_repository_port(db)
         policy = LifecyclePolicy()
 
         # Get all channels
@@ -83,7 +86,7 @@ def cleanup_inactive_channels(dry_run: bool = True):
 
     db = SessionLocal()
     try:
-        repo = ChannelRepository(db)
+        repo = create_channel_repository_port(db)
         policy = LifecyclePolicy()
         channel_port = create_channel_port()
 
@@ -140,7 +143,7 @@ def update_channel_statistics():
 
     db = SessionLocal()
     try:
-        repo = ChannelRepository(db)
+        repo = create_channel_repository_port(db)
         document_port = create_document_port()
 
         channels = repo.get_all()
@@ -190,8 +193,8 @@ def cleanup_expired_trash(retention_days: int = 30):
 
     db = SessionLocal()
     try:
-        trash_repo = TrashRepository(db)
-        trash_port = create_trash_repository_port(db)
+        trash_repo = create_trash_repository_port(db)
+        trash_port = trash_repo
         channel_port = create_channel_port()
 
         # Get trashed channels that have exceeded the retention period
