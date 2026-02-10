@@ -7,13 +7,13 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.modules.workspace.presentation.api.favorites import get_favorite_crud_use_case_factory
-from src.application.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
 from src.modules.workspace.infrastructure.persistence.models import NoteDB
 
 
 def _make_use_case(test_db, channel_port=None):
     """Create a FavoriteCrudUseCase with real DB repos and mocked external port."""
-    from src.application.use_cases.favorite_crud import FavoriteCrudUseCase
+    from src.modules.workspace.application.use_cases.favorite_crud import FavoriteCrudUseCase
     from src.modules.workspace.public import (
         create_favorite_repository_port,
         create_note_repository_port,
@@ -533,7 +533,7 @@ class TestChannelListWithFavorites:
     def test_list_channels_with_favorites(self, client_with_db: TestClient, test_db):
         """Test that channel list includes is_favorited field."""
         from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
-        from src.application.use_cases.channel_crud import ChannelCrudUseCase
+        from src.modules.workspace.application.use_cases.channel_crud import ChannelCrudUseCase
         from src.modules.workspace.public import (
             create_channel_repository_port,
             create_favorite_repository_port,
@@ -588,7 +588,7 @@ class TestChannelListWithFavorites:
     def test_get_channel_with_favorite_status(self, client_with_db: TestClient, test_db):
         """Test that get channel includes is_favorited field."""
         from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
-        from src.application.use_cases.channel_crud import ChannelCrudUseCase
+        from src.modules.workspace.application.use_cases.channel_crud import ChannelCrudUseCase
         from src.modules.workspace.public import (
             create_channel_repository_port,
             create_favorite_repository_port,

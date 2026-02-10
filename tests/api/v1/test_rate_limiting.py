@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.core.rate_limiter import RateLimits
 from src.modules.conversation.presentation.api.chat import get_chat_use_case_factory
-from src.application.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def client():
 @pytest.fixture
 def mock_channel_port():
     """Mock ChatUseCase via get_chat_use_case for chat endpoint."""
-    from src.application.use_cases.chat import ChatUseCase
+    from src.modules.conversation.application.use_cases.chat import ChatUseCase
 
     mock_port = MagicMock()
     mock_port.get_channel.return_value = ChannelDTO(

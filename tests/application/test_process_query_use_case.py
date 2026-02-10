@@ -9,9 +9,9 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from dataclasses import dataclass
 
-from src.application.use_cases.process_query import ProcessQueryUseCase, QueryResult
-from src.application.ports import AgentRunnerPort, AgentConfig, AgentEventSinkPort
-from src.application.ports.agent_runner import AgentResult
+from src.modules.conversation.application.use_cases.process_query import ProcessQueryUseCase, QueryResult
+from src.shared.kernel.contracts.ports import AgentRunnerPort, AgentConfig, AgentEventSinkPort
+from src.shared.kernel.contracts.ports.agent_runner import AgentResult
 
 
 class TestProcessQueryUseCase:

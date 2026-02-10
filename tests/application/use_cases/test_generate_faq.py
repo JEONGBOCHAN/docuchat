@@ -8,8 +8,8 @@ Tests the Clean Architecture use case for generating FAQ items.
 import pytest
 from unittest.mock import Mock
 
-from src.application.use_cases.generate_faq import GenerateFAQUseCase, FAQResult
-from src.application.ports.faq_generation import FAQGenerationPort, FAQItemDTO
+from src.modules.knowledge.application.use_cases.generate_faq import GenerateFAQUseCase, FAQResult
+from src.shared.kernel.contracts.ports.faq_generation import FAQGenerationPort, FAQItemDTO
 
 
 class TestGenerateFAQUseCase:

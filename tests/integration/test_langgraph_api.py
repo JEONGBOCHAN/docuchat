@@ -66,7 +66,7 @@ class TestLangGraphAPICompatibility:
     def test_langgraph_runner_creates_without_error(self):
         """Test that LangGraphAgentRunner doesn't raise state_modifier error."""
         from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
-        from src.application.ports.agent_runner import AgentConfig
+        from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         runner = LangGraphAgentRunner(
             event_sink=None,

@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock
 
 from src.infrastructure.external.gemini.quiz import GeminiQuizAdapter
-from src.application.ports.learning import QuizDTO, QuizQuestionDTO, QuizChoiceDTO
+from src.shared.kernel.contracts.ports.learning import QuizDTO, QuizQuestionDTO, QuizChoiceDTO
 
 
 class TestGeminiQuizAdapter:

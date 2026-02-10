@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock, patch
 
 from src.infrastructure.external.gemini.token_counter import GeminiTokenCounterAdapter
-from src.application.ports.token_counter import TokenCounterPort
+from src.shared.kernel.contracts.ports.token_counter import TokenCounterPort
 
 
 class TestGeminiTokenCounterAdapter:

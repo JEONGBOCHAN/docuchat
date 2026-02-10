@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock
 
 from src.infrastructure.external.gemini.timeline import GeminiTimelineAdapter
-from src.application.ports.timeline import TimelineEventDTO
+from src.shared.kernel.contracts.ports.timeline import TimelineEventDTO
 
 
 class TestGeminiTimelineAdapter:

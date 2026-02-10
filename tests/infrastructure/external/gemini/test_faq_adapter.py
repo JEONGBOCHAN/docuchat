@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 
 from src.infrastructure.external.gemini.faq import GeminiFAQAdapter
-from src.application.ports.faq_generation import FAQItemDTO
+from src.shared.kernel.contracts.ports.faq_generation import FAQItemDTO
 
 
 class TestGeminiFAQAdapter:

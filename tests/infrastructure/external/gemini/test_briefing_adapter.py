@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock
 
 from src.infrastructure.external.gemini.briefing import GeminiBriefingAdapter
-from src.application.ports.timeline import BriefingDTO, BriefingSectionDTO
+from src.shared.kernel.contracts.ports.timeline import BriefingDTO, BriefingSectionDTO
 
 
 class TestGeminiBriefingAdapter:

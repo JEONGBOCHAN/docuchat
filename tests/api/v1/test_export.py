@@ -11,14 +11,14 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.modules.workspace.presentation.api.export import get_channel_port
 from src.modules.workspace.presentation.api.notes import get_note_crud_use_case_factory
-from src.application.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
 from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata, NoteDB
 from src.modules.conversation.infrastructure.persistence.models import ChatMessageDB
 
 
 def _make_note_use_case(test_db, channel_port=None):
     """Create NoteCrudUseCase with real DB repos and optional mock channel port."""
-    from src.application.use_cases.note_crud import NoteCrudUseCase
+    from src.modules.workspace.application.use_cases.note_crud import NoteCrudUseCase
     from src.modules.workspace.public import (
         create_channel_repository_port,
         create_note_repository_port,

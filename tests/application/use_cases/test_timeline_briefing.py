@@ -8,13 +8,13 @@ Tests the Clean Architecture use cases for timeline and briefing generation.
 import pytest
 from unittest.mock import Mock
 
-from src.application.use_cases.timeline_briefing import (
+from src.modules.knowledge.application.use_cases.timeline_briefing import (
     GenerateTimelineUseCase,
     GenerateBriefingUseCase,
     TimelineResult,
     BriefingResult,
 )
-from src.application.ports.timeline import (
+from src.shared.kernel.contracts.ports.timeline import (
     TimelinePort,
     BriefingPort,
     TimelineEventDTO,

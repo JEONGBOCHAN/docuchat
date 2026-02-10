@@ -9,8 +9,8 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 
 from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
-from src.application.ports.channel import ChannelDTO
-from src.application.use_cases.exceptions import UpstreamError
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.errors.use_case_errors import UpstreamError
 
 
 class TestGeminiChannelAdapter:

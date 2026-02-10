@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock
 
 from src.infrastructure.external.gemini.podcast import GeminiPodcastAdapter
-from src.application.ports.podcast import (
+from src.shared.kernel.contracts.ports.podcast import (
     PodcastScriptDTO,
     DialogueLineDTO,
 )

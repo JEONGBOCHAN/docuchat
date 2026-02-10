@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.application.ports.conversation_summary import SummaryResult
-from src.application.use_cases.conversation_memory import ConversationMemoryService
+from src.shared.kernel.contracts.ports.conversation_summary import SummaryResult
+from src.modules.conversation.application.use_cases.conversation_memory import ConversationMemoryService
 
 
 @dataclass

@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock, patch
 
 from src.infrastructure.external.gemini.summarization import GeminiSummarizationAdapter
-from src.application.ports.summarization import SummaryDTO
+from src.shared.kernel.contracts.ports.summarization import SummaryDTO
 
 
 class TestGeminiSummarizationAdapter:

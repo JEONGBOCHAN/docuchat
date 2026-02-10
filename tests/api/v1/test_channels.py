@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
-from src.application.use_cases.channel_crud import ChannelCrudUseCase
-from src.application.ports.channel import ChannelDTO
-from src.application.ports.document import DocumentDTO
+from src.modules.workspace.application.use_cases.channel_crud import ChannelCrudUseCase
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.document import DocumentDTO
 from src.core.database import get_db
 from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata
 

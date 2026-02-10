@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.modules.knowledge.presentation.api.audio import get_channel_port
-from src.application.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
 from src.modules.knowledge.presentation.schemas.audio import AudioStatus, VoiceType
 from src.modules.workspace.infrastructure.persistence.models import ChannelMetadata, AudioOverviewDB
 
@@ -299,7 +299,7 @@ class TestPreviewScript:
 
     def test_preview_script_success(self, client_with_db: TestClient, test_db):
         """Test successful script preview."""
-        from src.application.ports.podcast import PodcastScriptDTO, DialogueLineDTO
+        from src.shared.kernel.contracts.ports.podcast import PodcastScriptDTO, DialogueLineDTO
 
         channel = ChannelMetadata(
             gemini_store_id="fileSearchStores/test-store",

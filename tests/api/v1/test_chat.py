@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.modules.conversation.presentation.api.chat import get_chat_use_case_factory
-from src.application.ports.channel import ChannelDTO
-from src.application.use_cases.process_query import QueryResult
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
+from src.modules.conversation.application.use_cases.process_query import QueryResult
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +37,7 @@ def _make_chat_use_case(
     When db is provided, real DB repositories are used (for integration tests).
     When db is None, all repositories are mocked.
     """
-    from src.application.use_cases.chat import ChatUseCase
+    from src.modules.conversation.application.use_cases.chat import ChatUseCase
 
     if db is not None:
         from src.modules.workspace.public import (
@@ -1139,7 +1139,7 @@ class TestSessionRenewalOldSessionId:
     ):
         """REST response includes old_session_id when session was renewed."""
         from datetime import datetime, UTC
-        from src.application.ports.persistence import ChatSessionDTO
+        from src.shared.kernel.contracts.ports.persistence import ChatSessionDTO
 
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
@@ -1193,7 +1193,7 @@ class TestSessionRenewalOldSessionId:
     ):
         """SSE session event includes old_session_id when session was renewed."""
         from datetime import datetime, UTC
-        from src.application.ports.persistence import ChatSessionDTO
+        from src.shared.kernel.contracts.ports.persistence import ChatSessionDTO
 
         mock_channel_port = MagicMock()
         mock_channel_port.get_channel.return_value = ChannelDTO(
@@ -1274,7 +1274,7 @@ class TestCheckpointMissFallback:
         """When checkpointer has no state, the lazy history loader is called."""
         from langgraph.checkpoint.memory import MemorySaver
         from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
-        from src.application.ports.agent_runner import AgentConfig
+        from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
         runner = LangGraphAgentRunner(checkpointer=checkpointer, document_search=_mock_document_search())
@@ -1320,7 +1320,7 @@ class TestCheckpointMissFallback:
         """When checkpoint exists, the lazy history loader is NOT called."""
         from langgraph.checkpoint.memory import MemorySaver
         from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
-        from src.application.ports.agent_runner import AgentConfig
+        from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
         runner = LangGraphAgentRunner(checkpointer=checkpointer, document_search=_mock_document_search())
@@ -1381,7 +1381,7 @@ class TestCheckpointMissFallbackStream:
         """run_stream(): when checkpointer has no state, the lazy history loader is called."""
         from langgraph.checkpoint.memory import MemorySaver
         from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
-        from src.application.ports.agent_runner import AgentConfig
+        from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
         runner = LangGraphAgentRunner(checkpointer=checkpointer, document_search=_mock_document_search())
@@ -1432,7 +1432,7 @@ class TestCheckpointMissFallbackStream:
         """run_stream(): when checkpoint exists, the lazy history loader is NOT called."""
         from langgraph.checkpoint.memory import MemorySaver
         from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
-        from src.application.ports.agent_runner import AgentConfig
+        from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         checkpointer = MemorySaver()
         runner = LangGraphAgentRunner(checkpointer=checkpointer, document_search=_mock_document_search())
@@ -1578,7 +1578,7 @@ class TestSqliteSaverIntegration:
         import sqlite3
         from langgraph.checkpoint.sqlite import SqliteSaver
         from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
-        from src.application.ports.agent_runner import AgentConfig
+        from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
         db_path = str(tmp_path / "runner_checkpoints.db")
         conn = sqlite3.connect(db_path, check_same_thread=False)

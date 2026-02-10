@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 
 from src.infrastructure.external.gemini.citation import GeminiCitationAdapter
-from src.application.ports.citation_search import CitationDTO, CitationResultDTO
+from src.shared.kernel.contracts.ports.citation_search import CitationDTO, CitationResultDTO
 
 
 class TestGeminiCitationAdapter:

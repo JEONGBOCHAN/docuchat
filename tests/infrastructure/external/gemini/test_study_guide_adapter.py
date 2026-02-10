@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock
 
 from src.infrastructure.external.gemini.study_guide import GeminiStudyGuideAdapter
-from src.application.ports.learning import (
+from src.shared.kernel.contracts.ports.learning import (
     StudyGuideDTO,
     StudySectionDTO,
     KeyConceptDTO,

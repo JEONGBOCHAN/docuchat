@@ -8,10 +8,10 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.modules.knowledge.presentation.api.citations import get_channel_port, get_citations_use_case_factory
-from src.application.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
 from src.core.database import get_db
-from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase, CitationSearchResult
-from src.application.ports.citation_search import CitationDTO
+from src.modules.knowledge.application.use_cases.search_with_citations import SearchWithCitationsUseCase, CitationSearchResult
+from src.shared.kernel.contracts.ports.citation_search import CitationDTO
 
 
 def _create_mock_use_case(result: CitationSearchResult = None, stream_events: list = None):

@@ -8,13 +8,13 @@ Tests the Clean Architecture use cases for study guide and quiz generation.
 import pytest
 from unittest.mock import Mock
 
-from src.application.use_cases.learning import (
+from src.modules.knowledge.application.use_cases.learning import (
     GenerateStudyGuideUseCase,
     GenerateQuizUseCase,
     StudyGuideResult,
     QuizResult,
 )
-from src.application.ports.learning import (
+from src.shared.kernel.contracts.ports.learning import (
     StudyGuidePort,
     QuizPort,
     StudyGuideDTO,

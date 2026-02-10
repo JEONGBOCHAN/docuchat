@@ -11,7 +11,7 @@ from datetime import datetime
 
 from src.infrastructure.observability.event_store import InMemoryEventStore
 from src.infrastructure.observability.state_store_adapter import StateStoreAdapter
-from src.application.dto.agent_event import (
+from src.shared.kernel.contracts.dto.agent_event import (
     AgentEvent,
     EventType,
     AgentStartedEvent,

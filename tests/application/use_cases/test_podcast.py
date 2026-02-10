@@ -8,11 +8,11 @@ Tests the Clean Architecture use case for podcast script generation.
 import pytest
 from unittest.mock import Mock
 
-from src.application.use_cases.podcast import (
+from src.modules.knowledge.application.use_cases.podcast import (
     GeneratePodcastScriptUseCase,
     GeneratePodcastScriptRequest,
 )
-from src.application.ports.podcast import (
+from src.shared.kernel.contracts.ports.podcast import (
     PodcastScriptPort,
     PodcastScriptDTO,
     DialogueLineDTO,

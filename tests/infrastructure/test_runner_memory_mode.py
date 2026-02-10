@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 
 from src.infrastructure.agent.langgraph_runner import LangGraphAgentRunner
-from src.application.ports.agent_runner import AgentConfig
+from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
 
 class TestHistoryToMessages:

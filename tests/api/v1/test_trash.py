@@ -12,9 +12,9 @@ from src.modules.workspace.presentation.api.trash import get_channel_port
 from src.modules.workspace.presentation.api.channels import get_channel_crud_use_case_factory
 from src.modules.workspace.presentation.api.notes import get_note_crud_use_case_factory
 from src.shared.kernel.presentation.dependencies.admin_auth import require_admin_key
-from src.application.use_cases.channel_crud import ChannelCrudUseCase
-from src.application.ports.channel import ChannelDTO
-from src.application.ports.document import DocumentDTO
+from src.modules.workspace.application.use_cases.channel_crud import ChannelCrudUseCase
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.document import DocumentDTO
 
 
 @pytest.fixture(autouse=True)
@@ -472,7 +472,7 @@ class TestSoftDeleteIntegration:
 
     def test_deleted_note_not_in_list(self, client_with_db: TestClient, test_db):
         """Test that soft-deleted notes are not shown in note list."""
-        from src.application.use_cases.note_crud import NoteCrudUseCase
+        from src.modules.workspace.application.use_cases.note_crud import NoteCrudUseCase
         from src.modules.workspace.public import (
             create_channel_repository_port,
             create_note_repository_port,

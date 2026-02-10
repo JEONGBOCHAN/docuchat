@@ -8,12 +8,12 @@ Tests the Clean Architecture use cases for document and channel summarization.
 import pytest
 from unittest.mock import Mock
 
-from src.application.use_cases.summarize import (
+from src.modules.knowledge.application.use_cases.summarize import (
     SummarizeChannelUseCase,
     SummarizeDocumentUseCase,
     SummarizeResult,
 )
-from src.application.ports.summarization import SummarizationPort, SummaryDTO
+from src.shared.kernel.contracts.ports.summarization import SummarizationPort, SummaryDTO
 
 
 class TestSummarizeChannelUseCase:

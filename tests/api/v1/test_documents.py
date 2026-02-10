@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.modules.workspace.presentation.api.documents import get_document_crud_use_case_factory
-from src.application.ports.channel import ChannelDTO
-from src.application.ports.document import DocumentDTO, UploadResultDTO
+from src.shared.kernel.contracts.ports.channel import ChannelDTO
+from src.shared.kernel.contracts.ports.document import DocumentDTO, UploadResultDTO
 from src.infrastructure.external.crawler.crawler import CrawlResult
 
 
@@ -20,7 +20,7 @@ def _make_use_case(
     max_file_size_mb=50,
 ):
     """Create DocumentCrudUseCase with mock dependencies."""
-    from src.application.use_cases.document_crud import DocumentCrudUseCase
+    from src.modules.workspace.application.use_cases.document_crud import DocumentCrudUseCase
 
     mock_cache = MagicMock()
     # Ensure cache returns None (cache miss) by default so port is called
@@ -336,7 +336,7 @@ class TestDeleteDocument:
 class TestUploadFromUrl:
     """Tests for POST /api/v1/documents/url."""
 
-    @patch("src.application.use_cases.document_crud.os.path.getsize")
+    @patch("src.modules.workspace.application.use_cases.document_crud.os.path.getsize")
     def test_upload_from_url_success(self, mock_getsize, client_with_db: TestClient, test_db):
         """Test successful URL upload."""
         mock_getsize.return_value = 1024

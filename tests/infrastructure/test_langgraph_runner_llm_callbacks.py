@@ -20,7 +20,7 @@ from src.agents.middlewares.dashboard import (
     AgentStatus,
     NodeStatus,
 )
-from src.application.ports.agent_runner import AgentConfig
+from src.shared.kernel.contracts.ports.agent_runner import AgentConfig
 
 
 class TestLangGraphAgentRunnerInit:
@@ -405,7 +405,7 @@ class TestLangGraphAgentRunnerToolCallsNotAffected:
             ))
 
         # Verify tool events were emitted to event_sink
-        from src.application.dto.agent_event import ToolStartedEvent, ToolCompletedEvent
+        from src.shared.kernel.contracts.dto.agent_event import ToolStartedEvent, ToolCompletedEvent
         tool_started = [e for e in events_emitted if isinstance(e, ToolStartedEvent)]
         tool_completed = [e for e in events_emitted if isinstance(e, ToolCompletedEvent)]
 

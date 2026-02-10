@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 
 from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
-from src.application.ports.document import DocumentDTO, UploadResultDTO
+from src.shared.kernel.contracts.ports.document import DocumentDTO, UploadResultDTO
 
 
 class TestGeminiDocumentAdapter:

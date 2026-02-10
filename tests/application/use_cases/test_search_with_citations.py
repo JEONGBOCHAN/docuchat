@@ -8,11 +8,11 @@ Tests the Clean Architecture use case for document search with inline citations.
 import pytest
 from unittest.mock import Mock
 
-from src.application.use_cases.search_with_citations import (
+from src.modules.knowledge.application.use_cases.search_with_citations import (
     SearchWithCitationsUseCase,
     CitationSearchResult,
 )
-from src.application.ports.citation_search import (
+from src.shared.kernel.contracts.ports.citation_search import (
     CitationSearchPort,
     CitationDTO,
     CitationResultDTO,
