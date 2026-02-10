@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Legacy freeze tests: prevent growth of legacy paths during modular transition.
+Legacy absence tests: verify all legacy packages have been removed.
 
-New code MUST go into src/modules/*. These tests ensure that legacy paths
-(src/application/use_cases, src/api/v1, src/infrastructure/di/container.py)
-do not grow — no new files, no significant length increase.
-
-If a test fails, it means new code was added to a legacy path instead
-of the proper module under src/modules/.
+After the modular monolith migration, these directories must not exist:
+- src/api
+- src/application
+- src/infrastructure/di
+- src/infrastructure/persistence
+- src/models
 """
 
 from pathlib import Path
@@ -15,166 +15,68 @@ from pathlib import Path
 import pytest
 
 
-# ──────────────────────────────────────────────────────────
-# Configuration
-# ──────────────────────────────────────────────────────────
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = PROJECT_ROOT / "src"
 
-# Snapshot of allowed files as of modular monolith transition start.
-# Files in this list are allowed to exist. Any NEW .py file is a violation.
-
-LEGACY_USE_CASES_ALLOWLIST = {
-    "__init__.py",
-    "audio_generation.py",
-    "channel_crud.py",
-    "chat.py",
-    "conversation_memory.py",
-    "document_crud.py",
-    "document_summary.py",
-    "exceptions.py",
-    "favorite_crud.py",
-    "generate_faq.py",
-    "learning.py",
-    "note_crud.py",
-    "podcast.py",
-    "process_query.py",
-    "search_history.py",
-    "search_with_citations.py",
-    "summarize.py",
-    "timeline_briefing.py",
-}
-
-LEGACY_API_V1_ALLOWLIST = {
-    "__init__.py",
-    "admin.py",
-    "audio.py",
-    "capacity.py",
-    "channels.py",
-    "chat.py",
-    "citations.py",
-    "dashboard.py",
-    "deps.py",
-    "documents.py",
-    "export.py",
-    "faq.py",
-    "favorites.py",
-    "google_drive.py",
-    "health.py",
-    "mcp.py",
-    "notes.py",
-    "preview.py",
-    "router.py",
-    "scheduler.py",
-    "search.py",
-    "study.py",
-    "summarize.py",
-    "timeline.py",
-    "trash.py",
-    "youtube.py",
-}
-
-# container.py line count at freeze point.
-# Container is now a pure shim (~195 lines). Allow small tolerance.
-LEGACY_API_DEPS_ALLOWLIST = {
-    "__init__.py",
-    "channel.py",
-}
-
-CONTAINER_MAX_LINES = 250
+BANNED_DIRECTORIES = [
+    "api",
+    "application",
+    "infrastructure/di",
+    "infrastructure/persistence",
+    "models",
+]
 
 
-# ──────────────────────────────────────────────────────────
-# Tests
-# ──────────────────────────────────────────────────────────
+class TestLegacyAbsence:
+    """Verify all legacy compatibility surfaces have been removed."""
 
-class TestLegacyFreeze:
-    """Prevent new code from being added to legacy paths."""
-
-    def test_no_new_use_case_files(self):
-        """No new .py files should appear in src/application/use_cases/."""
-        use_cases_dir = SRC_DIR / "application" / "use_cases"
-        if not use_cases_dir.exists():
-            return
-
-        current_files = {
-            f.name for f in use_cases_dir.iterdir()
-            if f.is_file() and f.suffix == ".py"
-        }
-        new_files = current_files - LEGACY_USE_CASES_ALLOWLIST
-        if new_files:
-            msg = (
-                "New files detected in legacy path src/application/use_cases/!\n\n"
-                + "\n".join(f"  - {f}" for f in sorted(new_files))
-                + "\n\nFix: add new use cases to src/modules/<module>/application/use_cases/ instead."
+    @pytest.mark.parametrize("rel_path", BANNED_DIRECTORIES)
+    def test_legacy_directory_absent(self, rel_path: str):
+        """Legacy directory must not exist."""
+        directory = SRC_DIR / rel_path
+        if directory.exists():
+            files = sorted(f.relative_to(SRC_DIR).as_posix() for f in directory.rglob("*.py"))
+            pytest.fail(
+                f"Legacy directory src/{rel_path} still exists!\n"
+                f"Files: {files}\n\n"
+                f"All code must live in src/modules/ or src/shared/."
             )
-            pytest.fail(msg)
 
-    def test_no_new_api_v1_files(self):
-        """No new .py files should appear in src/api/v1/."""
-        api_dir = SRC_DIR / "api" / "v1"
-        if not api_dir.exists():
-            return
+    def test_no_legacy_imports_in_src(self):
+        """No src code should import from banned legacy roots."""
+        import ast
 
-        current_files = {
-            f.name for f in api_dir.iterdir()
-            if f.is_file() and f.suffix == ".py"
-        }
-        new_files = current_files - LEGACY_API_V1_ALLOWLIST
-        if new_files:
-            msg = (
-                "New files detected in legacy path src/api/v1/!\n\n"
-                + "\n".join(f"  - {f}" for f in sorted(new_files))
-                + "\n\nFix: add new API routes to src/modules/<module>/presentation/api/ instead."
-            )
-            pytest.fail(msg)
-
-    def test_container_does_not_grow(self):
-        """src/infrastructure/di/container.py must not grow beyond freeze limit."""
-        container = SRC_DIR / "infrastructure" / "di" / "container.py"
-        if not container.exists():
-            return
-
-        line_count = len(container.read_text(encoding="utf-8").splitlines())
-        assert line_count <= CONTAINER_MAX_LINES, (
-            f"container.py has {line_count} lines (limit: {CONTAINER_MAX_LINES}).\n"
-            f"New DI logic should go into src/modules/<module>/infrastructure/di.py instead."
-        )
-
-    def test_no_new_api_dependencies_files(self):
-        """No new .py files should appear in src/api/dependencies/."""
-        deps_dir = SRC_DIR / "api" / "dependencies"
-        if not deps_dir.exists():
-            return
-
-        current_files = {
-            f.name for f in deps_dir.iterdir()
-            if f.is_file() and f.suffix == ".py"
-        }
-        new_files = current_files - LEGACY_API_DEPS_ALLOWLIST
-        if new_files:
-            msg = (
-                "New files detected in legacy path src/api/dependencies/!\n\n"
-                + "\n".join(f"  - {f}" for f in sorted(new_files))
-                + "\n\nFix: add new dependencies to the relevant module under src/modules/."
-            )
-            pytest.fail(msg)
-
-    def test_no_direct_container_imports(self):
-        """No code outside infrastructure/di/ should import from container directly."""
+        banned_prefixes = [
+            "src.api.",
+            "src.application.",
+            "src.infrastructure.di.",
+            "src.infrastructure.persistence.",
+            "src.models.",
+        ]
         violations = []
-        for py in SRC_DIR.rglob("*.py"):
-            rel = py.relative_to(SRC_DIR).as_posix()
-            if rel.startswith("infrastructure/di/"):
+
+        for py_file in SRC_DIR.rglob("*.py"):
+            try:
+                tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+            except SyntaxError:
                 continue
-            text = py.read_text(encoding="utf-8")
-            if "from src.infrastructure.di.container import" in text:
-                violations.append(rel)
+
+            rel = py_file.relative_to(SRC_DIR).as_posix()
+            for node in ast.walk(tree):
+                module = None
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    module = node.module
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        module = alias.name
+
+                if module:
+                    for prefix in banned_prefixes:
+                        if module.startswith(prefix) or module == prefix.rstrip("."):
+                            violations.append(f"src/{rel}:{node.lineno} imports '{module}'")
+
         if violations:
-            msg = (
-                "Direct container imports found outside infrastructure/di/!\n\n"
-                + "\n".join(f"  - src/{v}" for v in sorted(violations))
-                + "\n\nFix: import from src.modules.<module>.public instead."
+            pytest.fail(
+                "Legacy imports found in src/!\n\n"
+                + "\n".join(f"  - {v}" for v in violations)
             )
-            pytest.fail(msg)
