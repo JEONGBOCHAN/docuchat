@@ -34,6 +34,9 @@ from src.modules.workspace.infrastructure.di import (  # noqa: F401
     create_capacity_service,
     create_export_service,
     create_preview_service,
+    # Google Drive factories
+    create_google_drive_port,
+    create_google_drive_integration_use_case,
 )
 
 __all__ = [
@@ -61,4 +64,6 @@ __all__ = [
     "create_capacity_service",
     "create_export_service",
     "create_preview_service",
+    "create_google_drive_port",
+    "create_google_drive_integration_use_case",
 ]

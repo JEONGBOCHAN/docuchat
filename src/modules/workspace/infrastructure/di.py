@@ -16,6 +16,7 @@ from src.shared.kernel.contracts.ports import (
     YouTubePort,
     CrawlerPort,
     CachePort,
+    GoogleDrivePort,
 )
 from src.infrastructure.external.gemini.channel import GeminiChannelAdapter
 from src.infrastructure.external.gemini.document import GeminiDocumentAdapter
@@ -208,3 +209,26 @@ def create_preview_service(db):
 def create_audio_repository_port(db) -> AudioRepositoryPort:
     from src.modules.workspace.infrastructure.persistence.repositories import AudioRepositoryAdapter
     return AudioRepositoryAdapter(db)
+
+
+# ============================================================
+# Google Drive Factories
+# ============================================================
+
+def create_google_drive_port() -> GoogleDrivePort:
+    from src.modules.workspace.infrastructure.external.google_drive_adapter import GoogleDriveAdapter
+    return GoogleDriveAdapter()
+
+
+def create_google_drive_integration_use_case(db):
+    from src.modules.workspace.application.use_cases.google_drive_integration import (
+        GoogleDriveIntegrationUseCase,
+    )
+    from src.modules.workspace.application.services.oauth_state_signer import OAuthStateSigner
+    from src.core.config import get_settings
+    settings = get_settings()
+    return GoogleDriveIntegrationUseCase(
+        drive_port=create_google_drive_port(),
+        state_signer=OAuthStateSigner(secret=settings.google_oauth_client_secret),
+        document_crud=create_document_crud_use_case(db),
+    )

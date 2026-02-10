@@ -111,6 +111,14 @@ from src.shared.kernel.contracts.ports.external_services import (
     TTSPort,
 )
 
+# Google Drive Port
+from src.shared.kernel.contracts.ports.google_drive import (
+    GoogleDrivePort,
+    GoogleDriveTokenDTO,
+    GoogleDriveFileDTO,
+    DownloadedDriveFileDTO,
+)
+
 # Cache Port
 from src.shared.kernel.contracts.ports.cache import CachePort
 
@@ -254,6 +262,11 @@ __all__ = [
     "YouTubePort",
     "CrawlerPort",
     "TTSPort",
+    # Google Drive Port
+    "GoogleDrivePort",
+    "GoogleDriveTokenDTO",
+    "GoogleDriveFileDTO",
+    "DownloadedDriveFileDTO",
     # Cache Port
     "CachePort",
     # Token Counter Port

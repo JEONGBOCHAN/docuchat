@@ -1,103 +1,157 @@
 # -*- coding: utf-8 -*-
-"""Tests for Google Drive OAuth HMAC state functions."""
+"""Tests for Google Drive API endpoints.
 
-import time
-from unittest.mock import patch
+Tests router-level behavior: HTTP mapping, error codes, dependency injection.
+Business logic tests are in tests/modules/workspace/application/use_cases/.
+"""
+
+from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+
+from src.modules.workspace.application.use_cases.google_drive_integration import (
+    GoogleDriveIntegrationUseCase,
+    InvalidOAuthStateError,
+)
+from src.shared.kernel.contracts.ports.google_drive import (
+    GoogleDriveTokenDTO,
+    GoogleDriveFileDTO,
+)
+from src.modules.workspace.application.use_cases.document_crud import DocumentUploadResultDTO
+from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError
+from src.modules.workspace.domain.exceptions import CapacityExceededError
 
 
-class TestOAuthStateHMAC:
-    """Test HMAC-signed stateless OAuth state."""
+@pytest.fixture()
+def mock_use_case():
+    return MagicMock(spec=GoogleDriveIntegrationUseCase)
 
-    def _get_functions(self):
-        """Import functions under test with mocked settings."""
-        from src.modules.workspace.presentation.api.google_drive import (
-            _create_oauth_state,
-            _verify_oauth_state,
+
+@pytest.fixture()
+def client(mock_use_case):
+    from src.main import app
+    from src.modules.workspace.presentation.api.google_drive import _get_use_case
+
+    app.dependency_overrides[_get_use_case] = lambda: mock_use_case
+    yield TestClient(app, raise_server_exceptions=False)
+    app.dependency_overrides.clear()
+
+
+class TestGetAuthUrl:
+    def test_success(self, client, mock_use_case):
+        mock_use_case.get_auth_url.return_value = ("https://auth.example.com", "state123")
+        resp = client.get("/api/v1/integrations/google-drive/auth-url")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["auth_url"] == "https://auth.example.com"
+        assert data["state"] == "state123"
+
+    def test_failure_returns_500(self, client, mock_use_case):
+        mock_use_case.get_auth_url.side_effect = RuntimeError("boom")
+        resp = client.get("/api/v1/integrations/google-drive/auth-url")
+        assert resp.status_code == 500
+
+
+class TestExchangeToken:
+    def test_success(self, client, mock_use_case):
+        mock_use_case.exchange_token.return_value = GoogleDriveTokenDTO(
+            access_token="at", refresh_token="rt", expires_in=3600
         )
-        return _create_oauth_state, _verify_oauth_state
+        resp = client.post(
+            "/api/v1/integrations/google-drive/token",
+            json={"code": "authcode", "state": "valid-state"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["access_token"] == "at"
 
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_create_and_verify_roundtrip(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "test-secret-key"
-        create, verify = self._get_functions()
+    def test_invalid_state_returns_400(self, client, mock_use_case):
+        mock_use_case.exchange_token.side_effect = InvalidOAuthStateError("bad state")
+        resp = client.post(
+            "/api/v1/integrations/google-drive/token",
+            json={"code": "authcode", "state": "bad"},
+        )
+        assert resp.status_code == 400
 
-        state = create()
-        assert verify(state) is True
 
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_state_has_three_parts(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "test-secret-key"
-        create, _ = self._get_functions()
+class TestListFiles:
+    def test_success(self, client, mock_use_case):
+        files = [
+            GoogleDriveFileDTO(
+                id="f1", name="test.pdf", mime_type="application/pdf",
+                size=100, modified_time=None, icon_link=None,
+                thumbnail_link=None, parents=None,
+            )
+        ]
+        mock_use_case.list_files.return_value = (files, None)
+        resp = client.get(
+            "/api/v1/integrations/google-drive/files",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["files"]) == 1
+        assert data["files"][0]["name"] == "test.pdf"
 
-        state = create()
-        parts = state.split(".")
-        assert len(parts) == 3
+    def test_missing_bearer_returns_401(self, client):
+        resp = client.get(
+            "/api/v1/integrations/google-drive/files",
+            headers={"Authorization": "InvalidFormat"},
+        )
+        assert resp.status_code == 401
 
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_tampered_signature_rejected(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "test-secret-key"
-        create, verify = self._get_functions()
 
-        state = create()
-        parts = state.split(".")
-        # Tamper with signature
-        tampered = f"{parts[0]}.{parts[1]}.{'a' * 64}"
-        assert verify(tampered) is False
+class TestImportFile:
+    def test_success(self, client, mock_use_case):
+        mock_use_case.import_file.return_value = DocumentUploadResultDTO(
+            operation_name="op1", filename="test.pdf", done=True
+        )
+        resp = client.post(
+            "/api/v1/integrations/google-drive/import/ch1",
+            json={"file_id": "f1", "access_token": "at"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == "op1"
+        assert data["status"] == "completed"
 
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_tampered_nonce_rejected(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "test-secret-key"
-        create, verify = self._get_functions()
+    def test_channel_not_found_returns_404(self, client, mock_use_case):
+        mock_use_case.import_file.side_effect = ChannelNotFoundError("ch1")
+        resp = client.post(
+            "/api/v1/integrations/google-drive/import/ch1",
+            json={"file_id": "f1", "access_token": "at"},
+        )
+        assert resp.status_code == 404
 
-        state = create()
-        parts = state.split(".")
-        tampered = f"{'b' * 32}.{parts[1]}.{parts[2]}"
-        assert verify(tampered) is False
+    def test_capacity_exceeded_returns_413(self, client, mock_use_case):
+        mock_use_case.import_file.side_effect = CapacityExceededError(
+            "limit reached", limit_type="size", current=100.0, limit=50.0
+        )
+        resp = client.post(
+            "/api/v1/integrations/google-drive/import/ch1",
+            json={"file_id": "f1", "access_token": "at"},
+        )
+        assert resp.status_code == 413
 
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_expired_state_rejected(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "test-secret-key"
-        create, verify = self._get_functions()
 
-        # Create state, then fast-forward time past TTL
-        state = create()
-        with patch("src.modules.workspace.presentation.api.google_drive.time") as mock_time:
-            mock_time.time.return_value = time.time() + 700  # 700s > 600s TTL
-            assert verify(state) is False
+class TestRefreshToken:
+    def test_success(self, client, mock_use_case):
+        mock_use_case.refresh_token.return_value = GoogleDriveTokenDTO(
+            access_token="new-at", refresh_token=None, expires_in=3600
+        )
+        resp = client.post(
+            "/api/v1/integrations/google-drive/refresh-token",
+            json={"refresh_token": "old-rt"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["access_token"] == "new-at"
 
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_malformed_state_rejected(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "test-secret-key"
-        _, verify = self._get_functions()
-
-        assert verify("not-a-valid-state") is False
-        assert verify("only.two") is False
-        assert verify("") is False
-
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_invalid_timestamp_rejected(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "test-secret-key"
-        _, verify = self._get_functions()
-
-        assert verify("abc.not_a_number.def") is False
-
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_different_secret_rejected(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "secret-one"
-        create, _ = self._get_functions()
-        state = create()
-
-        # Change secret
-        mock_settings.google_oauth_client_secret = "secret-two"
-        _, verify = self._get_functions()
-        assert verify(state) is False
-
-    @patch("src.modules.workspace.presentation.api.google_drive.settings")
-    def test_unique_states(self, mock_settings):
-        mock_settings.google_oauth_client_secret = "test-secret-key"
-        create, _ = self._get_functions()
-
-        states = {create() for _ in range(10)}
-        assert len(states) == 10
+    def test_failure_returns_401(self, client, mock_use_case):
+        mock_use_case.refresh_token.side_effect = RuntimeError("failed")
+        resp = client.post(
+            "/api/v1/integrations/google-drive/refresh-token",
+            json={"refresh_token": "bad"},
+        )
+        assert resp.status_code == 401
