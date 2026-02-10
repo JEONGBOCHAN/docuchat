@@ -40,6 +40,17 @@ def _get_reset_cache_service():
     return reset_cache_service
 
 
+def _register_orm_models_for_tests() -> None:
+    """Ensure all ORM models are registered in Base.metadata before create_all.
+
+    Without this, standalone test file execution (e.g. pytest tests/api/v1/test_chat.py)
+    may fail with 'no such table' errors because model modules haven't been imported yet.
+    """
+    import importlib
+    importlib.import_module("src.modules.workspace.infrastructure.persistence.models")
+    importlib.import_module("src.infrastructure.persistence.db_models")
+
+
 @pytest.fixture(autouse=True)
 def reset_cache(request):
     """Reset cache service before each test to ensure test isolation.
@@ -112,6 +123,7 @@ def test_db():
     from sqlalchemy.pool import StaticPool
 
     Base, _ = _get_base_and_db()
+    _register_orm_models_for_tests()
 
     engine = create_engine(
         "sqlite:///:memory:",
