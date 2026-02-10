@@ -7,7 +7,7 @@ import pytest
 from unittest.mock import Mock, patch
 from fastapi import HTTPException
 
-from src.shared.kernel.presentation.dependencies.channel_validation import (
+from src.modules.knowledge.presentation.dependencies.channel_validation import (
     validate_channel_with_touch,
     get_channel_port,
     ValidatedChannel,
@@ -20,7 +20,7 @@ class TestGetChannelPort:
 
     def test_returns_channel_port(self):
         """Test that get_channel_port returns a ChannelPort instance."""
-        with patch('src.shared.kernel.presentation.dependencies.channel_validation.create_channel_port') as mock_create:
+        with patch('src.modules.knowledge.presentation.dependencies.channel_validation.create_channel_port') as mock_create:
             mock_port = Mock()
             mock_create.return_value = mock_port
 

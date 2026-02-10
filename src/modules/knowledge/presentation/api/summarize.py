@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.modules.knowledge.presentation.schemas.summarize import SummarizeRequest, SummarizeResponse, SummaryType
 from src.shared.kernel.contracts.ports.document import DocumentPort
-from src.shared.kernel.presentation.dependencies.channel_validation import (
+from src.modules.knowledge.presentation.dependencies.channel_validation import (
     ValidatedChannel,
     validate_channel_with_touch,
     require_channel_with_documents,

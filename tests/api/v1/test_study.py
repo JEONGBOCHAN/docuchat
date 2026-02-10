@@ -12,7 +12,7 @@ from src.modules.knowledge.presentation.schemas.study import (
     StudyGuideGenerateRequest,
     QuizGenerateRequest,
 )
-from src.shared.kernel.presentation.dependencies.channel_validation import get_channel_port, get_document_port_factory
+from src.modules.knowledge.presentation.dependencies.channel_validation import get_channel_port, get_document_port_factory
 from src.shared.kernel.contracts.ports.channel import ChannelDTO
 from src.shared.kernel.contracts.ports.document import DocumentDTO
 from src.modules.knowledge.application.use_cases.learning import StudyGuideResult, QuizResult

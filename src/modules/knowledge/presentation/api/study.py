@@ -22,7 +22,7 @@ from src.modules.knowledge.presentation.schemas.study import (
     StudyGuideResponse,
     StudySection,
 )
-from src.shared.kernel.presentation.dependencies.channel_validation import ValidatedChannel, require_channel_with_documents
+from src.modules.knowledge.presentation.dependencies.channel_validation import ValidatedChannel, require_channel_with_documents
 from src.modules.knowledge.public import (
     create_generate_study_guide_use_case,
     create_generate_quiz_use_case,
