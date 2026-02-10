@@ -80,8 +80,8 @@ def create_tts_port() -> TTSPort:
 
 
 def create_audio_repository_port(db) -> AudioRepositoryPort:
-    from src.infrastructure.persistence.adapters import AudioRepositoryAdapter
-    return AudioRepositoryAdapter(db)
+    from src.modules.workspace.public import create_audio_repository_port as _factory
+    return _factory(db)
 
 
 # ============================================================

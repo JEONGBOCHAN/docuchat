@@ -21,6 +21,7 @@ from src.modules.workspace.infrastructure.di import (  # noqa: F401
     create_trash_repository_port,
     create_document_preview_cache_repository_port,
     create_document_summary_cache_port,
+    create_audio_repository_port,
     # Use case factories
     create_channel_crud_use_case,
     create_document_crud_use_case,
@@ -54,6 +55,7 @@ __all__ = [
     "create_trash_repository_port",
     "create_document_preview_cache_repository_port",
     "create_document_summary_cache_port",
+    "create_audio_repository_port",
     "create_channel_crud_use_case",
     "create_document_crud_use_case",
     "create_note_crud_use_case",

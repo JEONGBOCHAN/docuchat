@@ -621,7 +621,7 @@ class AudioRepositoryPort(ABC):
         ...
 
     @abstractmethod
-    def update_script(self, audio_id: str, script_json: str) -> AudioOverviewDTO | None:
+    def update_script(self, audio_id: str, script_json: str, title: str | None = None) -> AudioOverviewDTO | None:
         """Update audio script."""
         ...
 

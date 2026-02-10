@@ -9,6 +9,7 @@ from src.shared.kernel.contracts.ports import (
     FavoriteRepositoryPort,
     SearchHistoryRepositoryPort,
     TrashRepositoryPort,
+    AudioRepositoryPort,
     DocumentPreviewCacheRepositoryPort,
     DocumentSummaryGenerationPort,
     DocumentSummaryCachePort,
@@ -87,7 +88,7 @@ def create_document_preview_cache_repository_port(db) -> DocumentPreviewCacheRep
 
 
 def create_document_summary_cache_port(db) -> DocumentSummaryCachePort:
-    from src.infrastructure.persistence.document_summary_repository import (
+    from src.modules.workspace.infrastructure.persistence.document_summary_repository import (
         DocumentSummaryCacheRepository,
     )
     return DocumentSummaryCacheRepository(db)
@@ -196,3 +197,8 @@ def create_preview_service(db):
         preview_cache_repo=DocumentPreviewCacheRepositoryAdapter(db),
         document_search=GeminiDocumentSearchAdapter(),
     )
+
+
+def create_audio_repository_port(db) -> AudioRepositoryPort:
+    from src.modules.workspace.infrastructure.persistence.repositories import AudioRepositoryAdapter
+    return AudioRepositoryAdapter(db)

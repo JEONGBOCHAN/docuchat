@@ -701,11 +701,13 @@ class AudioRepositoryAdapter(AudioRepositoryPort):
         self._db.refresh(audio)
         return self._to_dto(audio)
 
-    def update_script(self, audio_id: str, script_json: str) -> AudioOverviewDTO | None:
+    def update_script(self, audio_id: str, script_json: str, title: str | None = None) -> AudioOverviewDTO | None:
         audio = self._get(audio_id)
         if not audio:
             return None
         audio.script_json = script_json
+        if title is not None:
+            audio.title = title
         audio.status = "generating_audio"
         self._db.commit()
         self._db.refresh(audio)
