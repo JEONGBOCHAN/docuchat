@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
-from src.api.v1.router import api_router
+from src.modules.api_router import api_router
 from src.core.config import get_settings
 from src.core.database import init_db
 from src.core.logging import get_logger, setup_logging
