@@ -9,6 +9,7 @@ and error code translation.
 import logging
 import os
 import tempfile
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query, status
@@ -33,12 +34,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
-def get_document_crud_use_case(
+def get_document_crud_use_case_factory(
     db: Session = Depends(get_db),
-) -> DocumentCrudUseCase:
-    """Get document CRUD use case instance."""
+) -> Callable[[], DocumentCrudUseCase]:
+    """Get document CRUD use case factory."""
     from src.modules.workspace.public import create_document_crud_use_case
-    return create_document_crud_use_case(db)
+    return lambda: create_document_crud_use_case(db)
 
 
 @router.post(
@@ -52,12 +53,13 @@ async def upload_document(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
     file: Annotated[UploadFile, File(description="Document file to upload")],
-    use_case: Annotated[DocumentCrudUseCase, Depends(get_document_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], DocumentCrudUseCase], Depends(get_document_crud_use_case_factory)],
 ) -> DocumentUploadResponse:
     """Upload a document to a channel.
 
     The file will be processed asynchronously. Use the returned ID to check status.
     """
+    use_case = use_case_factory()
     try:
         use_case.validate_file(file.filename, file.size)
     except FileValidationError as e:
@@ -134,12 +136,13 @@ def upload_from_url(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
     body: UrlUploadRequest,
-    use_case: Annotated[DocumentCrudUseCase, Depends(get_document_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], DocumentCrudUseCase], Depends(get_document_crud_use_case_factory)],
 ) -> DocumentUploadResponse:
     """Crawl a URL and upload the content as a document.
 
     The URL content will be fetched, converted to markdown, and uploaded to the channel.
     """
+    use_case = use_case_factory()
     try:
         result = use_case.upload_from_url(channel_id, body.url)
 
@@ -185,9 +188,10 @@ def upload_from_url(
 def list_documents(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID (e.g., fileSearchStores/xxx)")],
-    use_case: Annotated[DocumentCrudUseCase, Depends(get_document_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], DocumentCrudUseCase], Depends(get_document_crud_use_case_factory)],
 ) -> DocumentList:
     """List all documents in a channel."""
+    use_case = use_case_factory()
     try:
         result = use_case.list_documents(channel_id)
 
@@ -231,9 +235,10 @@ def list_documents(
 def get_document_status(
     request: Request,
     document_id: str,
-    use_case: Annotated[DocumentCrudUseCase, Depends(get_document_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], DocumentCrudUseCase], Depends(get_document_crud_use_case_factory)],
 ) -> dict:
     """Get the status of a document upload operation."""
+    use_case = use_case_factory()
     result = use_case.get_status(document_id)
     return {"id": result.id, "done": result.done}
 
@@ -247,7 +252,7 @@ def get_document_status(
 def delete_document(
     request: Request,
     document_id: str,
-    use_case: Annotated[DocumentCrudUseCase, Depends(get_document_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], DocumentCrudUseCase], Depends(get_document_crud_use_case_factory)],
     channel_id: Annotated[
         str | None, Query(description="Channel ID to invalidate cache")
     ] = None,
@@ -258,6 +263,7 @@ def delete_document(
     (e.g., "fileSearchStores/xxx/documents/yyy")
     Optionally provide channel_id to invalidate related caches.
     """
+    use_case = use_case_factory()
     success = use_case.delete(document_id, channel_id)
     if not success:
         raise HTTPException(

@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.notes import get_note_crud_use_case
+from src.api.v1.notes import get_note_crud_use_case_factory
 from src.application.ports.channel import ChannelDTO
 
 
@@ -38,7 +38,7 @@ class TestCreateNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/notes",
@@ -59,7 +59,7 @@ class TestCreateNote:
         assert "created_at" in data
         assert "updated_at" in data
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_create_note_with_sources(self, client_with_db: TestClient, test_db):
         """Test creating note with AI sources."""
@@ -70,7 +70,7 @@ class TestCreateNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/notes",
@@ -89,7 +89,7 @@ class TestCreateNote:
         assert len(data["sources"]) == 1
         assert data["sources"][0]["source"] == "document.pdf"
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_create_note_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test creating note in non-existent channel."""
@@ -97,7 +97,7 @@ class TestCreateNote:
         mock_port.get_channel.return_value = None
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/notes",
@@ -110,7 +110,7 @@ class TestCreateNote:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_create_note_empty_title(self, client_with_db: TestClient, test_db):
         """Test creating note with empty title fails."""
@@ -138,7 +138,7 @@ class TestListNotes:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/notes",
@@ -150,7 +150,7 @@ class TestListNotes:
         assert data["notes"] == []
         assert data["total"] == 0
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_list_notes_with_data(self, client_with_db: TestClient, test_db):
         """Test listing notes after creating some."""
@@ -161,7 +161,7 @@ class TestListNotes:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         # Create notes
         for i in range(3):
@@ -182,7 +182,7 @@ class TestListNotes:
         assert data["total"] == 3
         assert len(data["notes"]) == 3
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_list_notes_pagination(self, client_with_db: TestClient, test_db):
         """Test listing notes with pagination."""
@@ -193,7 +193,7 @@ class TestListNotes:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         # Create 5 notes
         for i in range(5):
@@ -223,7 +223,7 @@ class TestListNotes:
         data = response.json()
         assert len(data["notes"]) == 2
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
 
 class TestGetNote:
@@ -238,7 +238,7 @@ class TestGetNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         # Create a note
         create_response = client_with_db.post(
@@ -260,7 +260,7 @@ class TestGetNote:
         assert data["title"] == "My Note"
         assert data["content"] == "My content"
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_get_note_not_found(self, client_with_db: TestClient, test_db):
         """Test getting non-existent note."""
@@ -271,7 +271,7 @@ class TestGetNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.get(
             "/api/v1/notes/99999",
@@ -280,7 +280,7 @@ class TestGetNote:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
 
 class TestUpdateNote:
@@ -295,7 +295,7 @@ class TestUpdateNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         # Create a note
         create_response = client_with_db.post(
@@ -317,7 +317,7 @@ class TestUpdateNote:
         assert data["title"] == "Updated Title"
         assert data["content"] == "Content"  # Content unchanged
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_update_note_content(self, client_with_db: TestClient, test_db):
         """Test updating note content."""
@@ -328,7 +328,7 @@ class TestUpdateNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         # Create a note
         create_response = client_with_db.post(
@@ -350,7 +350,7 @@ class TestUpdateNote:
         assert data["title"] == "Title"  # Title unchanged
         assert data["content"] == "Updated Content"
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_update_note_both_fields(self, client_with_db: TestClient, test_db):
         """Test updating both title and content."""
@@ -361,7 +361,7 @@ class TestUpdateNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         # Create a note
         create_response = client_with_db.post(
@@ -383,7 +383,7 @@ class TestUpdateNote:
         assert data["title"] == "New Title"
         assert data["content"] == "New Content"
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_update_note_no_fields_fails(self, client_with_db: TestClient, test_db):
         """Test update with no fields fails."""
@@ -394,7 +394,7 @@ class TestUpdateNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         # Create a note
         create_response = client_with_db.post(
@@ -413,7 +413,7 @@ class TestUpdateNote:
 
         assert response.status_code == 400
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_update_note_not_found(self, client_with_db: TestClient, test_db):
         """Test updating non-existent note."""
@@ -424,7 +424,7 @@ class TestUpdateNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.put(
             "/api/v1/notes/99999",
@@ -434,7 +434,7 @@ class TestUpdateNote:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
 
 class TestDeleteNote:
@@ -449,7 +449,7 @@ class TestDeleteNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         # Create a note
         create_response = client_with_db.post(
@@ -474,7 +474,7 @@ class TestDeleteNote:
         )
         assert get_response.status_code == 404
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)
 
     def test_delete_note_not_found(self, client_with_db: TestClient, test_db):
         """Test deleting non-existent note."""
@@ -485,7 +485,7 @@ class TestDeleteNote:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_port)
-        app.dependency_overrides[get_note_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_note_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.delete(
             "/api/v1/notes/99999",
@@ -494,4 +494,4 @@ class TestDeleteNote:
 
         assert response.status_code == 404
 
-        app.dependency_overrides.pop(get_note_crud_use_case, None)
+        app.dependency_overrides.pop(get_note_crud_use_case_factory, None)

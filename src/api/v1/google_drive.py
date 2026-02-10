@@ -7,6 +7,7 @@ import os
 import secrets
 import time
 import tempfile
+from collections.abc import Callable
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Body
@@ -76,12 +77,12 @@ def _verify_oauth_state(state: str) -> bool:
 router = APIRouter(prefix="/integrations/google-drive", tags=["google-drive"])
 
 
-def get_document_crud_use_case(
+def get_document_crud_use_case_factory(
     db: Session = Depends(get_db),
-) -> DocumentCrudUseCase:
-    """Get document CRUD use case instance."""
+) -> Callable[[], DocumentCrudUseCase]:
+    """Get document CRUD use case factory."""
     from src.modules.workspace.public import create_document_crud_use_case
-    return create_document_crud_use_case(db)
+    return lambda: create_document_crud_use_case(db)
 
 
 # OAuth 2.0 scopes for Google Drive
@@ -320,13 +321,14 @@ def list_files(
 def import_file(
     channel_id: str,
     request: ImportFileRequest,
-    use_case: Annotated[DocumentCrudUseCase, Depends(get_document_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], DocumentCrudUseCase], Depends(get_document_crud_use_case_factory)],
 ):
     """
     Import a file from Google Drive to a channel.
 
     Downloads the file from Drive and uploads it to the specified channel.
     """
+    use_case = use_case_factory()
     try:
         credentials = Credentials(token=request.access_token)
         service = build("drive", "v3", credentials=credentials)

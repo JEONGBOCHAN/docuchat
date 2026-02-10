@@ -4,6 +4,7 @@
 Thin controller: delegates all business logic to SearchHistoryUseCase.
 """
 
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -26,10 +27,10 @@ from src.core.database import get_db
 router = APIRouter(prefix="/search", tags=["search"])
 
 
-def get_search_history_use_case(db: Session = Depends(get_db)) -> SearchHistoryUseCase:
-    """Get search history use case instance with all dependencies wired."""
+def get_search_history_use_case_factory(db: Session = Depends(get_db)) -> Callable[[], SearchHistoryUseCase]:
+    """Get search history use case factory with all dependencies wired."""
     from src.modules.workspace.public import create_search_history_use_case
-    return create_search_history_use_case(db)
+    return lambda: create_search_history_use_case(db)
 
 
 def _history_dto_to_response(dto: SearchHistoryItemDTO) -> SearchHistoryItem:
@@ -53,7 +54,7 @@ def _history_dto_to_response(dto: SearchHistoryItemDTO) -> SearchHistoryItem:
 def get_search_history(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
+    use_case_factory: Annotated[Callable[[], SearchHistoryUseCase], Depends(get_search_history_use_case_factory)],
     limit: Annotated[int, Query(description="Maximum number of entries", ge=1, le=100)] = 50,
     offset: Annotated[int, Query(description="Number of entries to skip", ge=0)] = 0,
 ) -> SearchHistoryList:
@@ -61,6 +62,7 @@ def get_search_history(
 
     Returns search queries sorted by most recent first.
     """
+    use_case = use_case_factory()
     try:
         result = use_case.get_history(channel_id, limit=limit, offset=offset)
         return SearchHistoryList(
@@ -83,7 +85,7 @@ def get_search_history(
 def get_search_suggestions(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
+    use_case_factory: Annotated[Callable[[], SearchHistoryUseCase], Depends(get_search_history_use_case_factory)],
     q: Annotated[str, Query(description="Query prefix for suggestions")] = "",
     limit: Annotated[int, Query(description="Maximum number of suggestions", ge=1, le=20)] = 10,
 ) -> SearchSuggestionList:
@@ -91,6 +93,7 @@ def get_search_suggestions(
 
     If no prefix is provided, returns popular searches.
     """
+    use_case = use_case_factory()
     try:
         result = use_case.get_suggestions(channel_id, prefix=q, limit=limit)
         return SearchSuggestionList(
@@ -116,13 +119,14 @@ def get_search_suggestions(
 def get_popular_searches(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
+    use_case_factory: Annotated[Callable[[], SearchHistoryUseCase], Depends(get_search_history_use_case_factory)],
     limit: Annotated[int, Query(description="Maximum number of entries", ge=1, le=20)] = 10,
 ) -> SearchSuggestionList:
     """Get popular searches for a channel.
 
     Returns searches sorted by search count (most searched first).
     """
+    use_case = use_case_factory()
     try:
         result = use_case.get_popular(channel_id, limit=limit)
         return SearchSuggestionList(
@@ -149,9 +153,10 @@ def delete_search_history(
     request: Request,
     history_id: int,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
+    use_case_factory: Annotated[Callable[[], SearchHistoryUseCase], Depends(get_search_history_use_case_factory)],
 ):
     """Delete a specific search history entry."""
+    use_case = use_case_factory()
     try:
         if not use_case.delete_entry(channel_id, history_id):
             raise HTTPException(
@@ -175,9 +180,10 @@ def delete_search_history(
 def clear_search_history(
     request: Request,
     channel_id: Annotated[str, Query(description="Channel ID")],
-    use_case: Annotated[SearchHistoryUseCase, Depends(get_search_history_use_case)],
+    use_case_factory: Annotated[Callable[[], SearchHistoryUseCase], Depends(get_search_history_use_case_factory)],
 ):
     """Clear all search history for a channel."""
+    use_case = use_case_factory()
     try:
         use_case.clear_history(channel_id)
     except ChannelNotFoundError as e:

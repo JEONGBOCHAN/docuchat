@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.api.v1.favorites import get_favorite_crud_use_case
+from src.api.v1.favorites import get_favorite_crud_use_case_factory
 from src.application.ports.channel import ChannelDTO
 from src.infrastructure.persistence.db_models import NoteDB
 
@@ -37,7 +37,7 @@ class TestAddFavorite:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -55,7 +55,7 @@ class TestAddFavorite:
         assert "id" in data
         assert "created_at" in data
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_add_note_to_favorites(self, client_with_db: TestClient, test_db):
         """Test adding a note to favorites."""
@@ -71,7 +71,7 @@ class TestAddFavorite:
 
         mock_channel_port = MagicMock()
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -86,13 +86,13 @@ class TestAddFavorite:
         assert data["target_type"] == "note"
         assert data["target_id"] == str(note.id)
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_add_document_to_favorites(self, client_with_db: TestClient, test_db):
         """Test adding a document to favorites."""
         mock_channel_port = MagicMock()
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -107,7 +107,7 @@ class TestAddFavorite:
         assert data["target_type"] == "document"
         assert data["target_id"] == "files/doc-123"
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_add_channel_not_found(self, client_with_db: TestClient, test_db):
         """Test adding non-existent channel returns 404."""
@@ -115,7 +115,7 @@ class TestAddFavorite:
         mock_channel_port.get_channel.return_value = None
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -128,13 +128,13 @@ class TestAddFavorite:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_add_note_not_found(self, client_with_db: TestClient, test_db):
         """Test adding non-existent note returns 404."""
         mock_channel_port = MagicMock()
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -147,13 +147,13 @@ class TestAddFavorite:
         assert response.status_code == 404
         assert "Note not found" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_add_invalid_document_id(self, client_with_db: TestClient, test_db):
         """Test adding document with empty ID returns 400."""
         mock_channel_port = MagicMock()
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(
             "/api/v1/favorites",
@@ -166,7 +166,7 @@ class TestAddFavorite:
         assert response.status_code == 400
         assert "Document ID" in response.json()["detail"]
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_add_duplicate_favorite_returns_existing(self, client_with_db: TestClient, test_db):
         """Test adding duplicate favorite returns existing one."""
@@ -177,7 +177,7 @@ class TestAddFavorite:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         # Add first time
         response1 = client_with_db.post(
@@ -201,7 +201,7 @@ class TestAddFavorite:
         assert response2.status_code == 201
         assert response2.json()["id"] == first_id  # Same ID
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
 
 class TestRemoveFavorite:
@@ -216,7 +216,7 @@ class TestRemoveFavorite:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         # Add favorite first
         client_with_db.post(
@@ -238,7 +238,7 @@ class TestRemoveFavorite:
 
         assert response.status_code == 204
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_remove_nonexistent_favorite(self, client_with_db: TestClient, test_db):
         """Test removing non-existent favorite returns 404."""
@@ -274,7 +274,7 @@ class TestListFavorites:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         # Add a favorite
         client_with_db.post(
@@ -293,7 +293,7 @@ class TestListFavorites:
         assert len(data["favorites"]) == 1
         assert data["favorites"][0]["target_type"] == "channel"
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_list_favorites_filter_by_type(self, client_with_db: TestClient, test_db):
         """Test listing favorites filtered by type."""
@@ -304,7 +304,7 @@ class TestListFavorites:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         # Add channel favorite
         client_with_db.post(
@@ -332,7 +332,7 @@ class TestListFavorites:
         assert data["total"] == 1
         assert data["favorites"][0]["target_type"] == "channel"
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
 
 class TestCheckFavorite:
@@ -347,7 +347,7 @@ class TestCheckFavorite:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         # Add favorite
         client_with_db.post(
@@ -370,7 +370,7 @@ class TestCheckFavorite:
         assert response.status_code == 200
         assert response.json()["is_favorited"] is True
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_check_not_favorited(self, client_with_db: TestClient, test_db):
         """Test checking if item is favorited - false."""
@@ -398,7 +398,7 @@ class TestReorderFavorites:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         # Add two favorites
         r1 = client_with_db.post(
@@ -428,7 +428,7 @@ class TestReorderFavorites:
         assert response.status_code == 200
         assert response.json()["message"] == "Favorites reordered successfully"
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
 
 class TestConvenienceEndpoints:
@@ -443,7 +443,7 @@ class TestConvenienceEndpoints:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post("/api/v1/favorites/channels/fileSearchStores/store-123")
 
@@ -452,7 +452,7 @@ class TestConvenienceEndpoints:
         assert data["target_type"] == "channel"
         assert data["target_id"] == "fileSearchStores/store-123"
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_unfavorite_channel(self, client_with_db: TestClient, test_db):
         """Test DELETE /favorites/channels/{id}."""
@@ -463,7 +463,7 @@ class TestConvenienceEndpoints:
         )
 
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         # Add first
         client_with_db.post("/api/v1/favorites/channels/fileSearchStores/store-123")
@@ -473,7 +473,7 @@ class TestConvenienceEndpoints:
 
         assert response.status_code == 204
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_favorite_note(self, client_with_db: TestClient, test_db):
         """Test POST /favorites/notes/{id}."""
@@ -489,7 +489,7 @@ class TestConvenienceEndpoints:
 
         mock_channel_port = MagicMock()
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         response = client_with_db.post(f"/api/v1/favorites/notes/{note.id}")
 
@@ -498,7 +498,7 @@ class TestConvenienceEndpoints:
         assert data["target_type"] == "note"
         assert data["target_id"] == str(note.id)
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
     def test_unfavorite_note(self, client_with_db: TestClient, test_db):
         """Test DELETE /favorites/notes/{id}."""
@@ -514,7 +514,7 @@ class TestConvenienceEndpoints:
 
         mock_channel_port = MagicMock()
         use_case = _make_use_case(test_db, channel_port=mock_channel_port)
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: use_case
 
         # Add first
         client_with_db.post(f"/api/v1/favorites/notes/{note.id}")
@@ -524,7 +524,7 @@ class TestConvenienceEndpoints:
 
         assert response.status_code == 204
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
 
 
 class TestChannelListWithFavorites:
@@ -532,7 +532,7 @@ class TestChannelListWithFavorites:
 
     def test_list_channels_with_favorites(self, client_with_db: TestClient, test_db):
         """Test that channel list includes is_favorited field."""
-        from src.api.v1.channels import get_channel_crud_use_case
+        from src.api.v1.channels import get_channel_crud_use_case_factory
         from src.application.use_cases.channel_crud import ChannelCrudUseCase
         from src.infrastructure.di.container import (
             create_channel_repository_port,
@@ -565,8 +565,8 @@ class TestChannelListWithFavorites:
 
         fav_use_case = _make_use_case(test_db, channel_port=mock_channel_port)
 
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: fav_use_case
-        app.dependency_overrides[get_channel_crud_use_case] = lambda: channel_use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: fav_use_case
+        app.dependency_overrides[get_channel_crud_use_case_factory] = lambda: lambda: channel_use_case
 
         # Favorite only channel 1
         client_with_db.post("/api/v1/favorites/channels/fileSearchStores/store-1")
@@ -582,12 +582,12 @@ class TestChannelListWithFavorites:
         assert data["channels"][0]["is_favorited"] is True
         assert data["channels"][1]["is_favorited"] is False
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
-        app.dependency_overrides.pop(get_channel_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case_factory, None)
 
     def test_get_channel_with_favorite_status(self, client_with_db: TestClient, test_db):
         """Test that get channel includes is_favorited field."""
-        from src.api.v1.channels import get_channel_crud_use_case
+        from src.api.v1.channels import get_channel_crud_use_case_factory
         from src.application.use_cases.channel_crud import ChannelCrudUseCase
         from src.infrastructure.di.container import (
             create_channel_repository_port,
@@ -616,8 +616,8 @@ class TestChannelListWithFavorites:
 
         fav_use_case = _make_use_case(test_db, channel_port=mock_channel_port)
 
-        app.dependency_overrides[get_favorite_crud_use_case] = lambda: fav_use_case
-        app.dependency_overrides[get_channel_crud_use_case] = lambda: channel_use_case
+        app.dependency_overrides[get_favorite_crud_use_case_factory] = lambda: lambda: fav_use_case
+        app.dependency_overrides[get_channel_crud_use_case_factory] = lambda: lambda: channel_use_case
 
         # Not favorited
         response1 = client_with_db.get("/api/v1/channels/fileSearchStores/store-123")
@@ -632,5 +632,5 @@ class TestChannelListWithFavorites:
         assert response2.status_code == 200
         assert response2.json()["is_favorited"] is True
 
-        app.dependency_overrides.pop(get_favorite_crud_use_case, None)
-        app.dependency_overrides.pop(get_channel_crud_use_case, None)
+        app.dependency_overrides.pop(get_favorite_crud_use_case_factory, None)
+        app.dependency_overrides.pop(get_channel_crud_use_case_factory, None)

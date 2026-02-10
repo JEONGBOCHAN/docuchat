@@ -6,6 +6,7 @@ Only handles HTTP concerns (status codes, error mapping, DTO→Pydantic conversi
 """
 
 import logging
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -22,10 +23,10 @@ from src.core.rate_limiter import limiter, RateLimits
 router = APIRouter(prefix="/channels", tags=["channels"])
 
 
-def get_channel_crud_use_case(db: Session = Depends(get_db)) -> ChannelCrudUseCase:
-    """Get channel CRUD use case instance with all dependencies wired."""
+def get_channel_crud_use_case_factory(db: Session = Depends(get_db)) -> Callable[[], ChannelCrudUseCase]:
+    """Get channel CRUD use case factory with all dependencies wired."""
     from src.modules.workspace.public import create_channel_crud_use_case
-    return create_channel_crud_use_case(db)
+    return lambda: create_channel_crud_use_case(db)
 
 
 def _dto_to_response(dto: ChannelDetailDTO) -> ChannelResponse:
@@ -50,12 +51,13 @@ def _dto_to_response(dto: ChannelDetailDTO) -> ChannelResponse:
 def create_channel(
     request: Request,
     data: ChannelCreate,
-    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], ChannelCrudUseCase], Depends(get_channel_crud_use_case_factory)],
 ) -> ChannelResponse:
     """Create a new channel (Gemini File Search Store).
 
     A channel is a container for documents that can be searched together.
     """
+    use_case = use_case_factory()
     try:
         dto = use_case.create(data.name, data.description)
         return _dto_to_response(dto)
@@ -77,13 +79,14 @@ def create_channel(
 @limiter.limit(RateLimits.DEFAULT)
 def list_channels(
     request: Request,
-    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], ChannelCrudUseCase], Depends(get_channel_crud_use_case_factory)],
     limit: Annotated[int | None, Query(description="Maximum number of channels", ge=1, le=100)] = None,
     offset: Annotated[int, Query(description="Number of channels to skip", ge=0)] = 0,
     sort_by: Annotated[str, Query(description="Sort by field: created_at or name")] = "created_at",
     sort_order: Annotated[str, Query(description="Sort order: asc or desc")] = "desc",
 ) -> ChannelList:
     """List all channels (File Search Stores)."""
+    use_case = use_case_factory()
     try:
         result = use_case.list(
             limit=limit, offset=offset, sort_by=sort_by, sort_order=sort_order,
@@ -111,12 +114,13 @@ def list_channels(
 def get_channel(
     request: Request,
     channel_id: str,
-    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], ChannelCrudUseCase], Depends(get_channel_crud_use_case_factory)],
 ) -> ChannelResponse:
     """Get a specific channel by its ID.
 
     Note: channel_id should be the full store name (e.g., "fileSearchStores/xxx")
     """
+    use_case = use_case_factory()
     dto = use_case.get(channel_id)
     if not dto:
         raise HTTPException(
@@ -136,12 +140,13 @@ def update_channel(
     request: Request,
     channel_id: str,
     data: ChannelUpdate,
-    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], ChannelCrudUseCase], Depends(get_channel_crud_use_case_factory)],
 ) -> ChannelResponse:
     """Update a channel's name and/or description.
 
     Note: channel_id should be the full store name (e.g., "fileSearchStores/xxx")
     """
+    use_case = use_case_factory()
     # Validation stays in the router (HTTP concern)
     if data.name is None and data.description is None:
         raise HTTPException(
@@ -167,13 +172,14 @@ def update_channel(
 def delete_channel(
     request: Request,
     channel_id: str,
-    use_case: Annotated[ChannelCrudUseCase, Depends(get_channel_crud_use_case)],
+    use_case_factory: Annotated[Callable[[], ChannelCrudUseCase], Depends(get_channel_crud_use_case_factory)],
 ):
     """Delete a channel permanently.
 
     This deletes the channel from both Gemini and the local database.
     Note: When trash UI is implemented, this will change to soft delete.
     """
+    use_case = use_case_factory()
     try:
         success = use_case.delete(channel_id)
         if not success:
