@@ -15,7 +15,7 @@ from src.core.sentry import setup_sentry
 from src.middleware.metrics import MetricsMiddleware
 from src.middleware.request_logging import RequestLoggingMiddleware
 from src.modules.ops.public import setup_scheduler, shutdown_scheduler
-from src.application.use_cases.exceptions import UpstreamError
+from src.shared.kernel.contracts.errors.use_case_errors import UpstreamError
 
 # Initialize structured logging first
 setup_logging()
@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
     shutdown_compaction_runner(wait=False)
     logger.info("Compaction runner shutdown complete")
 
-    from src.api.v1.audio import shutdown_audio_executor
+    from src.modules.knowledge.public import shutdown_audio_executor
     shutdown_audio_executor(wait=False)
     logger.info("Audio executor shutdown complete")
 

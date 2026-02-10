@@ -30,6 +30,10 @@ from src.modules.knowledge.infrastructure.di import (  # noqa: F401
     create_generate_audio_use_case,
 )
 
+from src.modules.knowledge.presentation.api.audio import (  # noqa: F401
+    shutdown_audio_executor,
+)
+
 __all__ = [
     "create_citation_search",
     "create_faq_generation",
@@ -51,4 +55,5 @@ __all__ = [
     "create_generate_quiz_use_case",
     "create_generate_podcast_script_use_case",
     "create_generate_audio_use_case",
+    "shutdown_audio_executor",
 ]
