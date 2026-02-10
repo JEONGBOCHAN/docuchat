@@ -21,6 +21,7 @@ SRC_DIR = PROJECT_ROOT / "src"
 BANNED_DIRECTORIES = [
     "api",
     "application",
+    "domain",
     "infrastructure/di",
     "infrastructure/persistence",
     "models",
@@ -49,6 +50,7 @@ class TestLegacyAbsence:
         banned_prefixes = [
             "src.api.",
             "src.application.",
+            "src.domain.",
             "src.infrastructure.di.",
             "src.infrastructure.persistence.",
             "src.models.",

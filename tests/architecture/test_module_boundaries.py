@@ -279,6 +279,20 @@ class TestModuleStructure:
                 f"Module '{module_name}/{layer}/' is missing __init__.py."
             )
 
+    def test_workspace_domain_has_real_entities(self):
+        """Workspace module domain must contain at least one real entity file."""
+        domain_dir = MODULES_DIR / "workspace" / "domain"
+        assert domain_dir.exists(), "workspace/domain/ directory is missing"
+
+        real_files = [
+            f for f in domain_dir.rglob("*.py")
+            if f.name != "__init__.py"
+        ]
+        assert len(real_files) >= 1, (
+            "workspace/domain/ must have at least one real .py file "
+            "besides __init__.py. Found none."
+        )
+
     @pytest.mark.parametrize("module_name", MODULE_NAMES)
     def test_public_has_real_exports(self, module_name: str):
         """Each module's public.py must export at least one symbol."""

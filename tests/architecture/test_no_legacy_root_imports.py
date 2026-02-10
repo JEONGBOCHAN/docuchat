@@ -26,6 +26,7 @@ TESTS_DIR = PROJECT_ROOT / "tests"
 BANNED_ROOTS = (
     "src.api",
     "src.application",
+    "src.domain",
     "src.models",
     "src.infrastructure.di",
     "src.infrastructure.persistence",
