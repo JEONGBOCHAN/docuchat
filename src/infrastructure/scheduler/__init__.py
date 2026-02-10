@@ -2,24 +2,15 @@
 """Scheduler infrastructure layer.
 
 This module provides background job scheduling functionality.
+
+Job functions are accessed via:
+    src.modules.ops.infrastructure.scheduler.scheduler_jobs
+or via the ops module's public API / DI container.
 """
 
 from src.infrastructure.scheduler.scheduler import (
     SchedulerService,
     get_scheduler,
 )
-from src.modules.ops.infrastructure.scheduler.scheduler_jobs import (
-    scan_inactive_channels,
-    cleanup_inactive_channels,
-    update_channel_statistics,
-    cleanup_expired_trash,
-)
 
-__all__ = [
-    "SchedulerService",
-    "get_scheduler",
-    "scan_inactive_channels",
-    "cleanup_inactive_channels",
-    "update_channel_statistics",
-    "cleanup_expired_trash",
-]
+__all__ = ["SchedulerService", "get_scheduler"]
