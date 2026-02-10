@@ -68,7 +68,16 @@ class CompactionRunner:
                 return
             self._pending.add(session_id)
 
-        self._executor.submit(self._run, session_id)
+        try:
+            self._executor.submit(self._run, session_id)
+        except Exception:
+            with self._lock:
+                self._pending.discard(session_id)
+            logger.warning(
+                "Compaction submit failed for session %s; pending entry cleared",
+                session_id,
+                exc_info=True,
+            )
 
     def _run(self, session_id: str) -> None:
         """Execute compaction with an independent DB session."""

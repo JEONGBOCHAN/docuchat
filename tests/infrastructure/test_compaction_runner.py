@@ -271,6 +271,57 @@ class TestBoundedWorkers:
         assert max_concurrent <= 2
 
 
+class TestSubmitFailure:
+    """Tests for submit() failure handling — _pending cleanup."""
+
+    def test_submit_failure_clears_pending(self):
+        """If executor.submit raises, session_id must be removed from _pending."""
+        svc = MagicMock()
+        svc_factory = MagicMock(return_value=svc)
+        db = MagicMock()
+        session_factory = MagicMock(return_value=db)
+
+        runner = CompactionRunner(
+            session_factory=session_factory,
+            service_factory=svc_factory,
+            max_workers=2,
+        )
+        # Force executor.submit to fail
+        runner._executor.submit = MagicMock(side_effect=RuntimeError("pool shut down"))
+
+        # Should not raise
+        runner.submit("sess_broken")
+
+        # _pending must be clean
+        assert "sess_broken" not in runner._pending
+
+    def test_submit_failure_does_not_block_retry(self):
+        """After a submit failure, the same session_id can be submitted again."""
+        svc = MagicMock()
+        svc_factory = MagicMock(return_value=svc)
+        db = MagicMock()
+        session_factory = MagicMock(return_value=db)
+
+        runner = CompactionRunner(
+            session_factory=session_factory,
+            service_factory=svc_factory,
+            max_workers=2,
+        )
+
+        # First submit fails
+        original_submit = runner._executor.submit
+        runner._executor.submit = MagicMock(side_effect=RuntimeError("fail"))
+        runner.submit("sess_retry")
+        assert "sess_retry" not in runner._pending
+
+        # Restore real submit and retry — should succeed
+        runner._executor.submit = original_submit
+        runner.submit("sess_retry")
+        runner.shutdown(wait=True)
+
+        svc.maybe_compact.assert_called_once_with("sess_retry")
+
+
 class TestShutdownHelper:
     """Tests for shutdown_compaction_runner container helper."""
 
