@@ -69,6 +69,11 @@ def _matches_prefix(module: str, prefix: str) -> bool:
     return module == prefix or module.startswith(prefix + ".")
 
 
+def _is_src_outside_domain(module: str) -> bool:
+    """Return True if module is a src.* import that is NOT src.domain.*."""
+    return module.startswith("src.") and not _matches_prefix(module, "src.domain")
+
+
 def _is_module_presentation_import(module: str) -> bool:
     """Return True if module path points to src.modules.<m>.presentation..."""
     parts = module.split(".")
@@ -161,17 +166,10 @@ class TestInfrastructureLayerBoundaries:
 # Domain Layer Tests
 # ──────────────────────────────────────────────────────────
 
-# Domain must be completely independent - no src.* imports.
-DOMAIN_FORBIDDEN = [
-    "src.application",
-    "src.infrastructure",
-    "src.api",
-    "src.models",
-    "src.core",
-    "fastapi",
-    "sqlalchemy",
-    "pydantic",
-]
+# Domain must be completely independent.
+# - No src.* imports except src.domain.*
+# - No framework imports (fastapi, sqlalchemy, pydantic)
+DOMAIN_FRAMEWORK_FORBIDDEN = ["fastapi", "sqlalchemy", "pydantic"]
 DOMAIN_EXCEPTIONS: set[str] = set()
 
 
@@ -179,15 +177,30 @@ class TestDomainLayerBoundaries:
     """Ensure the domain layer has no external dependencies."""
 
     def test_domain_is_independent(self):
-        """Domain layer must not import from any other src layer or frameworks."""
-        violations = _find_violations(
-            DOMAIN_DIR, DOMAIN_FORBIDDEN, DOMAIN_EXCEPTIONS,
-        )
+        """Domain layer must not import from any src.* outside src.domain, or frameworks."""
+        violations: list[str] = []
+        for filepath in _collect_python_files(DOMAIN_DIR):
+            rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+            if rel in DOMAIN_EXCEPTIONS:
+                continue
+            for lineno, module in _extract_imports(filepath):
+                if _is_src_outside_domain(module):
+                    violations.append(
+                        f"{rel}:{lineno} imports '{module}' "
+                        f"(forbidden: src import outside domain)"
+                    )
+                for prefix in DOMAIN_FRAMEWORK_FORBIDDEN:
+                    if _matches_prefix(module, prefix):
+                        violations.append(
+                            f"{rel}:{lineno} imports '{module}' "
+                            f"(forbidden framework: '{prefix}')"
+                        )
         if violations:
             msg = (
                 "Domain layer has external dependencies!\n\n"
                 + "\n".join(f"  - {v}" for v in violations)
                 + "\n\nFix: domain must only use stdlib. "
+                "Any src.* import outside src.domain.* is forbidden. "
                 "Move framework-dependent code to application or infrastructure."
             )
             pytest.fail(msg)
