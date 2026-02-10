@@ -212,6 +212,18 @@ def create_audio_repository_port(db) -> AudioRepositoryPort:
 
 
 # ============================================================
+# Trash Management Factories
+# ============================================================
+
+def create_trash_management_use_case(db):
+    from src.modules.workspace.application.use_cases.trash_management import TrashManagementUseCase
+    return TrashManagementUseCase(
+        trash_repo=create_trash_repository_port(db),
+        channel_port=create_channel_port(),
+    )
+
+
+# ============================================================
 # Google Drive Factories
 # ============================================================
 
