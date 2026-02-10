@@ -454,6 +454,44 @@ class TestClearChatHistory:
         app.dependency_overrides.pop(get_chat_use_case_factory, None)
 
 
+class TestValidationPrecedence:
+    """Regression: payload validation must precede use-case factory invocation."""
+
+    def test_empty_query_skips_use_case_factory(self, client_with_db: TestClient, test_db):
+        """When query is empty (422), the use-case factory must NOT be called."""
+        mock_factory = MagicMock()
+
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: mock_factory
+
+        response = client_with_db.post(
+            "/api/v1/channels/fileSearchStores/test-store/chat",
+            json={"query": ""},
+        )
+
+        assert response.status_code == 422
+        mock_factory.assert_not_called()
+
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
+
+    def test_stream_empty_query_skips_use_case_factory(
+        self, client_with_db: TestClient, test_db
+    ):
+        """When stream query is empty (422), the use-case factory must NOT be called."""
+        mock_factory = MagicMock()
+
+        app.dependency_overrides[get_chat_use_case_factory] = lambda: mock_factory
+
+        response = client_with_db.post(
+            "/api/v1/channels/fileSearchStores/test-store/chat/stream",
+            json={"query": ""},
+        )
+
+        assert response.status_code == 422
+        mock_factory.assert_not_called()
+
+        app.dependency_overrides.pop(get_chat_use_case_factory, None)
+
+
 class TestStreamMessage:
     """Tests for POST /api/v1/chat/stream (SSE streaming).
 
