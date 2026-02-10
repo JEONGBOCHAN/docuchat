@@ -204,3 +204,30 @@ class TestDomainLayerBoundaries:
                 "Move framework-dependent code to application or infrastructure."
             )
             pytest.fail(msg)
+
+
+# ──────────────────────────────────────────────────────────
+# Helper Self-Tests
+# ──────────────────────────────────────────────────────────
+
+
+class TestHelperPredicates:
+    """Verify predicate helpers detect the right patterns."""
+
+    def test_is_module_presentation_import(self):
+        assert _is_module_presentation_import("src.modules.workspace.presentation.api.channels")
+        assert _is_module_presentation_import("src.modules.knowledge.presentation.schemas.audio")
+        assert _is_module_presentation_import("src.modules.workspace.presentation")
+        assert not _is_module_presentation_import("src.modules.workspace.infrastructure.di")
+        assert not _is_module_presentation_import("src.modules.workspace.application.use_cases")
+        assert not _is_module_presentation_import("src.infrastructure.external")
+
+    def test_is_src_outside_domain(self):
+        assert _is_src_outside_domain("src.modules.workspace.public")
+        assert _is_src_outside_domain("src.shared.kernel.contracts.ports")
+        assert _is_src_outside_domain("src.infrastructure.external")
+        assert _is_src_outside_domain("src.agents.graph")
+        assert not _is_src_outside_domain("src.domain.entities.channel")
+        assert not _is_src_outside_domain("src.domain.value_objects")
+        assert not _is_src_outside_domain("fastapi")
+        assert not _is_src_outside_domain("pydantic")
