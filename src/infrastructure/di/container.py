@@ -832,6 +832,11 @@ def shutdown_compaction_runner(wait: bool = False) -> None:
         _container_logger.warning(
             "CompactionRunner shutdown failed", exc_info=True,
         )
+    finally:
+        # Always remove the singleton so next access creates a fresh runner.
+        # Without this, a shutdown executor would be reused (stale singleton).
+        if hasattr(_get_compaction_runner, "_instance"):
+            delattr(_get_compaction_runner, "_instance")
 
 
 def create_chat_use_case(db):

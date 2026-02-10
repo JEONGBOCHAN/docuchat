@@ -332,12 +332,9 @@ class TestShutdownHelper:
             shutdown_compaction_runner,
         )
 
-        # Ensure no instance exists
+        saved = getattr(_get_compaction_runner, "_instance", None)
         if hasattr(_get_compaction_runner, "_instance"):
-            saved = _get_compaction_runner._instance
-            del _get_compaction_runner._instance
-        else:
-            saved = None
+            delattr(_get_compaction_runner, "_instance")
 
         try:
             # Should not raise
@@ -361,11 +358,9 @@ class TestShutdownHelper:
             shutdown_compaction_runner(wait=False)
             mock_runner.shutdown.assert_called_once_with(wait=False)
         finally:
+            # shutdown now deletes _instance; restore saved if needed
             if saved is not None:
                 _get_compaction_runner._instance = saved
-            else:
-                if hasattr(_get_compaction_runner, "_instance"):
-                    del _get_compaction_runner._instance
 
     def test_shutdown_exception_does_not_propagate(self):
         """Even if runner.shutdown raises, shutdown_compaction_runner should not propagate."""
@@ -385,6 +380,42 @@ class TestShutdownHelper:
         finally:
             if saved is not None:
                 _get_compaction_runner._instance = saved
-            else:
-                if hasattr(_get_compaction_runner, "_instance"):
-                    del _get_compaction_runner._instance
+
+    def test_shutdown_removes_singleton_instance(self):
+        """After shutdown, the singleton _instance must be removed."""
+        from src.infrastructure.di.container import (
+            _get_compaction_runner,
+            shutdown_compaction_runner,
+        )
+
+        mock_runner = MagicMock()
+        saved = getattr(_get_compaction_runner, "_instance", None)
+        _get_compaction_runner._instance = mock_runner
+
+        try:
+            shutdown_compaction_runner(wait=False)
+            assert not hasattr(_get_compaction_runner, "_instance")
+        finally:
+            if saved is not None:
+                _get_compaction_runner._instance = saved
+
+    def test_shutdown_allows_fresh_recreation(self):
+        """After shutdown, _get_compaction_runner must return a new instance."""
+        from src.infrastructure.di.container import (
+            _get_compaction_runner,
+            shutdown_compaction_runner,
+        )
+
+        saved = getattr(_get_compaction_runner, "_instance", None)
+
+        try:
+            inst1 = _get_compaction_runner()
+            shutdown_compaction_runner(wait=False)
+            inst2 = _get_compaction_runner()
+
+            assert inst1 is not inst2
+        finally:
+            # Clean up: shut down whatever is there and restore
+            shutdown_compaction_runner(wait=True)
+            if saved is not None:
+                _get_compaction_runner._instance = saved
