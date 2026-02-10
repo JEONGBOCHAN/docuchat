@@ -149,13 +149,13 @@ def update_note(
     use_case_factory: Annotated[Callable[[], NoteCrudUseCase], Depends(get_note_crud_use_case_factory)],
 ) -> NoteResponse:
     """Update an existing note."""
-    use_case = use_case_factory()
     if data.title is None and data.content is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one field (title or content) must be provided",
         )
 
+    use_case = use_case_factory()
     try:
         dto = use_case.update(channel_id, note_id, title=data.title, content=data.content)
     except ChannelNotFoundError as e:

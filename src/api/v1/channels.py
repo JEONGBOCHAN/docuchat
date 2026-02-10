@@ -146,7 +146,6 @@ def update_channel(
 
     Note: channel_id should be the full store name (e.g., "fileSearchStores/xxx")
     """
-    use_case = use_case_factory()
     # Validation stays in the router (HTTP concern)
     if data.name is None and data.description is None:
         raise HTTPException(
@@ -154,6 +153,7 @@ def update_channel(
             detail="At least one of 'name' or 'description' must be provided",
         )
 
+    use_case = use_case_factory()
     dto = use_case.update(channel_id, name=data.name, description=data.description)
     if not dto:
         raise HTTPException(
