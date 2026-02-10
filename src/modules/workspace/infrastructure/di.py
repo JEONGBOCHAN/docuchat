@@ -174,8 +174,12 @@ def create_get_channel_summaries_use_case(db):
 
 def create_capacity_service(db):
     from src.modules.workspace.application.services.capacity_service import CapacityService
+    from src.core.config import get_settings
+    settings = get_settings()
     return CapacityService(
         channel_repo=create_channel_repository_port(db),
+        max_files=settings.max_files_per_channel,
+        max_size_bytes=settings.max_channel_size_mb * 1024 * 1024,
     )
 
 

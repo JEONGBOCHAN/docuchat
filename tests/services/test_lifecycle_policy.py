@@ -219,11 +219,15 @@ class TestLifecycleConfig:
         assert config.max_files_per_channel == 100
         assert config.max_channel_size_mb == 500
 
-    def test_from_settings(self):
-        """Test creating config from settings."""
-        config = LifecycleConfig.from_settings()
-
-        # Should match values from get_settings()
-        assert config.inactive_days == 90
-        assert config.max_files_per_channel == 100
-        assert config.max_channel_size_mb == 500
+    def test_custom_values(self):
+        """Test creating config with custom values."""
+        config = LifecycleConfig(
+            inactive_days=30,
+            idle_warning_days=20,
+            max_files_per_channel=50,
+            max_channel_size_mb=100,
+        )
+        assert config.inactive_days == 30
+        assert config.idle_warning_days == 20
+        assert config.max_files_per_channel == 50
+        assert config.max_channel_size_mb == 100

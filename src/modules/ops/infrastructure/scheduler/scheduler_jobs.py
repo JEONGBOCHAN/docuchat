@@ -9,7 +9,8 @@ import logging
 from datetime import datetime, UTC
 
 from src.core.database import SessionLocal
-from src.modules.ops.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
+from src.modules.ops.application.services.lifecycle_policy import ChannelState
+from src.modules.ops.infrastructure.di import create_lifecycle_policy
 from src.modules.workspace.public import (
     create_channel_port,
     create_document_port,
@@ -31,7 +32,7 @@ def scan_inactive_channels():
     db = SessionLocal()
     try:
         repo = create_channel_repository_port(db)
-        policy = LifecyclePolicy()
+        policy = create_lifecycle_policy()
 
         # Get all channels
         channels = repo.get_all()
@@ -87,7 +88,7 @@ def cleanup_inactive_channels(dry_run: bool = True):
     db = SessionLocal()
     try:
         repo = create_channel_repository_port(db)
-        policy = LifecyclePolicy()
+        policy = create_lifecycle_policy()
         channel_port = create_channel_port()
 
         # Get all channels and filter inactive ones

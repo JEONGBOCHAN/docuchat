@@ -9,7 +9,6 @@ from enum import Enum
 from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass
 
-from src.core.config import get_settings
 from src.shared.kernel.contracts.ports.persistence import ChannelMetadataDTO
 
 
@@ -48,15 +47,6 @@ class LifecycleConfig:
     max_files_per_channel: int = 100
     max_channel_size_mb: int = 500
 
-    @classmethod
-    def from_settings(cls) -> "LifecycleConfig":
-        """Create config from application settings."""
-        settings = get_settings()
-        return cls(
-            inactive_days=settings.channel_inactive_days,
-            max_files_per_channel=settings.max_files_per_channel,
-            max_channel_size_mb=settings.max_channel_size_mb,
-        )
 
 
 @dataclass
@@ -87,7 +77,7 @@ class LifecyclePolicy:
 
     Example:
         ```python
-        policy = LifecyclePolicy()
+        policy = LifecyclePolicy(config)
         status = policy.get_status(channel)
 
         if status.action == ChannelAction.ARCHIVE:
@@ -96,13 +86,13 @@ class LifecyclePolicy:
         ```
     """
 
-    def __init__(self, config: LifecycleConfig | None = None):
-        """Initialize policy with optional custom config.
+    def __init__(self, config: LifecycleConfig):
+        """Initialize policy with lifecycle configuration.
 
         Args:
-            config: Optional custom configuration. Uses settings if not provided.
+            config: Lifecycle configuration with thresholds and limits.
         """
-        self.config = config or LifecycleConfig.from_settings()
+        self.config = config
 
     def get_status(self, channel: ChannelMetadataDTO) -> LifecycleStatus:
         """Get the lifecycle status for a channel.

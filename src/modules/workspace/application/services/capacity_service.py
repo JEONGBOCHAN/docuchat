@@ -7,7 +7,6 @@ It enforces file count and size limits to prevent resource exhaustion.
 
 from dataclasses import dataclass
 
-from src.core.config import get_settings
 from src.shared.kernel.contracts.ports.persistence import ChannelRepositoryPort, ChannelMetadataDTO
 from src.modules.workspace.domain.exceptions import CapacityExceededError
 
@@ -56,16 +55,22 @@ class CapacityService:
         ```
     """
 
-    def __init__(self, channel_repo: ChannelRepositoryPort):
-        """Initialize service with channel repository port.
+    def __init__(
+        self,
+        channel_repo: ChannelRepositoryPort,
+        max_files: int,
+        max_size_bytes: int,
+    ):
+        """Initialize service with channel repository port and limits.
 
         Args:
             channel_repo: Channel repository port
+            max_files: Maximum number of files per channel
+            max_size_bytes: Maximum total size in bytes per channel
         """
         self.repo = channel_repo
-        settings = get_settings()
-        self.max_files = settings.max_files_per_channel
-        self.max_size_bytes = settings.max_channel_size_mb * 1024 * 1024
+        self.max_files = max_files
+        self.max_size_bytes = max_size_bytes
 
     def get_usage(self, channel_id: str) -> CapacityUsage | None:
         """Get current capacity usage for a channel.
@@ -231,13 +236,3 @@ class CapacityService:
         return self._calculate_usage(channel)
 
 
-def get_capacity_service(channel_repo: ChannelRepositoryPort) -> CapacityService:
-    """Get a CapacityService instance.
-
-    Args:
-        channel_repo: Channel repository port
-
-    Returns:
-        CapacityService instance
-    """
-    return CapacityService(channel_repo)

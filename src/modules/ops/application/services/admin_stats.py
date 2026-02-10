@@ -11,7 +11,6 @@ from datetime import datetime, UTC
 from src.shared.kernel.contracts.ports.persistence import ChannelRepositoryPort
 from src.shared.kernel.contracts.ports.infrastructure import ApiMetricsPort, SchedulerPort
 from src.modules.ops.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
-from src.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +106,9 @@ class AdminStatsService:
         channel_repo: ChannelRepositoryPort,
         api_metrics: ApiMetricsPort,
         scheduler: SchedulerPort,
+        lifecycle_policy: LifecyclePolicy,
+        max_files_per_channel: int,
+        max_channel_size_mb: int,
     ):
         """Initialize the admin stats service.
 
@@ -114,12 +116,16 @@ class AdminStatsService:
             channel_repo: Channel repository port
             api_metrics: API metrics port
             scheduler: Scheduler port
+            lifecycle_policy: Lifecycle policy for channel state evaluation
+            max_files_per_channel: Maximum files allowed per channel
+            max_channel_size_mb: Maximum channel size in MB
         """
         self.channel_repo = channel_repo
         self.api_metrics = api_metrics
         self.scheduler = scheduler
-        self.lifecycle_policy = LifecyclePolicy()
-        self.settings = get_settings()
+        self.lifecycle_policy = lifecycle_policy
+        self.max_files_per_channel = max_files_per_channel
+        self.max_channel_size_mb = max_channel_size_mb
 
     def get_system_stats(self) -> SystemStats:
         """Get comprehensive system statistics.
@@ -182,8 +188,8 @@ class AdminStatsService:
             scheduler_running=self.scheduler.is_running(),
             scheduled_jobs=len(scheduler_jobs),
             # Capacity limits
-            max_files_per_channel=self.settings.max_files_per_channel,
-            max_channel_size_mb=self.settings.max_channel_size_mb,
+            max_files_per_channel=self.max_files_per_channel,
+            max_channel_size_mb=self.max_channel_size_mb,
         )
 
     def get_channel_breakdown(self) -> list[dict]:

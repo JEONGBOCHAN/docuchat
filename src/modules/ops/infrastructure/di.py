@@ -5,6 +5,7 @@ from src.shared.kernel.contracts.ports import (
     ApiMetricsPort,
     SchedulerPort,
 )
+from src.modules.ops.application.services.lifecycle_policy import LifecyclePolicy, LifecycleConfig
 
 
 # ============================================================
@@ -37,13 +38,29 @@ def create_scheduler_port() -> SchedulerPort:
 # Service Factories
 # ============================================================
 
+def create_lifecycle_policy() -> LifecyclePolicy:
+    from src.core.config import get_settings
+    settings = get_settings()
+    config = LifecycleConfig(
+        inactive_days=settings.channel_inactive_days,
+        max_files_per_channel=settings.max_files_per_channel,
+        max_channel_size_mb=settings.max_channel_size_mb,
+    )
+    return LifecyclePolicy(config)
+
+
 def create_admin_stats_service(db):
     from src.modules.ops.application.services.admin_stats import AdminStatsService
     from src.modules.workspace.public import create_channel_repository_port
+    from src.core.config import get_settings
+    settings = get_settings()
     return AdminStatsService(
         channel_repo=create_channel_repository_port(db),
         api_metrics=create_api_metrics_port(),
         scheduler=create_scheduler_port(),
+        lifecycle_policy=create_lifecycle_policy(),
+        max_files_per_channel=settings.max_files_per_channel,
+        max_channel_size_mb=settings.max_channel_size_mb,
     )
 
 
