@@ -3,7 +3,7 @@
 
 These tests ensure that test files follow the same modular architecture
 rules as production code — specifically, that API tests do not import
-from legacy container paths.
+from legacy container paths or legacy db_models paths.
 """
 
 import ast
@@ -81,6 +81,56 @@ class TestApiTestImportBoundaries:
                 + "\n".join(f"  - {v}" for v in violations)
                 + "\n\nFix: use module public imports instead "
                 "(e.g. src.modules.workspace.public)."
+            )
+            pytest.fail(msg)
+
+
+# ──────────────────────────────────────────────────────────
+# Test: ORM model registration covers required tables
+# ──────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────
+# Test: API tests must not import from legacy db_models
+# ──────────────────────────────────────────────────────────
+
+DB_MODELS_FORBIDDEN = [
+    "src.infrastructure.persistence.db_models",
+]
+
+# Legacy exceptions: existing files that still use db_models directly.
+# New files must NOT be added here — use module-level model paths instead.
+DB_MODELS_LEGACY_EXCEPTIONS: set[str] = {
+    "tests/api/v1/test_audio.py",
+    "tests/api/v1/test_channels.py",
+    "tests/api/v1/test_export.py",
+    "tests/api/v1/test_favorites.py",
+    "tests/api/v1/test_trash.py",
+}
+
+
+class TestApiTestDbModelsImportBoundaries:
+    """Ensure API test files do not import from legacy db_models path."""
+
+    def test_no_db_models_imports_in_api_tests(self):
+        """API tests must use module-level model paths, not db_models directly."""
+        violations: list[str] = []
+        for filepath in _collect_python_files(API_TEST_DIR):
+            rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+            if rel in DB_MODELS_LEGACY_EXCEPTIONS:
+                continue
+            for lineno, module in _extract_imports(filepath):
+                for prefix in DB_MODELS_FORBIDDEN:
+                    if module == prefix or module.startswith(prefix + "."):
+                        violations.append(
+                            f"{rel}:{lineno} imports '{module}' "
+                            f"(forbidden: '{prefix}')"
+                        )
+        if violations:
+            msg = (
+                "API test files import from legacy db_models path!\n\n"
+                + "\n".join(f"  - {v}" for v in violations)
+                + "\n\nFix: use module-level model paths instead "
+                "(e.g. src.modules.workspace.infrastructure.persistence.models)."
             )
             pytest.fail(msg)
 
