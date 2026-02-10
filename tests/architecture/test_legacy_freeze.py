@@ -76,8 +76,8 @@ LEGACY_API_V1_ALLOWLIST = {
 }
 
 # container.py line count at freeze point.
-# Allow small tolerance (shim additions) but block major growth.
-CONTAINER_MAX_LINES = 1350
+# Container is now a pure shim (~195 lines). Allow small tolerance.
+CONTAINER_MAX_LINES = 250
 
 
 # ──────────────────────────────────────────────────────────

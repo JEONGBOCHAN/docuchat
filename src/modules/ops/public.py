@@ -12,3 +12,11 @@ from src.modules.ops.infrastructure.di import (  # noqa: F401
     setup_scheduler,
     shutdown_scheduler,
 )
+
+__all__ = [
+    "create_api_metrics_port",
+    "create_scheduler_port",
+    "create_admin_stats_service",
+    "setup_scheduler",
+    "shutdown_scheduler",
+]

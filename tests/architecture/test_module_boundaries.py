@@ -278,3 +278,14 @@ class TestModuleStructure:
             assert init_file.exists(), (
                 f"Module '{module_name}/{layer}/' is missing __init__.py."
             )
+
+    @pytest.mark.parametrize("module_name", MODULE_NAMES)
+    def test_public_has_real_exports(self, module_name: str):
+        """Each module's public.py must export at least one symbol."""
+        public_py = MODULES_DIR / module_name / "public.py"
+        if not public_py.exists():
+            pytest.skip(f"No public.py for {module_name}")
+        assert _has_real_exports(public_py), (
+            f"Module '{module_name}' public.py has no real exports "
+            f"(needs __all__, def, or class)."
+        )
