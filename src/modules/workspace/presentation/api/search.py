@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from src.core.rate_limiter import limiter, RateLimits
-from src.models.search import (
+from src.modules.workspace.presentation.schemas.search import (
     SearchHistoryItem,
     SearchHistoryList,
     SearchSuggestion,

@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.models.faq import FAQItem, FAQGenerateRequest, FAQGenerateResponse
+from src.modules.knowledge.presentation.schemas.faq import FAQItem, FAQGenerateRequest, FAQGenerateResponse
 from src.shared.kernel.presentation.dependencies.channel_validation import ValidatedChannel, require_channel_with_documents
 from src.modules.knowledge.public import create_generate_faq_use_case
 

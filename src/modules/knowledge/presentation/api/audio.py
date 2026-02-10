@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from src.models.audio import (
+from src.modules.knowledge.presentation.schemas.audio import (
     AudioStatus,
     VoiceType,
     PodcastScript,

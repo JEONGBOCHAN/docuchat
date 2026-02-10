@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from src.models.timeline import (
+from src.modules.knowledge.presentation.schemas.timeline import (
     TimelineEvent,
     TimelineResponse,
     BriefingSection,

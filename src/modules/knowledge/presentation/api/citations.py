@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from src.models.citation import (
+from src.modules.knowledge.presentation.schemas.citation import (
     Citation,
     CitationLocation,
     CitedResponse,

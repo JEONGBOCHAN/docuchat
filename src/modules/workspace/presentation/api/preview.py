@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from src.core.rate_limiter import limiter, RateLimits
 from src.core.database import get_db
-from src.models.preview import (
+from src.modules.workspace.presentation.schemas.preview import (
     DocumentPreviewResponse,
     TextHighlight,
     SourceLocation,

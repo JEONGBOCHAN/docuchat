@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from src.models.capacity import CapacityUsageResponse
+from src.modules.workspace.presentation.schemas.capacity import CapacityUsageResponse
 from src.shared.kernel.contracts.ports.channel import ChannelPort
 from src.modules.workspace.application.services.capacity_service import CapacityService
 from src.modules.workspace.public import create_channel_port, create_capacity_service

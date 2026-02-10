@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from src.models.trash import TrashList, TrashItemType, RestoreResponse, EmptyTrashResponse
+from src.modules.workspace.presentation.schemas.trash import TrashList, TrashItemType, RestoreResponse, EmptyTrashResponse
 from src.shared.kernel.contracts.ports.channel import ChannelPort
 from src.shared.kernel.contracts.ports.persistence import TrashRepositoryPort
 from src.core.database import get_db
@@ -41,7 +41,7 @@ def list_trash(
     trash_repo: Annotated[TrashRepositoryPort, Depends(get_trash_repo_port)],
 ) -> TrashList:
     """List all items in the trash (soft-deleted channels and notes)."""
-    from src.models.trash import TrashItem
+    from src.modules.workspace.presentation.schemas.trash import TrashItem
     items_dto = trash_repo.get_all_trashed_items()
 
     # Convert DTOs to Pydantic models

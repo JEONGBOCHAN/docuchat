@@ -10,7 +10,7 @@ from slowapi.util import get_remote_address
 
 from src.core.config import get_settings
 from src.core.rate_limiter import RateLimits
-from src.models.study import (
+from src.modules.knowledge.presentation.schemas.study import (
     DifficultyLevel,
     KeyConcept,
     QuizChoice,

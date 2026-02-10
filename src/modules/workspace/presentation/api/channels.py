@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-from src.models.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelList
+from src.modules.workspace.presentation.schemas.channel import ChannelCreate, ChannelUpdate, ChannelResponse, ChannelList
 from src.modules.workspace.application.use_cases.channel_crud import ChannelCrudUseCase, ChannelDetailDTO
 from src.core.database import get_db
 from src.shared.kernel.contracts.errors.use_case_errors import UpstreamError

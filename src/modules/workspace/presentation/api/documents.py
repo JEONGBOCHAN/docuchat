@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from src.core.config import get_settings
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.models.document import (
+from src.modules.workspace.presentation.schemas.document import (
     DocumentResponse,
     DocumentList,
     DocumentUploadResponse,

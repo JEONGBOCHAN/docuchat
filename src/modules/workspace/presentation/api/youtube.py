@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
-from src.models.youtube import (
+from src.modules.workspace.presentation.schemas.youtube import (
     YouTubeSourceRequest,
     YouTubeSourceResponse,
 )

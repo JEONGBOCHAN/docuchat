@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from src.models.export import ExportFormat
+from src.modules.workspace.presentation.schemas.export import ExportFormat
 from src.shared.kernel.contracts.ports.channel import ChannelPort
 from src.shared.kernel.contracts.ports.persistence import ChannelRepositoryPort
 from src.modules.workspace.application.services.export_service import ExportService

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from src.models.chat import (
+from src.modules.conversation.presentation.schemas.chat import (
     ChatRequest,
     ChatResponse,
     ChatHistory,
