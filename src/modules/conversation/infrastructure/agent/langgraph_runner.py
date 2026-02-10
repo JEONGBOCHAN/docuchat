@@ -97,7 +97,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self._event_sink = event_sink
         if document_search is None:
             # Lazy import to avoid circular dependency
-            from src.infrastructure.di import create_document_search
+            from src.modules.conversation.infrastructure.di import create_document_search
             document_search = create_document_search()
         self._document_search = document_search
         self._model = model
@@ -144,29 +144,29 @@ class LangGraphAgentRunner(AgentRunnerPort):
 
         # External search tools: only create if enabled
         if enabled_tools is None or "web_search" in enabled_tools:
-            from src.infrastructure.di import create_web_search
+            from src.modules.conversation.infrastructure.di import create_web_search
             web_search_adapter = create_web_search()
             tools.append(create_web_search_tool(web_search_port=web_search_adapter))
 
         if enabled_tools is None or "arxiv_search" in enabled_tools:
-            from src.infrastructure.di import create_arxiv_search
+            from src.modules.conversation.infrastructure.di import create_arxiv_search
             arxiv_search_adapter = create_arxiv_search()
             tools.append(create_arxiv_search_tool(arxiv_search_port=arxiv_search_adapter))
 
         if enabled_tools is None or "semantic_scholar_search" in enabled_tools:
-            from src.infrastructure.di import create_semantic_scholar_search
+            from src.modules.conversation.infrastructure.di import create_semantic_scholar_search
             semantic_scholar_adapter = create_semantic_scholar_search()
             tools.append(create_semantic_scholar_search_tool(
                 semantic_scholar_port=semantic_scholar_adapter
             ))
 
         if enabled_tools is None or "crossref_search" in enabled_tools:
-            from src.infrastructure.di import create_crossref_search
+            from src.modules.conversation.infrastructure.di import create_crossref_search
             crossref_adapter = create_crossref_search()
             tools.append(create_crossref_search_tool(crossref_port=crossref_adapter))
 
         if enabled_tools is None or "google_scholar_search" in enabled_tools:
-            from src.infrastructure.di import create_google_scholar_search
+            from src.modules.conversation.infrastructure.di import create_google_scholar_search
             google_scholar_adapter = create_google_scholar_search()
             tools.append(create_google_scholar_search_tool(
                 google_scholar_port=google_scholar_adapter

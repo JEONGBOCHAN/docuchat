@@ -11,7 +11,7 @@ from datetime import datetime, UTC
 from src.core.database import SessionLocal
 from src.infrastructure.persistence.channel_repository import ChannelRepository
 from src.application.services.lifecycle_policy import LifecyclePolicy, ChannelState
-from src.infrastructure.di import create_channel_port, create_document_port
+from src.modules.workspace.public import create_channel_port, create_document_port
 from src.infrastructure.persistence.trash_repository import TrashRepository
 
 logger = logging.getLogger(__name__)
