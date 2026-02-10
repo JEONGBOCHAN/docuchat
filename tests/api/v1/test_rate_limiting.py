@@ -85,19 +85,39 @@ class TestRateLimitingConfig:
 
 
 class TestRateLimiting429Response:
-    """Test 429 Too Many Requests response."""
+    """Test 429 Too Many Requests response — deterministic verification."""
 
-    def test_rate_limit_exceeded_returns_429(self, client, mock_channel_port, mock_db):
-        """Test that exceeding rate limit returns 429 status code."""
-        # mock_channel_port fixture already overrides get_chat_use_case
-        # with a fully mocked ChatUseCase including process_query_factory
-        response = client.post(
-            "/api/v1/channels/test-store/chat",
-            json={"query": "test question"},
-        )
+    def test_rate_limit_exceeded_returns_429(self, client):
+        """Exceed a strict 1/minute limit and assert 429 with Retry-After."""
+        from fastapi import APIRouter, Request
+        from fastapi.responses import JSONResponse
+        from src.core.rate_limiter import limiter
 
-        # First request should succeed (not 429)
-        assert response.status_code != 429 or "Retry-After" in response.headers
+        # Create a temporary test route with a very low limit
+        test_router = APIRouter()
+
+        @test_router.get("/_test_rate_limit")
+        @limiter.limit("1/minute")
+        def _rate_limit_test_endpoint(request: Request):
+            return JSONResponse({"ok": True})
+
+        app.include_router(test_router)
+
+        try:
+            # Use a fresh client so route registration takes effect
+            test_client = TestClient(app)
+
+            # First request should succeed
+            r1 = test_client.get("/_test_rate_limit")
+            assert r1.status_code == 200
+
+            # Second request must be rate-limited
+            r2 = test_client.get("/_test_rate_limit")
+            assert r2.status_code == 429, f"Expected 429 but got {r2.status_code}"
+            assert "Retry-After" in r2.headers
+        finally:
+            # Remove the test route to avoid polluting other tests
+            app.routes[:] = [r for r in app.routes if getattr(r, "path", None) != "/_test_rate_limit"]
 
 
 class TestRateLimitHeaders:
