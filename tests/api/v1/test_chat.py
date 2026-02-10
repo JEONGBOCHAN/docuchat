@@ -12,6 +12,19 @@ from src.application.ports.channel import ChannelDTO
 from src.application.use_cases.process_query import QueryResult
 
 
+@pytest.fixture(autouse=True)
+def _override_chat_use_case():
+    """Prevent real container from resolving (which requires API keys).
+
+    Provides a safe default override so tests that don't explicitly set
+    their own override never trigger external service initialization.
+    Individual tests may still override via app.dependency_overrides.
+    """
+    app.dependency_overrides[get_chat_use_case] = lambda: _make_chat_use_case()
+    yield
+    app.dependency_overrides.pop(get_chat_use_case, None)
+
+
 def _make_chat_use_case(
     channel_port=None,
     process_query_factory=None,
