@@ -12,10 +12,12 @@ This is where the Clean Architecture comes together:
 """
 
 import logging
+import threading
 from functools import lru_cache
 from typing import Callable
 
 _container_logger = logging.getLogger(__name__)
+_compaction_runner_lock = threading.Lock()
 
 from src.application.ports import (
     AgentRunnerPort,
@@ -807,18 +809,26 @@ def create_conversation_memory_service(db):
 def _get_compaction_runner():
     """Get or create the singleton CompactionRunner.
 
-    The runner uses independent DB sessions (via SessionLocal) so that
-    background compaction never shares the request-scoped session.
+    Uses double-checked locking to prevent duplicate creation under
+    concurrent access while avoiding lock overhead on the hot path.
     """
-    from src.infrastructure.compaction.runner import CompactionRunner
-    from src.core.database import SessionLocal
+    instance = getattr(_get_compaction_runner, "_instance", None)
+    if instance is not None:
+        return instance
+    with _compaction_runner_lock:
+        # Re-check inside lock (another thread may have created it)
+        instance = getattr(_get_compaction_runner, "_instance", None)
+        if instance is not None:
+            return instance
+        from src.infrastructure.compaction.runner import CompactionRunner
+        from src.core.database import SessionLocal
 
-    if not hasattr(_get_compaction_runner, "_instance"):
-        _get_compaction_runner._instance = CompactionRunner(
+        instance = CompactionRunner(
             session_factory=SessionLocal,
             service_factory=create_conversation_memory_service,
         )
-    return _get_compaction_runner._instance
+        _get_compaction_runner._instance = instance
+        return instance
 
 
 def shutdown_compaction_runner(wait: bool = False) -> None:
@@ -827,22 +837,22 @@ def shutdown_compaction_runner(wait: bool = False) -> None:
     Safe to call even if the runner was never created (no-op).
     Exceptions are logged as warnings and swallowed so that app
     shutdown is never blocked by compaction cleanup.
+    Uses _compaction_runner_lock to prevent race with creation.
     """
-    instance = getattr(_get_compaction_runner, "_instance", None)
-    if instance is None:
-        return
-    try:
-        instance.shutdown(wait=wait)
-        _container_logger.info("CompactionRunner shut down (wait=%s)", wait)
-    except Exception:
-        _container_logger.warning(
-            "CompactionRunner shutdown failed", exc_info=True,
-        )
-    finally:
-        # Always remove the singleton so next access creates a fresh runner.
-        # Without this, a shutdown executor would be reused (stale singleton).
-        if hasattr(_get_compaction_runner, "_instance"):
-            delattr(_get_compaction_runner, "_instance")
+    with _compaction_runner_lock:
+        instance = getattr(_get_compaction_runner, "_instance", None)
+        if instance is None:
+            return
+        try:
+            instance.shutdown(wait=wait)
+            _container_logger.info("CompactionRunner shut down (wait=%s)", wait)
+        except Exception:
+            _container_logger.warning(
+                "CompactionRunner shutdown failed", exc_info=True,
+            )
+        finally:
+            if hasattr(_get_compaction_runner, "_instance"):
+                delattr(_get_compaction_runner, "_instance")
 
 
 def create_chat_use_case(db):

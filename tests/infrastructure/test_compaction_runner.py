@@ -419,3 +419,55 @@ class TestShutdownHelper:
             shutdown_compaction_runner(wait=True)
             if saved is not None:
                 _get_compaction_runner._instance = saved
+
+
+class TestSingletonThreadSafety:
+    """Tests for _get_compaction_runner thread safety (double-checked locking)."""
+
+    def test_concurrent_access_returns_same_instance(self):
+        """100 concurrent calls must all return the same CompactionRunner instance."""
+        from src.infrastructure.di.container import (
+            _get_compaction_runner,
+            shutdown_compaction_runner,
+        )
+
+        saved = getattr(_get_compaction_runner, "_instance", None)
+        if hasattr(_get_compaction_runner, "_instance"):
+            delattr(_get_compaction_runner, "_instance")
+
+        results = []
+        barrier = threading.Barrier(100)
+
+        def get_runner():
+            barrier.wait()
+            results.append(id(_get_compaction_runner()))
+
+        threads = [threading.Thread(target=get_runner) for _ in range(100)]
+        try:
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=10)
+
+            assert len(set(results)) == 1, f"Expected 1 unique instance, got {len(set(results))}"
+        finally:
+            shutdown_compaction_runner(wait=True)
+            if saved is not None:
+                _get_compaction_runner._instance = saved
+
+    def test_shutdown_during_creation_does_not_leak(self):
+        """Shutdown under lock must not leave a stale instance."""
+        from src.infrastructure.di.container import (
+            _get_compaction_runner,
+            shutdown_compaction_runner,
+        )
+
+        saved = getattr(_get_compaction_runner, "_instance", None)
+
+        try:
+            _get_compaction_runner()
+            shutdown_compaction_runner(wait=True)
+            assert not hasattr(_get_compaction_runner, "_instance")
+        finally:
+            if saved is not None:
+                _get_compaction_runner._instance = saved
