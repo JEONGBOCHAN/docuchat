@@ -22,7 +22,7 @@ from src.shared.kernel.contracts.ports.persistence import (
     SearchHistoryRepositoryPort,
 )
 from src.shared.kernel.contracts.ports.cache import CachePort
-from src.modules.workspace.public import GetChannelDocumentSummariesUseCase
+from src.shared.kernel.contracts.ports.workspace_queries import ChannelDocumentSummaryQueryPort
 from src.modules.conversation.application.use_cases.process_query import ProcessQueryUseCase
 from src.modules.conversation.application.use_cases.conversation_memory import ConversationMemoryService
 from src.shared.kernel.contracts.errors.use_case_errors import (
@@ -115,7 +115,7 @@ class ChatUseCase:
         session_repo: ChatSessionRepositoryPort,
         search_history_repo: SearchHistoryRepositoryPort,
         cache: CachePort,
-        summaries_use_case: GetChannelDocumentSummariesUseCase,
+        summaries_use_case: ChannelDocumentSummaryQueryPort,
         process_query_factory: Callable[[], ProcessQueryUseCase],
         conversation_memory: ConversationMemoryService | None = None,
         session_memory_repo: ChatSessionMemoryRepositoryPort | None = None,

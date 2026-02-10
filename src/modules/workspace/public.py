@@ -36,11 +36,6 @@ from src.modules.workspace.infrastructure.di import (  # noqa: F401
     create_preview_service,
 )
 
-# Use case classes (for type annotations in cross-module DI)
-from src.modules.workspace.application.use_cases.document_summary import (  # noqa: F401
-    GetChannelDocumentSummariesUseCase,
-)
-
 __all__ = [
     "create_channel_port",
     "create_document_port",
@@ -66,5 +61,4 @@ __all__ = [
     "create_capacity_service",
     "create_export_service",
     "create_preview_service",
-    "GetChannelDocumentSummariesUseCase",
 ]

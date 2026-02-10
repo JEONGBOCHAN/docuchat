@@ -162,10 +162,12 @@ def create_generate_document_summary_use_case(db):
 
 
 def create_get_channel_summaries_use_case(db):
+    from src.shared.kernel.contracts.ports.workspace_queries import ChannelDocumentSummaryQueryPort
     from src.modules.workspace.application.use_cases.document_summary import GetChannelDocumentSummariesUseCase
-    return GetChannelDocumentSummariesUseCase(
+    use_case: ChannelDocumentSummaryQueryPort = GetChannelDocumentSummariesUseCase(
         cache_port=create_document_summary_cache_port(db),
     )
+    return use_case
 
 
 # ============================================================

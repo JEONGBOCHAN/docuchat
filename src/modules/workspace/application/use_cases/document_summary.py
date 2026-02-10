@@ -10,6 +10,7 @@ system prompt, helping it choose the right tool (search_documents vs web_search)
 import logging
 from dataclasses import dataclass, field
 
+from src.shared.kernel.contracts.ports.workspace_queries import ChannelDocumentSummaryQueryPort
 from src.shared.kernel.contracts.ports.document_summary import (
     DocumentSummaryGenerationPort,
     DocumentSummaryCachePort,
@@ -155,7 +156,7 @@ class GenerateDocumentSummaryUseCase:
             )
 
 
-class GetChannelDocumentSummariesUseCase:
+class GetChannelDocumentSummariesUseCase(ChannelDocumentSummaryQueryPort):
     """Use case for retrieving document summaries for a channel.
 
     This use case retrieves cached summaries that can be injected
