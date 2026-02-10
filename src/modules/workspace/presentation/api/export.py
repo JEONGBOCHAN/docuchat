@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Export API endpoints for exporting notes, chat history, and channels."""
+"""Export API endpoints (thin controller)."""
 
 from typing import Annotated
 
@@ -8,55 +8,30 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from src.modules.workspace.presentation.schemas.export import ExportFormat
-from src.shared.kernel.contracts.ports.channel import ChannelPort
-from src.shared.kernel.contracts.ports.persistence import ChannelRepositoryPort
-from src.modules.workspace.application.services.export_service import ExportService
-from src.modules.workspace.public import (
-    create_channel_port,
-    create_channel_repository_port,
-    create_export_service,
+from src.modules.workspace.application.use_cases.export_channel_context import (
+    ExportChannelContextUseCase,
 )
+from src.modules.workspace.application.services.export_service import ExportService
+from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 
 router = APIRouter(prefix="/export", tags=["export"])
 
 
-def get_channel_port() -> ChannelPort:
-    """Get channel port instance."""
-    return create_channel_port()
+# ── Dependencies ────────────────────────────────────────────
 
-
-def get_channel_repo_port(db: Session = Depends(get_db)) -> ChannelRepositoryPort:
-    """Get channel repository port instance."""
-    return create_channel_repository_port(db)
+def _get_context_use_case(db: Session = Depends(get_db)) -> ExportChannelContextUseCase:
+    from src.modules.workspace.public import create_export_channel_context_use_case
+    return create_export_channel_context_use_case(db)
 
 
 def get_export_service(db: Session = Depends(get_db)) -> ExportService:
-    """Get export service instance."""
+    from src.modules.workspace.public import create_export_service
     return create_export_service(db)
 
 
-def _get_channel_or_404(
-    channel_id: str, channel_port: ChannelPort, channel_repo: ChannelRepositoryPort
-) -> tuple:
-    """Get channel or raise 404."""
-    channel = channel_port.get_channel(channel_id)
-    if not channel:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Channel not found: {channel_id}",
-        )
-
-    channel_meta = channel_repo.get_by_gemini_id(channel_id)
-    if not channel_meta:
-        channel_meta = channel_repo.create(
-            gemini_store_id=channel_id,
-            name=channel.display_name or "unknown",
-        )
-
-    return channel, channel_meta
-
+# ── Endpoints ───────────────────────────────────────────────
 
 @router.get(
     "/channels/{channel_id:path}/notes/{note_id}",
@@ -72,17 +47,16 @@ def export_note(
         ExportFormat,
         Query(description="Export format: markdown, pdf, or json"),
     ] = ExportFormat.MARKDOWN,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)] = None,
+    context_uc: Annotated[ExportChannelContextUseCase, Depends(_get_context_use_case)] = None,
     export_service: Annotated[ExportService, Depends(get_export_service)] = None,
 ) -> Response:
-    """Export a specific note.
-
-    - **markdown**: Human-readable Markdown format
-    - **pdf**: PDF document
-    - **json**: Structured JSON format
-    """
-    _, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
+    try:
+        channel_meta = context_uc.resolve(channel_id)
+    except ChannelNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Channel not found: {channel_id}",
+        )
 
     try:
         content, content_type, filename = export_service.export_note(
@@ -121,20 +95,17 @@ def export_chat(
         ExportFormat,
         Query(description="Export format: markdown or json (pdf not supported)"),
     ] = ExportFormat.MARKDOWN,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)] = None,
+    context_uc: Annotated[ExportChannelContextUseCase, Depends(_get_context_use_case)] = None,
     export_service: Annotated[ExportService, Depends(get_export_service)] = None,
 ) -> Response:
-    """Export chat history of a channel.
+    try:
+        channel_meta = context_uc.resolve(channel_id)
+    except ChannelNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Channel not found: {channel_id}",
+        )
 
-    - **markdown**: Human-readable Markdown format
-    - **json**: Structured JSON format
-
-    Note: PDF format is not supported for chat export.
-    """
-    _, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
-
-    # PDF not supported for chat, fallback to markdown
     if format == ExportFormat.PDF:
         format = ExportFormat.MARKDOWN
 
@@ -160,17 +131,16 @@ def export_channel(
         ExportFormat,
         Query(description="Export format: markdown, json, or pdf (pdf exports as zip)"),
     ] = ExportFormat.JSON,
-    channel_port: Annotated[ChannelPort, Depends(get_channel_port)] = None,
-    channel_repo: Annotated[ChannelRepositoryPort, Depends(get_channel_repo_port)] = None,
+    context_uc: Annotated[ExportChannelContextUseCase, Depends(_get_context_use_case)] = None,
     export_service: Annotated[ExportService, Depends(get_export_service)] = None,
 ) -> Response:
-    """Export entire channel with all notes and chat history.
-
-    - **markdown**: Human-readable Markdown format
-    - **json**: Structured JSON format for data backup
-    - **pdf**: ZIP archive containing all files
-    """
-    _, channel_meta = _get_channel_or_404(channel_id, channel_port, channel_repo)
+    try:
+        channel_meta = context_uc.resolve(channel_id)
+    except ChannelNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Channel not found: {channel_id}",
+        )
 
     content, content_type, filename = export_service.export_channel(channel_meta, format)
 

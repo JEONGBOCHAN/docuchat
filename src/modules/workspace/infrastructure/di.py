@@ -212,6 +212,20 @@ def create_audio_repository_port(db) -> AudioRepositoryPort:
 
 
 # ============================================================
+# Export Channel Context Factory
+# ============================================================
+
+def create_export_channel_context_use_case(db):
+    from src.modules.workspace.application.use_cases.export_channel_context import (
+        ExportChannelContextUseCase,
+    )
+    return ExportChannelContextUseCase(
+        channel_port=create_channel_port(),
+        channel_repo=create_channel_repository_port(db),
+    )
+
+
+# ============================================================
 # Trash Management Factories
 # ============================================================
 
