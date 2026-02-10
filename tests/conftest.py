@@ -92,12 +92,16 @@ def client():
     from fastapi.testclient import TestClient
     app = _get_app()
 
-    # Disable rate limiting for tests
+    # Disable rate limiting for tests, restore original state afterwards
     limiter = _get_limiter()
+    prev_enabled = limiter.enabled
     limiter.enabled = False
 
-    with TestClient(app) as client:
-        yield client
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        limiter.enabled = prev_enabled
 
 
 @pytest.fixture
@@ -134,8 +138,9 @@ def client_with_db(test_db):
     app = _get_app()
     _, get_db = _get_base_and_db()
 
-    # Disable rate limiting for tests
+    # Disable rate limiting for tests, restore original state afterwards
     limiter = _get_limiter()
+    prev_enabled = limiter.enabled
     limiter.enabled = False
 
     def override_get_db():
@@ -145,9 +150,12 @@ def client_with_db(test_db):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as client:
-        yield client
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
+        limiter.enabled = prev_enabled
 
 
 @pytest.fixture

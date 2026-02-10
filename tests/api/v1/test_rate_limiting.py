@@ -93,6 +93,10 @@ class TestRateLimiting429Response:
         from fastapi.responses import JSONResponse
         from src.core.rate_limiter import limiter
 
+        # Force limiter ON regardless of conftest fixture state
+        prev_enabled = limiter.enabled
+        limiter.enabled = True
+
         # Create a temporary test route with a very low limit
         test_router = APIRouter()
 
@@ -116,8 +120,9 @@ class TestRateLimiting429Response:
             assert r2.status_code == 429, f"Expected 429 but got {r2.status_code}"
             assert "Retry-After" in r2.headers
         finally:
-            # Remove the test route to avoid polluting other tests
+            # Remove the test route and restore limiter state
             app.routes[:] = [r for r in app.routes if getattr(r, "path", None) != "/_test_rate_limit"]
+            limiter.enabled = prev_enabled
 
 
 class TestRateLimitHeaders:
