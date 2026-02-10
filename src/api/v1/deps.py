@@ -13,7 +13,7 @@ from src.application.ports.channel import ChannelPort, ChannelDTO
 from src.application.ports.document import DocumentPort
 from src.application.ports.persistence import ChannelRepositoryPort
 from src.core.database import get_db
-from src.infrastructure.di.container import (
+from src.modules.workspace.public import (
     create_channel_port,
     create_channel_repository_port,
     create_document_port,

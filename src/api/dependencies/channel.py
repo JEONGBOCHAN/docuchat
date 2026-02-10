@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 
 from src.application.ports.channel import ChannelPort, ChannelDTO
-from src.infrastructure.di.container import create_channel_port
+from src.modules.workspace.public import create_channel_port
 
 
 @dataclass
