@@ -2,8 +2,6 @@
 """Audio Overview (Podcast) API endpoints."""
 
 import asyncio
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, UTC
 from typing import Annotated
 
@@ -45,44 +43,12 @@ from src.modules.workspace.public import (
     create_channel_repository_port,
 )
 
+from src.modules.knowledge.infrastructure.runtime.audio_executor import (
+    get_audio_executor as _get_audio_executor,
+    shutdown_audio_executor,
+)
+
 router = APIRouter(prefix="/channels", tags=["audio"])
-
-# Lazy-initialized bounded thread pool for audio generation.
-# Uses lock + getter pattern so executor can be recreated after shutdown.
-_audio_executor: ThreadPoolExecutor | None = None
-_audio_executor_lock = threading.Lock()
-_audio_logger = __import__("logging").getLogger(__name__)
-
-
-def _get_audio_executor() -> ThreadPoolExecutor:
-    """Get or create the audio generation thread pool."""
-    global _audio_executor
-    if _audio_executor is not None:
-        return _audio_executor
-    with _audio_executor_lock:
-        if _audio_executor is not None:
-            return _audio_executor
-        _audio_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="audio-gen")
-        return _audio_executor
-
-
-def shutdown_audio_executor(wait: bool = False) -> None:
-    """Shut down the audio generation thread pool.
-
-    Called during app lifespan shutdown. Sets the global to None so
-    a fresh executor is created on next access.
-    """
-    global _audio_executor
-    with _audio_executor_lock:
-        executor = _audio_executor
-        _audio_executor = None
-    if executor is None:
-        return
-    try:
-        executor.shutdown(wait=wait)
-        _audio_logger.info("Audio executor shut down (wait=%s)", wait)
-    except Exception:
-        _audio_logger.warning("Audio executor shutdown failed", exc_info=True)
 
 
 def get_channel_port() -> ChannelPort:

@@ -30,7 +30,7 @@ from src.modules.knowledge.infrastructure.di import (  # noqa: F401
     create_generate_audio_use_case,
 )
 
-from src.modules.knowledge.presentation.api.audio import (  # noqa: F401
+from src.modules.knowledge.infrastructure.runtime.audio_executor import (  # noqa: F401
     shutdown_audio_executor,
 )
 

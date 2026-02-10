@@ -445,72 +445,72 @@ class TestAudioExecutorShutdown:
 
     def test_shutdown_calls_executor_shutdown(self):
         """shutdown_audio_executor should invoke the executor's shutdown method."""
-        from src.modules.knowledge.presentation.api import audio as audio_module
+        from src.modules.knowledge.infrastructure.runtime import audio_executor as rt
 
         # Force an executor to exist
-        original = audio_module._audio_executor
+        original = rt._audio_executor
         mock_executor = MagicMock()
-        audio_module._audio_executor = mock_executor
+        rt._audio_executor = mock_executor
 
         try:
-            audio_module.shutdown_audio_executor(wait=True)
+            rt.shutdown_audio_executor(wait=True)
             mock_executor.shutdown.assert_called_once_with(wait=True)
             # After shutdown, global should be None
-            assert audio_module._audio_executor is None
+            assert rt._audio_executor is None
         finally:
-            audio_module._audio_executor = original
+            rt._audio_executor = original
 
     def test_shutdown_exception_does_not_propagate(self):
         """Even if executor.shutdown raises, the function should not propagate."""
-        from src.modules.knowledge.presentation.api import audio as audio_module
+        from src.modules.knowledge.infrastructure.runtime import audio_executor as rt
 
-        original = audio_module._audio_executor
+        original = rt._audio_executor
         mock_executor = MagicMock()
         mock_executor.shutdown.side_effect = RuntimeError("thread error")
-        audio_module._audio_executor = mock_executor
+        rt._audio_executor = mock_executor
 
         try:
             # Should not raise
-            audio_module.shutdown_audio_executor(wait=False)
+            rt.shutdown_audio_executor(wait=False)
             # Global should still be cleared
-            assert audio_module._audio_executor is None
+            assert rt._audio_executor is None
         finally:
-            audio_module._audio_executor = original
+            rt._audio_executor = original
 
     def test_shutdown_noop_when_none(self):
         """shutdown_audio_executor is safe to call when no executor exists."""
-        from src.modules.knowledge.presentation.api import audio as audio_module
+        from src.modules.knowledge.infrastructure.runtime import audio_executor as rt
 
-        original = audio_module._audio_executor
-        audio_module._audio_executor = None
+        original = rt._audio_executor
+        rt._audio_executor = None
 
         try:
             # Should not raise
-            audio_module.shutdown_audio_executor(wait=False)
+            rt.shutdown_audio_executor(wait=False)
         finally:
-            audio_module._audio_executor = original
+            rt._audio_executor = original
 
     def test_get_recreates_after_shutdown(self):
         """_get_audio_executor creates a fresh executor after shutdown."""
-        from src.modules.knowledge.presentation.api import audio as audio_module
+        from src.modules.knowledge.infrastructure.runtime import audio_executor as rt
 
-        original = audio_module._audio_executor
+        original = rt._audio_executor
 
         try:
             # Get an executor
-            exec1 = audio_module._get_audio_executor()
+            exec1 = rt.get_audio_executor()
             assert exec1 is not None
 
             # Shutdown
-            audio_module.shutdown_audio_executor(wait=True)
-            assert audio_module._audio_executor is None
+            rt.shutdown_audio_executor(wait=True)
+            assert rt._audio_executor is None
 
             # Get again — should be a new instance
-            exec2 = audio_module._get_audio_executor()
+            exec2 = rt.get_audio_executor()
             assert exec2 is not None
             assert exec2 is not exec1
         finally:
             # Cleanup: shut down whatever was created, restore original
-            if audio_module._audio_executor is not None and audio_module._audio_executor is not original:
-                audio_module._audio_executor.shutdown(wait=True)
-            audio_module._audio_executor = original
+            if rt._audio_executor is not None and rt._audio_executor is not original:
+                rt._audio_executor.shutdown(wait=True)
+            rt._audio_executor = original
