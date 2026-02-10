@@ -310,24 +310,8 @@ class ChatUseCase:
         )
         document_context = self._summaries.build_context_string(channel_id)
 
-        # Check cache (only when no session is active — stateful conversations
-        # must always run the agent so context is maintained)
-        use_cache = session_id_response is None
-        if use_cache:
-            cached = self._cache.get_chat_response(channel_id, query)
-            if cached:
-                sources = self._dicts_to_sources(cached.get("sources", []))
-                self._search_history.add_or_update(channel_meta.id, query)
-                self._save_chat_messages(
-                    channel_meta.id, query, cached.get("response", ""),
-                    cached.get("sources", []), session_id_response,
-                )
-                return ChatResultDTO(
-                    query=query,
-                    response=cached.get("response", ""),
-                    sources=sources,
-                    session_id=session_id_response,
-                )
+        # Note: _resolve_session always ensures a session exists, so
+        # session_id_response is never None. All conversations are stateful.
 
         # Build conversation history — use memory service if available
         if self._conversation_memory and session_id_response:
@@ -363,13 +347,6 @@ class ChatUseCase:
 
         response_text = self._normalize_response_content(result.response)
         sources = self._dicts_to_sources(result.sources or [])
-
-        # Cache the response
-        if use_cache:
-            self._cache.set_chat_response(
-                channel_id, query,
-                {"response": response_text, "sources": result.sources or []},
-            )
 
         # Save to history
         self._search_history.add_or_update(channel_meta.id, query)
