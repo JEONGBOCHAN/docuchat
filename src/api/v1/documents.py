@@ -1,3 +1,8 @@
 # -*- coding: utf-8 -*-
 """Compatibility shim — real implementation in workspace module."""
-from src.modules.workspace.presentation.api.documents import *  # noqa: F401,F403
+import importlib
+import sys
+
+sys.modules[__name__] = importlib.import_module(
+    "src.modules.workspace.presentation.api.documents"
+)
