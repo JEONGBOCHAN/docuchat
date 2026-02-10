@@ -18,8 +18,6 @@ class TestGenerateAudioOverview:
 
     def test_generate_audio_overview_success(self, client_with_db: TestClient, test_db):
         """Test successful audio overview generation start."""
-        import threading
-
         # Create channel in database
         channel = ChannelMetadata(
             gemini_store_id="fileSearchStores/test-store",
@@ -36,9 +34,9 @@ class TestGenerateAudioOverview:
 
         app.dependency_overrides[get_channel_port] = lambda: mock_port
 
-        with patch.object(threading, "Thread") as mock_thread:
-            mock_thread_instance = MagicMock()
-            mock_thread.return_value = mock_thread_instance
+        with patch("src.api.v1.audio._get_audio_executor") as mock_get_exec:
+            mock_executor = MagicMock()
+            mock_get_exec.return_value = mock_executor
 
             response = client_with_db.post(
                 "/api/v1/channels/fileSearchStores/test-store/audio",
@@ -56,7 +54,14 @@ class TestGenerateAudioOverview:
             assert "id" in data
             assert data["title"] is None
             assert data["audio_url"] is None
-            mock_thread_instance.start.assert_called_once()
+
+            # Verify executor.submit was called with the background function
+            mock_executor.submit.assert_called_once()
+            fn, req = mock_executor.submit.call_args[0]
+            assert fn.__name__ == "_run_audio_generation_in_background"
+            assert req.duration_minutes == 5
+            assert req.style == "conversational"
+            assert req.language == "ko"
 
         app.dependency_overrides.pop(get_channel_port, None)
 
