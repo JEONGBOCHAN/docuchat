@@ -13,21 +13,21 @@ from src.application.ports import (
     TTSPort,
 )
 from src.application.ports.citation_search import CitationSearchPort
-from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
-from src.application.use_cases.generate_faq import GenerateFAQUseCase
-from src.application.use_cases.summarize import (
+from src.modules.knowledge.application.use_cases.search_with_citations import SearchWithCitationsUseCase
+from src.modules.knowledge.application.use_cases.generate_faq import GenerateFAQUseCase
+from src.modules.knowledge.application.use_cases.summarize import (
     SummarizeChannelUseCase,
     SummarizeDocumentUseCase,
 )
-from src.application.use_cases.timeline_briefing import (
+from src.modules.knowledge.application.use_cases.timeline_briefing import (
     GenerateTimelineUseCase,
     GenerateBriefingUseCase,
 )
-from src.application.use_cases.learning import (
+from src.modules.knowledge.application.use_cases.learning import (
     GenerateStudyGuideUseCase,
     GenerateQuizUseCase,
 )
-from src.application.use_cases.podcast import GeneratePodcastScriptUseCase
+from src.modules.knowledge.application.use_cases.podcast import GeneratePodcastScriptUseCase
 
 
 # ============================================================
@@ -125,7 +125,7 @@ def create_generate_podcast_script_use_case() -> GeneratePodcastScriptUseCase:
 
 
 def create_generate_audio_use_case(db):
-    from src.application.use_cases.audio_generation import GenerateAudioUseCase
+    from src.modules.knowledge.application.use_cases.audio_generation import GenerateAudioUseCase
     return GenerateAudioUseCase(
         audio_repo=create_audio_repository_port(db),
         tts_port=create_tts_port(),

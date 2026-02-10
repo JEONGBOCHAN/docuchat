@@ -34,13 +34,15 @@ from src.application.use_cases.audio_generation import (
 from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.application.use_cases.podcast import GeneratePodcastScriptRequest
-from src.infrastructure.di.container import (
-    create_channel_port,
+from src.modules.knowledge.public import (
     create_generate_podcast_script_use_case,
     create_generate_audio_use_case,
     create_audio_repository_port,
-    create_channel_repository_port,
     create_tts_port,
+)
+from src.modules.workspace.public import (
+    create_channel_port,
+    create_channel_repository_port,
 )
 
 router = APIRouter(prefix="/channels", tags=["audio"])

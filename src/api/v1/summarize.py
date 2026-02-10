@@ -13,7 +13,7 @@ from src.api.v1.deps import (
     require_channel_with_documents,
     get_document_port,
 )
-from src.infrastructure.di.container import (
+from src.modules.knowledge.public import (
     create_summarize_channel_use_case,
     create_summarize_document_use_case,
 )

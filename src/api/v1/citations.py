@@ -22,9 +22,9 @@ from src.core.database import get_db
 from src.core.rate_limiter import limiter, RateLimits
 from src.application.use_cases.search_with_citations import SearchWithCitationsUseCase
 from src.application.ports.citation_search import CitationDTO
-from src.infrastructure.di.container import (
+from src.modules.knowledge.public import create_search_with_citations_use_case
+from src.modules.workspace.public import (
     create_channel_port,
-    create_search_with_citations_use_case,
     create_channel_repository_port,
 )
 

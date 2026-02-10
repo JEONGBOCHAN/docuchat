@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.models.faq import FAQItem, FAQGenerateRequest, FAQGenerateResponse
 from src.api.v1.deps import ValidatedChannel, require_channel_with_documents
-from src.infrastructure.di.container import create_generate_faq_use_case
+from src.modules.knowledge.public import create_generate_faq_use_case
 
 router = APIRouter(prefix="/channels", tags=["faq"])
 

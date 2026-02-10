@@ -23,7 +23,7 @@ from src.models.study import (
     StudySection,
 )
 from src.api.v1.deps import ValidatedChannel, require_channel_with_documents
-from src.infrastructure.di.container import (
+from src.modules.knowledge.public import (
     create_generate_study_guide_use_case,
     create_generate_quiz_use_case,
 )
