@@ -328,6 +328,9 @@ class ChatSessionRepositoryAdapter(ChatSessionRepositoryPort):
     def cleanup_expired(self) -> int:
         return self._repo.cleanup_expired()
 
+    def list_session_ids_by_channel(self, channel_id: int) -> list[str]:
+        return self._repo.list_session_ids_by_channel(channel_id)
+
 
 # =============================================================================
 # Note Repository Adapter

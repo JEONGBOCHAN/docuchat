@@ -325,6 +325,15 @@ class ChatSessionRepositoryPort(ABC):
         """Delete all expired sessions."""
         ...
 
+    @abstractmethod
+    def list_session_ids_by_channel(self, channel_id: int) -> list[str]:
+        """Get all session ID strings for a channel.
+
+        Returns:
+            List of session_id strings (e.g. ['sess_abc123', 'sess_def456']).
+        """
+        ...
+
 
 class NoteRepositoryPort(ABC):
     """Port for note repository operations."""

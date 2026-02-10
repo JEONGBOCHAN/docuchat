@@ -17,6 +17,7 @@ def _make_chat_use_case(
     process_query_factory=None,
     db=None,
     session_memory_repo=None,
+    checkpoint_store=None,
 ):
     """Create ChatUseCase with mock/real dependencies.
 
@@ -58,6 +59,7 @@ def _make_chat_use_case(
         summaries_use_case=mock_summaries,
         process_query_factory=process_query_factory or (lambda: MagicMock()),
         session_memory_repo=session_memory_repo,
+        checkpoint_store=checkpoint_store,
     )
 
 
@@ -342,6 +344,99 @@ class TestClearChatHistory:
 
         assert response.status_code == 204
         mock_session_memory_repo.clear_by_channel.assert_called_once()
+
+        app.dependency_overrides.pop(get_chat_use_case, None)
+
+    def test_clear_history_deletes_checkpoints(self, client_with_db: TestClient, test_db):
+        """Test that clearing history also deletes LangGraph checkpoints for all sessions."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_checkpoint_store = MagicMock()
+
+        mock_pq = MagicMock()
+        mock_pq.execute.return_value = QueryResult(
+            response="Answer",
+            sources=[],
+            iterations=1,
+        )
+
+        use_case = _make_chat_use_case(
+            channel_port=mock_channel_port,
+            process_query_factory=lambda: mock_pq,
+            db=test_db,
+            checkpoint_store=mock_checkpoint_store,
+        )
+        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+
+        # Send messages to create sessions
+        client_with_db.post(
+            "/api/v1/channels/fileSearchStores/test-store/chat",
+            json={"query": "Hello?"},
+        )
+        client_with_db.post(
+            "/api/v1/channels/fileSearchStores/test-store/chat",
+            json={"query": "Second?"},
+        )
+
+        # Clear history — should trigger checkpoint deletion
+        response = client_with_db.delete(
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
+        )
+
+        assert response.status_code == 204
+        # Checkpoint delete_thread should have been called for each session
+        assert mock_checkpoint_store.delete_thread.call_count > 0
+
+        app.dependency_overrides.pop(get_chat_use_case, None)
+
+    def test_clear_history_checkpoint_failure_non_blocking(self, client_with_db: TestClient, test_db):
+        """Test that checkpoint deletion failure doesn't block history clearing."""
+        mock_channel_port = MagicMock()
+        mock_channel_port.get_channel.return_value = ChannelDTO(
+            name="fileSearchStores/test-store",
+            display_name="Test Channel",
+        )
+
+        mock_checkpoint_store = MagicMock()
+        mock_checkpoint_store.delete_thread.side_effect = RuntimeError("DB locked")
+
+        mock_pq = MagicMock()
+        mock_pq.execute.return_value = QueryResult(
+            response="Answer",
+            sources=[],
+            iterations=1,
+        )
+
+        use_case = _make_chat_use_case(
+            channel_port=mock_channel_port,
+            process_query_factory=lambda: mock_pq,
+            db=test_db,
+            checkpoint_store=mock_checkpoint_store,
+        )
+        app.dependency_overrides[get_chat_use_case] = lambda: use_case
+
+        # Send a message to create session
+        client_with_db.post(
+            "/api/v1/channels/fileSearchStores/test-store/chat",
+            json={"query": "Hello?"},
+        )
+
+        # Clear history should succeed even when checkpoint deletion fails
+        response = client_with_db.delete(
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
+        )
+
+        assert response.status_code == 204
+
+        # Verify history is still cleared
+        response = client_with_db.get(
+            "/api/v1/channels/fileSearchStores/test-store/chat/history",
+        )
+        assert response.json()["total"] == 0
 
         app.dependency_overrides.pop(get_chat_use_case, None)
 

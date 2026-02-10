@@ -419,3 +419,17 @@ class ChatSessionRepository:
         ).delete()
         self.db.commit()
         return count
+
+    def list_session_ids_by_channel(self, channel_id: int) -> list[str]:
+        """Get all session_id strings for a channel.
+
+        Args:
+            channel_id: The channel DB ID.
+
+        Returns:
+            List of session_id strings.
+        """
+        rows = self.db.query(ChatSessionDB.session_id).filter(
+            ChatSessionDB.channel_id == channel_id
+        ).all()
+        return [row[0] for row in rows]

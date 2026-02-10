@@ -123,6 +123,7 @@ class ChatUseCase:
         memory_token_budget: int = 12000,
         memory_recent_turns: int = 80,
         compaction_runner=None,
+        checkpoint_store=None,
     ):
         self._channel_port = channel_port
         self._channel_repo = channel_repo
@@ -138,6 +139,7 @@ class ChatUseCase:
         self._memory_token_budget = memory_token_budget
         self._memory_recent_turns = memory_recent_turns
         self._compaction_runner = compaction_runner
+        self._checkpoint_store = checkpoint_store
 
     # ---- Private helpers ----
 
@@ -521,8 +523,10 @@ class ChatUseCase:
     def clear_history(self, channel_id: str) -> None:
         """Clear chat history for a channel.
 
-        Also clears session memory (rolling summaries) for all sessions
-        in the channel to prevent stale context from persisting.
+        Clears in order:
+          1. LangGraph checkpoints (per session) — prevents stale model context
+          2. Session memories (rolling summaries)
+          3. Chat message history
 
         Raises:
             ChannelNotFoundError: Channel not found.
@@ -531,7 +535,26 @@ class ChatUseCase:
 
         channel_meta = self._channel_repo.get_by_gemini_id(channel_id)
         if channel_meta:
-            # Clear session memories (rolling summaries) first
+            # Clear LangGraph checkpoints for all channel sessions
+            if self._checkpoint_store:
+                try:
+                    session_ids = self._session_repo.list_session_ids_by_channel(
+                        channel_meta.id,
+                    )
+                    for sid in session_ids:
+                        self._checkpoint_store.delete_thread(sid)
+                    if session_ids:
+                        logger.info(
+                            "Cleared checkpoints for %d sessions in channel %s",
+                            len(session_ids), channel_id,
+                        )
+                except Exception:
+                    logger.warning(
+                        "Failed to clear checkpoints for channel %s",
+                        channel_id, exc_info=True,
+                    )
+
+            # Clear session memories (rolling summaries)
             if self._session_memory_repo:
                 try:
                     cleared = self._session_memory_repo.clear_by_channel(channel_meta.id)

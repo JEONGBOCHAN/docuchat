@@ -185,6 +185,12 @@ def get_checkpointer():
     return _checkpointer
 
 
+def _create_checkpoint_store():
+    """Create a CheckpointStorePort backed by the global checkpointer."""
+    from src.infrastructure.agent.checkpoint_adapter import LangGraphCheckpointAdapter
+    return LangGraphCheckpointAdapter(get_checkpointer())
+
+
 def get_checkpointer_type() -> str:
     """Get the type name of the active checkpointer.
 
@@ -870,6 +876,7 @@ def create_chat_use_case(db):
         memory_token_budget=settings.memory_token_budget,
         memory_recent_turns=settings.memory_recent_turns,
         compaction_runner=_get_compaction_runner(),
+        checkpoint_store=_create_checkpoint_store(),
     )
 
 
