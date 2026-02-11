@@ -143,10 +143,17 @@ class ChannelCrudUseCase:
                 continue
 
             if not local_meta:
-                local_meta = self._channel_repo.create(
-                    gemini_store_id=store_id,
-                    name=store.get("display_name", ""),
-                )
+                try:
+                    local_meta = self._channel_repo.create(
+                        gemini_store_id=store_id,
+                        name=store.get("display_name", ""),
+                    )
+                except Exception:
+                    # Race condition: another concurrent request already created it
+                    local_meta = self._channel_repo.get_by_gemini_id(store_id)
+                    if not local_meta:
+                        logger.warning("Failed to create or retrieve channel metadata for %s", store_id)
+                        continue
 
             try:
                 files = self._document_port.list_documents(store_id)
