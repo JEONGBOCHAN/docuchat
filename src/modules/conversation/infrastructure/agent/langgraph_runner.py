@@ -108,7 +108,7 @@ class LangGraphAgentRunner(AgentRunnerPort):
         self._checkpoint_miss_count = 0
         self._checkpoint_hit_count = 0
 
-    def _create_agent(self, channel_id: str, config: AgentConfig, streaming: bool = False):
+    def _create_agent(self, channel_id: str, config: AgentConfig, streaming: bool = False, use_checkpointer: bool = True):
         """Create a LangGraph agent for the specified channel.
 
         Args:
@@ -189,7 +189,7 @@ If the question is clearly about external/current events not covered in these do
         # Create the agent with prompt parameter
         # Suppress LangGraph 1.0 deprecation at call site (pytest resets module-level filters)
         agent_kwargs = dict(model=llm, tools=tools, prompt=system_prompt)
-        if self._checkpointer is not None:
+        if self._checkpointer is not None and use_checkpointer:
             agent_kwargs["checkpointer"] = self._checkpointer
 
         with warnings.catch_warnings():
@@ -393,8 +393,13 @@ If the question is clearly about external/current events not covered in these do
                 channel_id=channel_id,
             ))
 
+        # Determine if checkpointer should be attached to the agent.
+        # LangGraph requires configurable.thread_id when checkpointer is present;
+        # skip checkpointer when thread_id is unavailable or hybrid_strict bypasses it.
+        _use_cp = bool(self._checkpointer and thread_id and memory_mode != "hybrid_strict")
+
         try:
-            agent = self._create_agent(channel_id, config)
+            agent = self._create_agent(channel_id, config, use_checkpointer=_use_cp)
 
             # Build messages based on memory_mode
             if memory_mode == "hybrid_strict":
@@ -630,8 +635,13 @@ If the question is clearly about external/current events not covered in these do
 
         yield {"event": "agent_started", "session_id": session_id}
 
+        # Determine if checkpointer should be attached to the agent.
+        # LangGraph requires configurable.thread_id when checkpointer is present;
+        # skip checkpointer when thread_id is unavailable or hybrid_strict bypasses it.
+        _use_cp = bool(self._checkpointer and thread_id and memory_mode != "hybrid_strict")
+
         try:
-            agent = self._create_agent(channel_id, config, streaming=True)
+            agent = self._create_agent(channel_id, config, streaming=True, use_checkpointer=_use_cp)
 
             # Build messages based on memory_mode
             if memory_mode == "hybrid_strict":
