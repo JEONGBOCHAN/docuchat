@@ -559,8 +559,8 @@ class TestMCPStreamableHTTP:
         )
         assert response.status_code == 400
 
-    def test_mcp_message_without_admin_key_rejected(self, client):
-        """Test that MCP message endpoint rejects requests without admin key."""
+    def test_mcp_message_without_admin_key_allowed(self, client):
+        """Test that MCP message endpoint works without admin key."""
         response = client.post(
             "/api/v1/mcp/message",
             json={
@@ -570,25 +570,25 @@ class TestMCPStreamableHTTP:
                 "params": {"protocolVersion": "2025-03-26", "capabilities": {}},
             },
         )
-        assert response.status_code in (401, 422)
+        assert response.status_code == 200
 
-    def test_mcp_state_without_admin_key_rejected(self, client):
-        """Test that MCP state endpoint rejects requests without admin key."""
+    def test_mcp_state_without_admin_key_allowed(self, client):
+        """Test that MCP state endpoint works without admin key."""
         response = client.get("/api/v1/mcp/state")
-        assert response.status_code in (401, 422)
+        assert response.status_code == 200
 
-    def test_mcp_get_message_without_admin_key_rejected(self, client):
-        """Test that GET /mcp/message rejects requests without admin key."""
+    def test_mcp_get_message_without_admin_key_allowed(self, client):
+        """Test that GET /mcp/message works without admin key (returns 405 because SSE not supported)."""
         response = client.get("/api/v1/mcp/message")
-        assert response.status_code in (401, 422)
+        assert response.status_code == 405
 
-    def test_mcp_delete_message_without_admin_key_rejected(self, client):
-        """Test that DELETE /mcp/message rejects requests without admin key."""
+    def test_mcp_delete_message_without_admin_key_allowed(self, client):
+        """Test that DELETE /mcp/message works without admin key (returns 404 for unknown session)."""
         response = client.delete(
             "/api/v1/mcp/message",
             headers={"Mcp-Session-Id": "some-session"},
         )
-        assert response.status_code in (401, 422)
+        assert response.status_code == 404
 
 
 class TestMCPSessionManagement:
