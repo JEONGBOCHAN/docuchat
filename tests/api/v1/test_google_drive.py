@@ -19,7 +19,11 @@ from src.shared.kernel.contracts.ports.google_drive import (
     GoogleDriveFileDTO,
 )
 from src.modules.workspace.application.use_cases.document_crud import DocumentUploadResultDTO
-from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError
+from src.shared.kernel.contracts.errors.use_case_errors import (
+    ChannelNotFoundError,
+    ServiceNotConfiguredError,
+    FileValidationError,
+)
 from src.modules.workspace.domain.exceptions import CapacityExceededError
 
 
@@ -52,6 +56,14 @@ class TestGetAuthUrl:
         resp = client.get("/api/v1/integrations/google-drive/auth-url")
         assert resp.status_code == 500
 
+    def test_not_configured_returns_503(self, client, mock_use_case):
+        mock_use_case.get_auth_url.side_effect = ServiceNotConfiguredError(
+            "google_drive", missing_fields=["GOOGLE_OAUTH_CLIENT_ID"]
+        )
+        resp = client.get("/api/v1/integrations/google-drive/auth-url")
+        assert resp.status_code == 503
+        assert "google_drive" in resp.json()["detail"]
+
 
 class TestExchangeToken:
     def test_success(self, client, mock_use_case):
@@ -73,6 +85,16 @@ class TestExchangeToken:
             json={"code": "authcode", "state": "bad"},
         )
         assert resp.status_code == 400
+
+    def test_not_configured_returns_503(self, client, mock_use_case):
+        mock_use_case.exchange_token.side_effect = ServiceNotConfiguredError(
+            "google_drive", missing_fields=["GOOGLE_OAUTH_CLIENT_SECRET"]
+        )
+        resp = client.post(
+            "/api/v1/integrations/google-drive/token",
+            json={"code": "authcode", "state": "some-state"},
+        )
+        assert resp.status_code == 503
 
 
 class TestListFiles:
@@ -134,6 +156,17 @@ class TestImportFile:
         )
         assert resp.status_code == 413
 
+    def test_unsupported_type_returns_400(self, client, mock_use_case):
+        mock_use_case.import_file.side_effect = FileValidationError(
+            "Unsupported Google Docs type: application/vnd.google-apps.spreadsheet"
+        )
+        resp = client.post(
+            "/api/v1/integrations/google-drive/import/ch1",
+            json={"file_id": "f1", "access_token": "at"},
+        )
+        assert resp.status_code == 400
+        assert "Unsupported" in resp.json()["detail"]
+
 
 class TestRefreshToken:
     def test_success(self, client, mock_use_case):
@@ -155,3 +188,13 @@ class TestRefreshToken:
             json={"refresh_token": "bad"},
         )
         assert resp.status_code == 401
+
+    def test_not_configured_returns_503(self, client, mock_use_case):
+        mock_use_case.refresh_token.side_effect = ServiceNotConfiguredError(
+            "google_drive", missing_fields=["GOOGLE_OAUTH_CLIENT_ID"]
+        )
+        resp = client.post(
+            "/api/v1/integrations/google-drive/refresh-token",
+            json={"refresh_token": "some-rt"},
+        )
+        assert resp.status_code == 503

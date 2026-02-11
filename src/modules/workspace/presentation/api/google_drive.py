@@ -13,7 +13,11 @@ from src.modules.workspace.application.use_cases.google_drive_integration import
     GoogleDriveIntegrationUseCase,
     InvalidOAuthStateError,
 )
-from src.shared.kernel.contracts.errors.use_case_errors import ChannelNotFoundError
+from src.shared.kernel.contracts.errors.use_case_errors import (
+    ChannelNotFoundError,
+    ServiceNotConfiguredError,
+    FileValidationError,
+)
 from src.modules.workspace.domain.exceptions import CapacityExceededError
 
 logger = get_logger(__name__)
@@ -85,6 +89,8 @@ def get_auth_url(
     try:
         auth_url, state = use_case.get_auth_url()
         return AuthUrlResponse(auth_url=auth_url, state=state)
+    except ServiceNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error("Failed to generate OAuth URL", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to generate OAuth authorization URL")
@@ -108,6 +114,8 @@ def exchange_token(
             status_code=400,
             detail="Invalid or expired OAuth state parameter. Please retry authorization.",
         )
+    except ServiceNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error("Failed to exchange OAuth code", error=str(e))
         raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
@@ -176,6 +184,8 @@ def import_file(
         raise HTTPException(status_code=404, detail=f"Channel not found: {channel_id}")
     except CapacityExceededError as e:
         raise HTTPException(status_code=413, detail=str(e))
+    except FileValidationError as e:
+        raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.error("Failed to import file from Google Drive", error=str(e), file_id=request.file_id, channel_id=channel_id)
         if "invalid_grant" in str(e).lower() or "invalid credentials" in str(e).lower():
@@ -199,6 +209,8 @@ def refresh_access_token(
             expires_in=token.expires_in,
             token_type=token.token_type,
         )
+    except ServiceNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error("Failed to refresh access token", error=str(e))
         raise HTTPException(

@@ -56,6 +56,18 @@ class NoteValidationError(Exception):
         super().__init__(message)
 
 
+class ServiceNotConfiguredError(Exception):
+    """Required external service config is missing. Maps to HTTP 503."""
+
+    def __init__(self, service: str, missing_fields: list[str] | None = None):
+        self.service = service
+        self.missing_fields = missing_fields or []
+        detail = f"{service} is not configured"
+        if self.missing_fields:
+            detail += f" (missing: {', '.join(self.missing_fields)})"
+        super().__init__(detail)
+
+
 class UpstreamError(Exception):
     """External service (upstream) error. Maps to HTTP 502.
 

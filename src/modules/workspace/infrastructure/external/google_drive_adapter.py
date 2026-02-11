@@ -18,6 +18,10 @@ from src.shared.kernel.contracts.ports.google_drive import (
     GoogleDriveFileDTO,
     DownloadedDriveFileDTO,
 )
+from src.shared.kernel.contracts.errors.use_case_errors import (
+    ServiceNotConfiguredError,
+    FileValidationError,
+)
 
 SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
@@ -38,7 +42,19 @@ class GoogleDriveAdapter(GoogleDrivePort):
     def __init__(self):
         self._settings = get_settings()
 
+    def _ensure_oauth_configured(self) -> None:
+        missing = []
+        if not self._settings.google_oauth_client_id:
+            missing.append("GOOGLE_OAUTH_CLIENT_ID")
+        if not self._settings.google_oauth_client_secret:
+            missing.append("GOOGLE_OAUTH_CLIENT_SECRET")
+        if not self._settings.google_oauth_redirect_uri:
+            missing.append("GOOGLE_OAUTH_REDIRECT_URI")
+        if missing:
+            raise ServiceNotConfiguredError("google_drive", missing_fields=missing)
+
     def _create_flow(self) -> Flow:
+        self._ensure_oauth_configured()
         client_config = {
             "web": {
                 "client_id": self._settings.google_oauth_client_id,
@@ -76,6 +92,7 @@ class GoogleDriveAdapter(GoogleDrivePort):
         )
 
     def refresh_access_token(self, refresh_token: str) -> GoogleDriveTokenDTO:
+        self._ensure_oauth_configured()
         creds = Credentials(
             token=None,
             refresh_token=refresh_token,
@@ -146,7 +163,7 @@ class GoogleDriveAdapter(GoogleDrivePort):
                 export_mime = "application/pdf"
                 file_name = f"{file_name}.pdf"
             else:
-                raise ValueError(f"Unsupported Google Docs type: {mime_type}")
+                raise FileValidationError(f"Unsupported Google Docs type: {mime_type}")
             media_request = service.files().export_media(fileId=file_id, mimeType=export_mime)
         else:
             media_request = service.files().get_media(fileId=file_id)
