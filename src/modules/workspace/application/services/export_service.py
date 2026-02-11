@@ -163,31 +163,38 @@ class ExportService:
         pdf = FPDF()
         pdf.add_page()
 
-        # Add Unicode font for Korean support
-        pdf.add_font("NanumGothic", "", "C:/Windows/Fonts/malgun.ttf")
-        pdf.set_font("NanumGothic", size=16)
+        # Add Unicode font for Korean support (graceful fallback for non-Windows)
+        _font_name = "Helvetica"
+        for _candidate in ("C:/Windows/Fonts/malgun.ttf", "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"):
+            try:
+                pdf.add_font("NanumGothic", "", _candidate)
+                _font_name = "NanumGothic"
+                break
+            except (FileNotFoundError, OSError):
+                continue
+        pdf.set_font(_font_name, size=16)
 
         # Title
         pdf.cell(0, 10, note.title, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(5)
 
         # Content
-        pdf.set_font("NanumGothic", size=11)
+        pdf.set_font(_font_name, size=11)
         pdf.multi_cell(0, 7, note.content)
         pdf.ln(10)
 
         sources = self._sources_from_list(note.sources)
         if sources:
-            pdf.set_font("NanumGothic", size=12)
+            pdf.set_font(_font_name, size=12)
             pdf.cell(0, 10, "Sources", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.set_font("NanumGothic", size=10)
+            pdf.set_font(_font_name, size=10)
             for i, src in enumerate(sources, 1):
                 page_info = f" (p.{src.page})" if src.page else ""
                 pdf.multi_cell(0, 6, f"{i}. {src.source}{page_info}")
 
         # Metadata
         pdf.ln(10)
-        pdf.set_font("NanumGothic", size=9)
+        pdf.set_font(_font_name, size=9)
         pdf.cell(0, 5, f"Created: {note.created_at.isoformat()}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.cell(0, 5, f"Updated: {note.updated_at.isoformat()}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 

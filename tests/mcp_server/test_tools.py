@@ -292,7 +292,7 @@ class TestChannelTools:
         mock_channel_port = Mock()
         mock_channel_port.get_channel.return_value = mock_channel
 
-        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
+        with patch("src.modules.workspace.public.create_channel_port", return_value=mock_channel_port):
             result = await validate_channel("test-channel")
 
         assert result["valid"] is True
@@ -305,7 +305,7 @@ class TestChannelTools:
         mock_channel_port = Mock()
         mock_channel_port.get_channel.return_value = None
 
-        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
+        with patch("src.modules.workspace.public.create_channel_port", return_value=mock_channel_port):
             result = await validate_channel("nonexistent")
 
         assert result["valid"] is False
@@ -325,7 +325,7 @@ class TestChannelTools:
         mock_channel_port = Mock()
         mock_channel_port.list_channels.return_value = [mock_channel1, mock_channel2]
 
-        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
+        with patch("src.modules.workspace.public.create_channel_port", return_value=mock_channel_port):
             result = await list_channels()
 
         assert result["total"] == 2
@@ -348,7 +348,7 @@ class TestSessionTools:
         mock_channel_port = Mock()
         mock_channel_port.get_channel.return_value = mock_channel
 
-        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
+        with patch("src.modules.workspace.public.create_channel_port", return_value=mock_channel_port):
             result = await create_session("test-channel")
 
         assert result["success"] is True
@@ -361,7 +361,7 @@ class TestSessionTools:
         mock_channel_port = Mock()
         mock_channel_port.get_channel.return_value = None
 
-        with patch("src.infrastructure.di.create_channel_port", return_value=mock_channel_port):
+        with patch("src.modules.workspace.public.create_channel_port", return_value=mock_channel_port):
             result = await create_session("invalid-channel")
 
         assert result["success"] is False

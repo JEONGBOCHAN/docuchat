@@ -218,7 +218,7 @@ class TestRunRagQueryTool:
         mock_use_case = Mock()
         mock_use_case.execute.return_value = MockResult()
 
-        with patch("src.infrastructure.di.create_process_query_use_case", return_value=mock_use_case):
+        with patch("src.modules.conversation.public.create_process_query_use_case", return_value=mock_use_case):
             from src.mcp_server.server import run_rag_query_tool
 
             result = await run_rag_query_tool(
@@ -238,7 +238,7 @@ class TestRunRagQueryTool:
 
         # Mock the create_process_query_use_case function to raise an error
         with patch(
-            "src.infrastructure.di.create_process_query_use_case",
+            "src.modules.conversation.public.create_process_query_use_case",
             side_effect=RuntimeError("API Error"),
         ):
             from src.mcp_server.server import run_rag_query_tool
