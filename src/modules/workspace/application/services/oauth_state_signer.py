@@ -11,11 +11,6 @@ import secrets
 import time
 
 
-class InvalidOAuthStateError(Exception):
-    """Raised when OAuth state verification fails."""
-    pass
-
-
 class OAuthStateSigner:
     """HMAC-based OAuth state token signer/verifier."""
 

@@ -17,6 +17,10 @@ from src.shared.kernel.contracts.ports.google_drive import (
     DownloadedDriveFileDTO,
 )
 from src.modules.workspace.application.use_cases.document_crud import DocumentUploadResultDTO
+from src.shared.kernel.contracts.errors.use_case_errors import (
+    ServiceNotConfiguredError,
+    FileValidationError,
+)
 
 
 # ── OAuthStateSigner tests ─────────────────────────────────
@@ -182,3 +186,18 @@ class TestGoogleDriveIntegrationUseCase:
             with pytest.raises(RuntimeError, match="upload failed"):
                 use_case.import_file("ch1", "at", "file1")
             mock_unlink.assert_called_once_with("/tmp/test.pdf")
+
+    def test_get_auth_url_propagates_service_not_configured(self, use_case, drive_port):
+        drive_port.build_auth_url.side_effect = ServiceNotConfiguredError(
+            "google_drive", missing_fields=["GOOGLE_OAUTH_CLIENT_ID"]
+        )
+        with pytest.raises(ServiceNotConfiguredError):
+            use_case.get_auth_url()
+
+    def test_import_file_validation_error_skips_upload(self, use_case, drive_port, document_crud):
+        drive_port.download_to_temp.side_effect = FileValidationError(
+            "Unsupported Google Docs type: application/vnd.google-apps.spreadsheet"
+        )
+        with pytest.raises(FileValidationError):
+            use_case.import_file("ch1", "at", "file1")
+        document_crud.upload.assert_not_called()
